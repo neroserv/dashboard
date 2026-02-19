@@ -7,9 +7,12 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DiscountCodeController;
 use App\Http\Controllers\Admin\DunningLetterController;
 use App\Http\Controllers\Admin\EmailController;
+use App\Http\Controllers\Admin\HostingPlanController;
+use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\LegacyMigrationController;
 use App\Http\Controllers\Admin\OrderConfirmationController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\QuoteController;
 use App\Http\Controllers\Admin\ResellerDomainController;
 use App\Http\Controllers\Admin\SearchController;
@@ -34,6 +37,8 @@ use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SiteRenderController;
 use App\Http\Controllers\SiteSubscriptionController;
 use App\Http\Controllers\SupportController;
+use App\Http\Controllers\WebspaceAccountController;
+use App\Http\Controllers\WebspaceController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Middleware\DisableCacheForSiteRender;
 use Illuminate\Support\Facades\Route;
@@ -94,6 +99,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('checkout', [CheckoutController::class, 'store'])->middleware('billing.profile')->name('checkout.store');
     Route::get('checkout/redirect', [CheckoutController::class, 'redirect'])->middleware('billing.profile')->name('checkout.redirect');
     Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
+
+    Route::get('webspace', [WebspaceController::class, 'index'])->name('webspace.index');
+    Route::get('webspace/checkout', [WebspaceController::class, 'checkout'])->name('webspace.checkout');
+    Route::post('webspace/checkout', [WebspaceController::class, 'storeCheckout'])->middleware('billing.profile')->name('webspace.checkout.store');
+    Route::get('webspace-accounts', [WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');
+    Route::get('webspace-accounts/{webspace_account}/plesk-login', [WebspaceAccountController::class, 'pleskLogin'])->name('webspace-accounts.plesk-login');
+    Route::get('webspace-accounts/{webspace_account}', [WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
 
     Route::get('invoices/{invoice}/pdf', [CustomerInvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
     Route::get('invoices/{invoice}/xml', [CustomerInvoiceController::class, 'downloadXml'])->name('invoices.xml');
@@ -202,6 +214,11 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::resource('discount-codes', DiscountCodeController::class)->except(['show']);
     Route::resource('vouchers', VoucherController::class)->except(['show', 'destroy']);
 
+    Route::get('products', [ProductController::class, 'index'])->name('products.index');
+    Route::resource('hosting-servers', HostingServerController::class);
+    Route::resource('hosting-plans', HostingPlanController::class);
+    Route::get('webspace-accounts', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');
+    Route::get('webspace-accounts/{webspace_account}', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
     Route::resource('templates', TemplateController::class);
     Route::get('templates/{template}/design', [\App\Http\Controllers\Admin\TemplateDesignController::class, 'design'])->name('templates.design');
     Route::put('templates/{template}/design', [\App\Http\Controllers\Admin\TemplateDesignController::class, 'update'])->name('templates.design.update');

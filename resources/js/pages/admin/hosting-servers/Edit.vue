@@ -1,0 +1,166 @@
+<script setup lang="ts">
+import { Form, Head, Link } from '@inertiajs/vue3';
+import InputError from '@/components/InputError.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Heading, Text } from '@/components/ui/typography';
+import { Switch } from '@/components/ui/switch';
+import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
+import { ref, computed } from 'vue';
+
+type HostingServer = {
+    id: number;
+    name: string | null;
+    hostname: string;
+    port: number;
+    use_ssl: boolean;
+    ip_address: string | null;
+    api_username: string | null;
+    is_active: boolean;
+};
+
+type Props = {
+    hostingServer: HostingServer;
+};
+
+const props = defineProps<Props>();
+
+const isActive = ref(props.hostingServer.is_active);
+const useSsl = ref(props.hostingServer.use_ssl ?? true);
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Dashboard', href: dashboard().url },
+    { title: 'Hosting-Server', href: '/admin/hosting-servers' },
+    { title: props.hostingServer.name ?? props.hostingServer.hostname, href: '#' },
+];
+</script>
+
+<template>
+    <AppLayout :breadcrumbs="breadcrumbs">
+        <Head title="Hosting-Server bearbeiten" />
+
+        <div class="space-y-6">
+            <div>
+                <Heading level="h1">Hosting-Server bearbeiten</Heading>
+                <Text class="mt-2" muted>
+                    {{ hostingServer.hostname }}
+                </Text>
+            </div>
+
+            <Card class="max-w-2xl">
+                <CardHeader>
+                    <CardTitle>Server-Details</CardTitle>
+                    <CardDescription>
+                    Hostname, Port, API-Zugang. Bei API-Benutzername wird die Plesk REST API v2 (Basic Auth) verwendet.
+                </CardDescription>
+                </CardHeader>
+                <Form
+                    :action="`/admin/hosting-servers/${hostingServer.id}`"
+                    method="post"
+                    class="space-y-6"
+                    v-slot="{ errors }"
+                >
+                    <CardContent class="space-y-4">
+                        <input type="hidden" name="_method" value="PUT" />
+                        <div class="space-y-2">
+                            <Label for="name">Name (optional)</Label>
+                            <Input
+                                id="name"
+                                name="name"
+                                :model-value="hostingServer.name ?? ''"
+                                placeholder="z. B. Plesk Server 1"
+                            />
+                            <InputError :message="errors.name" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="hostname">Hostname *</Label>
+                            <Input
+                                id="hostname"
+                                name="hostname"
+                                required
+                                :model-value="hostingServer.hostname"
+                                :aria-invalid="!!errors.hostname"
+                            />
+                            <InputError :message="errors.hostname" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-2">
+                                <Label for="port">Port</Label>
+                                <Input
+                                    id="port"
+                                    name="port"
+                                    type="number"
+                                    min="1"
+                                    max="65535"
+                                    :model-value="String(hostingServer.port ?? 8443)"
+                                />
+                                <InputError :message="errors.port" />
+                            </div>
+                            <div class="flex items-center space-x-2 pt-8">
+                                <input type="hidden" name="use_ssl" value="0" />
+                                <input
+                                    type="checkbox"
+                                    id="use_ssl"
+                                    name="use_ssl"
+                                    value="1"
+                                    :checked="useSsl"
+                                    @change="useSsl = ($event.target as HTMLInputElement).checked"
+                                    class="rounded"
+                                />
+                                <Label for="use_ssl">HTTPS (SSL)</Label>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="api_username">API-Benutzername (optional)</Label>
+                            <Input
+                                id="api_username"
+                                name="api_username"
+                                :model-value="hostingServer.api_username ?? ''"
+                                placeholder="admin"
+                            />
+                            <InputError :message="errors.api_username" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="ip_address">IP-Adresse (optional)</Label>
+                            <Input
+                                id="ip_address"
+                                name="ip_address"
+                                :model-value="hostingServer.ip_address ?? ''"
+                            />
+                            <InputError :message="errors.ip_address" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="api_token">API-Token / Passwort</Label>
+                            <Input
+                                id="api_token"
+                                name="api_token"
+                                type="password"
+                                placeholder="Leer lassen um beizubehalten"
+                            />
+                            <InputError :message="errors.api_token" />
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <Switch
+                                id="is_active"
+                                :checked="isActive"
+                                @update:checked="isActive = $event"
+                            />
+                            <Label for="is_active">Aktiv</Label>
+                        </div>
+                        <input type="hidden" name="is_active" :value="isActive ? '1' : '0'" />
+                    </CardContent>
+                    <CardFooter class="flex gap-2">
+                        <Button type="submit">Speichern</Button>
+                        <Link :href="`/admin/hosting-servers/${hostingServer.id}`">
+                            <Button type="button" variant="outline">Abbrechen</Button>
+                        </Link>
+                    </CardFooter>
+                </Form>
+            </Card>
+        </div>
+    </AppLayout>
+</template>

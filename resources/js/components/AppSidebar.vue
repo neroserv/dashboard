@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Globe, Users } from 'lucide-vue-next';
+import {
+    BookOpen,
+    Folder,
+    LayoutGrid,
+    Globe,
+    LayoutList,
+    Package,
+    Server,
+    ShoppingBag,
+    Users,
+} from 'lucide-vue-next';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -28,11 +38,17 @@ const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
         { title: 'Dashboard', href: dashboard().url, icon: LayoutGrid },
         { title: 'Meine Sites', href: sitesIndex().url, icon: Globe },
+        { title: 'Webspace', href: '/webspace', icon: Server },
+        { title: 'Meine Webspace-Accounts', href: '/webspace-accounts', icon: Package },
     ];
     if (isAdmin.value) {
         items.push(
             { title: 'Templates', href: adminTemplatesIndex().url, icon: LayoutGrid },
             { title: 'Kunden', href: adminCustomersIndex().url, icon: Users },
+            { title: 'Produkte', href: '/admin/products', icon: ShoppingBag },
+            { title: 'Hosting-Server', href: '/admin/hosting-servers', icon: Server },
+            { title: 'Webspace-Pakete', href: '/admin/hosting-plans', icon: Package },
+            { title: 'Webspace-Accounts', href: '/admin/webspace-accounts', icon: LayoutList },
         );
     }
     return items;

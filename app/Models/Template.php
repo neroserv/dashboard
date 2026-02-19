@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Template extends Model
 {
@@ -48,5 +49,15 @@ class Template extends Model
     public function pages(): HasMany
     {
         return $this->hasMany(TemplatePage::class)->orderBy('order');
+    }
+
+    /**
+     * Product entry for this template (Meine Seiten sellable).
+     *
+     * @return MorphOne<Product>
+     */
+    public function product(): MorphOne
+    {
+        return $this->morphOne(Product::class, 'productable');
     }
 }

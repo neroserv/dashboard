@@ -7,6 +7,7 @@ use App\Listeners\CreateLocalInvoiceFromStripeWebhook;
 use App\Listeners\LogStripeWebhookReceived;
 use App\Listeners\SendPaymentFailedNotification;
 use App\Listeners\SyncSiteSubscriptionFromStripeWebhook;
+use App\Listeners\SyncWebspaceSubscriptionFromStripeWebhook;
 use App\Models\Site;
 use App\Modules\Handlers\ContactModuleHandler;
 use App\Modules\Handlers\NewsletterModuleHandler;
@@ -67,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(WebhookReceived::class, LogStripeWebhookReceived::class);
         Event::listen(WebhookReceived::class, AddAiTokensFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SyncSiteSubscriptionFromStripeWebhook::class);
+        Event::listen(WebhookReceived::class, SyncWebspaceSubscriptionFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, CreateLocalInvoiceFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SendPaymentFailedNotification::class);
 

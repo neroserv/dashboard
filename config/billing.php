@@ -40,6 +40,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Stripe Product ID (Webspace)
+    |--------------------------------------------------------------------------
+    |
+    | One Stripe Product under which webspace plan prices are created as
+    | Stripe Prices. Used for HostingPlan sync and checkout.
+    |
+    */
+
+    'stripe_webspace_product_id' => env('STRIPE_WEBSPACE_PRODUCT_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Additional Domain Price ID
     |--------------------------------------------------------------------------
     |

@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\HostingPlan;
+use App\Models\HostingServer;
 use App\Models\Invoice;
 use App\Models\Site;
 use App\Models\SiteSubscription;
 use App\Models\Template;
+use App\Models\WebspaceAccount;
 use App\Notifications\InvoiceCreatedNotification;
 use App\Notifications\OrderCompletedNotification;
+use App\Services\ControlPanels\PleskClient;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use App\Services\SyncTemplateStripePriceService;
@@ -15,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -26,10 +31,15 @@ use Stripe\StripeClient;
 class CheckoutController extends Controller
 {
     /**
-     * Redirect to Stripe Checkout using session data (from SiteController::store).
+     * Redirect to Stripe Checkout using session data (meine_seiten or webspace).
      */
     public function redirect(Request $request): RedirectResponse|Response
     {
+        $webspacePayload = $request->session()->get('checkout_webspace');
+        if ($webspacePayload && isset($webspacePayload['hosting_plan_id'], $webspacePayload['domain'])) {
+            return $this->redirectWebspaceToStripe($request, $webspacePayload);
+        }
+
         $payload = $request->session()->get('checkout_meine_seiten');
         if (! $payload || ! isset($payload['template_id'], $payload['name'])) {
             return redirect()->route('sites.create')->with('error', 'Bitte starten Sie die Bestellung erneut.');
@@ -205,6 +215,12 @@ class CheckoutController extends Controller
         }
 
         $metadata = $subscription->metadata->toArray();
+        $checkoutType = $metadata['type'] ?? 'meine_seiten';
+
+        if ($checkoutType === 'webspace') {
+            return $this->handleWebspaceCheckoutSuccess($request, $user, $subscription, $metadata);
+        }
+
         $templateId = (int) ($metadata['template_id'] ?? 0);
         $siteName = $metadata['site_name'] ?? 'Meine Webseite';
         $userId = (int) ($metadata['user_id'] ?? 0);
@@ -355,6 +371,139 @@ class CheckoutController extends Controller
 
         $invoice->user->notify(new InvoiceCreatedNotification($invoice));
         Log::debug('Checkout success: invoice created', ['invoice_id' => $invoice->id]);
+    }
+
+    /**
+     * Build Stripe Checkout for webspace and redirect.
+     */
+    protected function redirectWebspaceToStripe(Request $request, array $payload): RedirectResponse|Response
+    {
+        $user = $request->user();
+        $plan = HostingPlan::find($payload['hosting_plan_id'] ?? 0);
+        if (! $plan || ! $plan->is_active) {
+            $request->session()->forget('checkout_webspace');
+
+            return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
+        }
+
+        $priceId = $plan->stripe_price_id ?: config('billing.stripe_webspace_product_id');
+        if (! $priceId) {
+            $request->session()->forget('checkout_webspace');
+
+            return redirect()->route('webspace.checkout', ['plan' => $plan->id])
+                ->with('error', 'Kein Stripe-Preis für dieses Paket konfiguriert. Bitte im Admin unter Webspace-Pakete einen Stripe Price eintragen.');
+        }
+
+        $domain = $payload['domain'] ?? '';
+
+        try {
+            $checkout = Checkout::customer($user)
+                ->allowPromotionCodes()
+                ->create($priceId, [
+                    'mode' => StripeSession::MODE_SUBSCRIPTION,
+                    'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
+                    'cancel_url' => route('webspace.checkout', ['plan' => $plan->id]),
+                    'subscription_data' => [
+                        'metadata' => [
+                            'type' => 'webspace',
+                            'hosting_plan_id' => (string) $plan->id,
+                            'domain' => $domain,
+                            'user_id' => (string) $user->id,
+                        ],
+                    ],
+                ]);
+
+            $request->session()->forget('checkout_webspace');
+
+            return Inertia::location($checkout->redirect()->getTargetUrl());
+        } catch (InvalidRequestException $e) {
+            $request->session()->forget('checkout_webspace');
+
+            return redirect()->route('webspace.checkout', ['plan' => $plan->id])
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Create WebspaceAccount and Plesk account after successful Stripe checkout.
+     */
+    protected function handleWebspaceCheckoutSuccess(Request $request, \App\Models\User $user, \Stripe\Subscription $subscription, array $metadata): RedirectResponse
+    {
+        $planId = (int) ($metadata['hosting_plan_id'] ?? 0);
+        $domain = $metadata['domain'] ?? '';
+        $userId = (int) ($metadata['user_id'] ?? 0);
+
+        if ($userId !== $user->id || $planId < 1 || $domain === '') {
+            Log::debug('Checkout success webspace: invalid metadata');
+
+            return redirect()->route('webspace-accounts.index')->with('error', 'Ungültige Abo-Daten.');
+        }
+
+        $existing = WebspaceAccount::where('stripe_subscription_id', $subscription->id)->first();
+        if ($existing) {
+            return redirect()->route('webspace-accounts.show', $existing->id)->with('success', 'Ihr Webspace ist aktiv.');
+        }
+
+        $plan = HostingPlan::find($planId);
+        if (! $plan) {
+            return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
+        }
+
+        $server = HostingServer::where('is_active', true)->first();
+        if (! $server) {
+            Log::error('Checkout success webspace: no active HostingServer');
+            $account = $user->webspaceAccounts()->create([
+                'hosting_plan_id' => $plan->id,
+                'domain' => $domain,
+                'plesk_username' => 'webspace_'.Str::random(8),
+                'status' => 'pending',
+                'stripe_subscription_id' => $subscription->id,
+                'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
+                'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
+                'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
+                'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+                'renewal_type' => 'auto',
+            ]);
+            $plan->product?->id && $account->update(['product_id' => $plan->product->id]);
+
+            return redirect()->route('webspace-accounts.show', $account->id)
+                ->with('error', 'Webspace wird eingerichtet. Es ist kein aktiver Hosting-Server konfiguriert – bitte kontaktieren Sie uns.');
+        }
+
+        $pleskUsername = 'webspace_'.(string) (WebspaceAccount::max('id') ?? 0).'_'.Str::random(4);
+        $password = Str::password(20);
+
+        $account = $user->webspaceAccounts()->create([
+            'hosting_plan_id' => $plan->id,
+            'hosting_server_id' => $server->id,
+            'domain' => $domain,
+            'plesk_username' => $pleskUsername,
+            'plesk_password_encrypted' => Crypt::encryptString($password),
+            'status' => 'pending',
+            'stripe_subscription_id' => $subscription->id,
+            'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
+            'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
+            'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
+            'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+            'renewal_type' => 'auto',
+        ]);
+        if ($plan->product?->id) {
+            $account->update(['product_id' => $plan->product->id]);
+        }
+
+        $plesk = app(PleskClient::class);
+        $plesk->setServer($server);
+        $ok = $plesk->createAccount($pleskUsername, $domain, $plan->plesk_package_name, $password);
+
+        if ($ok) {
+            $account->update(['status' => 'active']);
+            Log::debug('Checkout success webspace: Plesk account created', ['account_id' => $account->id]);
+        } else {
+            Log::warning('Checkout success webspace: Plesk createAccount failed', ['account_id' => $account->id]);
+        }
+
+        return redirect()->route('webspace-accounts.show', $account->id)
+            ->with('success', $ok ? 'Ihr Webspace wurde erfolgreich eingerichtet.' : 'Ihr Abo ist aktiv. Die Einrichtung des Webspace kann einen Moment dauern.');
     }
 
     protected function getPriceIdForTemplate(Template $template): ?string

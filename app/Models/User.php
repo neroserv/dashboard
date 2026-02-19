@@ -106,6 +106,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Webspace accounts (Plesk hosting) owned by this user.
+     *
+     * @return HasMany<WebspaceAccount>
+     */
+    public function webspaceAccounts(): HasMany
+    {
+        return $this->hasMany(WebspaceAccount::class);
+    }
+
+    /**
      * Sites this user can edit as a collaborator.
      *
      * @return BelongsToMany<Site>
