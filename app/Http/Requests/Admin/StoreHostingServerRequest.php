@@ -14,6 +14,13 @@ class StoreHostingServerRequest extends FormRequest
         return $this->user()?->isAdmin() ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('port') && $this->input('port') === '') {
+            $this->merge(['port' => null]);
+        }
+    }
+
     /**
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

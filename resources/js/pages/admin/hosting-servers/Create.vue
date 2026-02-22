@@ -69,14 +69,14 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="space-y-2">
-                                <Label for="port">Port</Label>
+                                <Label for="port">Port (optional)</Label>
                                 <Input
                                     id="port"
                                     name="port"
                                     type="number"
                                     min="1"
                                     max="65535"
-                                    placeholder="8443"
+                                    placeholder="leer = Standard (443/80)"
                                 />
                                 <InputError :message="errors.port" />
                             </div>
@@ -97,12 +97,13 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <InputError :message="errors.api_username" />
                         </div>
                         <div class="space-y-2">
-                            <Label for="ip_address">IP-Adresse (optional)</Label>
+                            <Label for="ip_address">IP-Adresse</Label>
                             <Input
                                 id="ip_address"
                                 name="ip_address"
-                                placeholder="192.168.1.1"
+                                placeholder="z. B. Shared-IP aus dem Reseller-Pool"
                             />
+                            <Text class="text-sm" muted>Für Plesk Reseller: Muss eine IP aus Ihrem Reseller-IP-Pool sein (Plesk → IP-Adressen).</Text>
                             <InputError :message="errors.ip_address" />
                         </div>
                         <div class="space-y-2">

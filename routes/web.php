@@ -98,6 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('checkout', [CheckoutController::class, 'store'])->middleware('billing.profile')->name('checkout.store');
     Route::get('checkout/redirect', [CheckoutController::class, 'redirect'])->middleware('billing.profile')->name('checkout.redirect');
+    Route::get('checkout/redirect-to-stripe', [CheckoutController::class, 'redirectToStripe'])->middleware('billing.profile')->name('checkout.redirect-to-stripe');
     Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
 
     Route::get('webspace', [WebspaceController::class, 'index'])->name('webspace.index');
@@ -218,6 +219,7 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::resource('hosting-servers', HostingServerController::class);
     Route::resource('hosting-plans', HostingPlanController::class);
     Route::get('webspace-accounts', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');
+    Route::post('webspace-accounts/{webspace_account}/retry-plesk', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'retryPlesk'])->name('webspace-accounts.retry-plesk');
     Route::get('webspace-accounts/{webspace_account}', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
     Route::resource('templates', TemplateController::class);
     Route::get('templates/{template}/design', [\App\Http\Controllers\Admin\TemplateDesignController::class, 'design'])->name('templates.design');

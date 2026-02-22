@@ -74,7 +74,9 @@ class WebspaceAccountController extends Controller
             return redirect()->back()->with('error', 'Plesk-Login konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.');
         }
 
-        $url = 'https://'.$server->hostname.':8443/enterprise/rsession_init.php?PLESKSESSID='.urlencode($token);
+        $protocol = ($server->use_ssl ?? true) ? 'https' : 'http';
+        $port = $server->port !== null && (int) $server->port > 0 ? (int) $server->port : 8443;
+        $url = $protocol.'://'.$server->hostname.':'.$port.'/enterprise/rsession_init.php?PHPSESSID='.urlencode($token);
 
         return redirect()->away($url);
     }

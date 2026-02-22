@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreHostingPlanRequest;
 use App\Http\Requests\Admin\UpdateHostingPlanRequest;
 use App\Models\HostingPlan;
+use App\Services\SyncHostingPlanStripePriceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -49,6 +50,12 @@ class HostingPlanController extends Controller
             'sort_order' => $plan->sort_order,
         ]);
 
+        try {
+            app(SyncHostingPlanStripePriceService::class)->sync($plan);
+        } catch (\Throwable) {
+            // Stripe nicht konfiguriert oder Fehler – Plan ist trotzdem gespeichert
+        }
+
         return to_route('admin.hosting-plans.index');
     }
 
@@ -81,6 +88,12 @@ class HostingPlanController extends Controller
             'is_active' => $hostingPlan->is_active,
             'sort_order' => $hostingPlan->sort_order,
         ]);
+
+        try {
+            app(SyncHostingPlanStripePriceService::class)->sync($hostingPlan);
+        } catch (\Throwable) {
+            // Stripe nicht konfiguriert oder Fehler – Plan ist trotzdem gespeichert
+        }
 
         return to_route('admin.hosting-plans.show', $hostingPlan);
     }

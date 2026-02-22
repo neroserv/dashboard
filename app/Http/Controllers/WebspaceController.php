@@ -66,12 +66,13 @@ class WebspaceController extends Controller
             return redirect()->route('webspace.checkout')->with('error', 'Paket nicht verfügbar.');
         }
 
-        $request->session()->put('checkout_webspace', [
+        $payload = [
             'hosting_plan_id' => $plan->id,
             'domain' => $validated['domain'],
             'user_id' => $request->user()->id,
-        ]);
+        ];
+        $request->session()->put('checkout_webspace', $payload);
 
-        return redirect()->route('checkout.redirect');
+        return app(CheckoutController::class)->buildWebspaceCheckoutRedirect($request, $payload);
     }
 }

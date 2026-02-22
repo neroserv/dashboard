@@ -7,6 +7,8 @@ use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
+use PleskX\Api\Client as PleskXmlClient;
+use PleskX\Api\Exception as PleskApiException;
 
 class PleskClient
 {
@@ -31,8 +33,43 @@ class PleskClient
     }
 
     /**
-     * Create a Plesk webspace account. Password is passed in and used for owner and FTP.
-     * When using REST API, optional email defaults to a placeholder if not provided.
+     * Plesk XML-RPC client (plesk/api-php-lib) for reseller-compatible operations.
+     */
+    protected function getPleskXmlClient(): PleskXmlClient
+    {
+        $host = $this->server->hostname;
+        $port = $this->server->port !== null && (int) $this->server->port > 0 ? (int) $this->server->port : 8443;
+        $protocol = ($this->server->use_ssl ?? true) ? 'https' : 'http';
+
+        $plesk = new PleskXmlClient($host, $port, $protocol);
+        if (! empty($this->server->api_username)) {
+            $plesk->setCredentials($this->server->api_username, $this->server->api_token);
+        } else {
+            $plesk->setSecretKey($this->server->api_token);
+        }
+
+        return $plesk;
+    }
+
+    /**
+     * IP for new webspace must be from the reseller's IP pool (not just any server IP).
+     * Only the in HostingServer configured ip_address is used so you can set one that is in your pool.
+     */
+    protected function resolveIpForNewWebspace(): string
+    {
+        if (empty($this->server->ip_address)) {
+            throw new Exception(
+                'Plesk: Für die Webspace-Anlage muss unter Hosting-Server eine IP eingetragen sein, die in Ihrem Reseller-IP-Pool liegt. '
+                .'In Plesk: Als Reseller anmelden → IP-Adressen – eine davon (z. B. Shared-IP) im Hosting-Server eintragen.'
+            );
+        }
+
+        return trim($this->server->ip_address);
+    }
+
+    /**
+     * Create a Plesk webspace account via XML API (reseller-compatible).
+     * Uses plesk/api-php-lib: customer then webspace.
      */
     public function createAccount(string $username, string $domain, string $package, string $password, ?string $email = null): bool
     {
@@ -40,15 +77,50 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        if ($this->server->usesRestApi()) {
-            return $this->createAccountRest($username, $domain, $package, $password, $email ?? 'webspace@placeholder.local');
-        }
+        $email = $email ?? 'webspace@placeholder.local';
 
-        return $this->createAccountXml($username, $domain, $package, $password);
+        try {
+            $plesk = $this->getPleskXmlClient();
+            $plesk->customer()->create([
+                'cname' => $username,
+                'pname' => $username,
+                'login' => $username,
+                'passwd' => $password,
+                'email' => $email,
+            ]);
+            $ipForWebspace = $this->resolveIpForNewWebspace();
+            $plesk->webspace()->create(
+                [
+                    'name' => $domain,
+                    'owner-login' => $username,
+                    'ip_address' => $ipForWebspace,
+                ],
+                [
+                    'ftp_login' => $username,
+                    'ftp_password' => $password,
+                    'php' => 'true',
+                    'ssl' => 'true',
+                    'webstat' => 'awstats',
+                    'www-root' => "/var/www/vhosts/{$domain}",
+                ],
+                $package
+            );
+            Log::info('Plesk XML API account created', ['server' => $this->server->hostname, 'domain' => $domain]);
+
+            return true;
+        } catch (PleskApiException $e) {
+            Log::error('Plesk XML API create account error', [
+                'server' => $this->server->hostname,
+                'domain' => $domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new Exception('Plesk: '.$e->getMessage(), (int) $e->getCode(), $e);
+        }
     }
 
     /**
-     * Create a session token for the customer to log into Plesk panel (server.create_session).
+     * Create a session token for the customer to log into Plesk panel (XML API server.create_session).
      * Returns the session ID or null on failure.
      */
     public function createCustomerSession(string $pleskUsername, string $clientIp): ?string
@@ -57,49 +129,12 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        $userIpBase64 = base64_encode($clientIp);
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
-        $xml .= '<packet version="1.6.9.1">';
-        $xml .= '<server>';
-        $xml .= '<create_session>';
-        $xml .= '<login>'.htmlspecialchars($pleskUsername, ENT_XML1).'</login>';
-        $xml .= '<data>';
-        $xml .= '<user_ip>'.htmlspecialchars($userIpBase64, ENT_XML1).'</user_ip>';
-        $xml .= '<source_server></source_server>';
-        $xml .= '</data>';
-        $xml .= '</create_session>';
-        $xml .= '</server>';
-        $xml .= '</packet>';
-
-        $url = $this->getBaseUrl().'/api/v2/cli/server/';
-        $headers = ['Content-Type' => 'text/xml'];
-        if ($this->server->usesRestApi()) {
-            $headers['Authorization'] = 'Basic '.base64_encode($this->server->api_username.':'.$this->server->api_token);
-        } else {
-            $headers['HTTP_AUTH_KEY'] = $this->apiKey;
-            $headers['KEY'] = $this->apiKey;
-        }
-
         try {
-            $response = $this->client->request('POST', $url, [
-                'headers' => $headers,
-                'body' => $xml,
-            ]);
+            $plesk = $this->getPleskXmlClient();
 
-            $result = simplexml_load_string($response->getBody()->getContents());
-            $createSession = $result->server->create_session->result ?? null;
-            if ($createSession && (string) $createSession->status === 'ok' && isset($createSession->id)) {
-                return (string) $createSession->id;
-            }
-
+            return $plesk->session()->create($pleskUsername, $clientIp);
+        } catch (PleskApiException $e) {
             Log::warning('Plesk create_session failed', [
-                'server' => $this->server->hostname,
-                'response' => $response->getBody()->getContents(),
-            ]);
-
-            return null;
-        } catch (GuzzleException $e) {
-            Log::error('Plesk create_session error', [
                 'server' => $this->server->hostname,
                 'error' => $e->getMessage(),
             ]);
@@ -114,17 +149,13 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        if ($this->server->usesRestApi()) {
-            return $this->suspendAccountRest($username);
+        try {
+            return $this->getPleskXmlClient()->customer()->disable('login', $username);
+        } catch (PleskApiException $e) {
+            Log::error('Plesk XML API suspend error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
+
+            return false;
         }
-
-        $xml = $this->buildXmlRequest('customer.set', [
-            'filter' => ['login' => $username],
-            'values' => ['status' => '16'],
-            'general' => ['status' => 'suspended'],
-        ]);
-
-        return $this->makeXmlApiCall($xml);
     }
 
     public function unsuspendAccount(string $username): bool
@@ -133,17 +164,13 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        if ($this->server->usesRestApi()) {
-            return $this->unsuspendAccountRest($username);
+        try {
+            return $this->getPleskXmlClient()->customer()->enable('login', $username);
+        } catch (PleskApiException $e) {
+            Log::error('Plesk XML API unsuspend error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
+
+            return false;
         }
-
-        $xml = $this->buildXmlRequest('customer.set', [
-            'filter' => ['login' => $username],
-            'values' => ['status' => '0'],
-            'general' => ['status' => 'active'],
-        ]);
-
-        return $this->makeXmlApiCall($xml);
     }
 
     public function changePackage(string $username, string $newPackage): bool
@@ -152,16 +179,40 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        if ($this->server->usesRestApi()) {
-            return $this->changePackageRest($username, $newPackage);
+        try {
+            $plesk = $this->getPleskXmlClient();
+            $planGuid = null;
+            foreach ($plesk->servicePlan()->getAll() as $plan) {
+                if (($plan->name ?? '') === $newPackage && ! empty($plan->guid)) {
+                    $planGuid = $plan->guid;
+                    break;
+                }
+            }
+            if ($planGuid === null) {
+                Log::warning('Plesk changePackage: plan not found', ['plan' => $newPackage]);
+
+                return false;
+            }
+            $customer = $plesk->customer()->get('login', $username);
+            $webspaces = $plesk->webspace()->getAll();
+            $ok = true;
+            foreach ($webspaces as $ws) {
+                if ($ws->ownerId === $customer->id) {
+                    $plesk->webspace()->request([
+                        'switch-subscription' => [
+                            'filter' => ['name' => $ws->name],
+                            'plan-guid' => $planGuid,
+                        ],
+                    ]);
+                }
+            }
+
+            return $ok;
+        } catch (PleskApiException $e) {
+            Log::error('Plesk XML API change package error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
+
+            return false;
         }
-
-        $xml = $this->buildXmlRequest('service-plan.set', [
-            'filter' => ['owner-login' => $username],
-            'values' => ['name' => $newPackage],
-        ]);
-
-        return $this->makeXmlApiCall($xml);
     }
 
     public function terminateAccount(string $username): bool
@@ -170,15 +221,22 @@ class PleskClient
             throw new Exception('Server not configured');
         }
 
-        if ($this->server->usesRestApi()) {
-            return $this->terminateAccountRest($username);
+        try {
+            $plesk = $this->getPleskXmlClient();
+            $customer = $plesk->customer()->get('login', $username);
+            $webspaces = $plesk->webspace()->getAll();
+            foreach ($webspaces as $ws) {
+                if ($ws->ownerId === $customer->id) {
+                    $plesk->webspace()->delete('name', $ws->name);
+                }
+            }
+
+            return $plesk->customer()->delete('login', $username);
+        } catch (PleskApiException $e) {
+            Log::error('Plesk XML API terminate error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
+
+            return false;
         }
-
-        $xml = $this->buildXmlRequest('webspace.del', [
-            'filter' => ['owner-login' => $username],
-        ]);
-
-        return $this->makeXmlApiCall($xml);
     }
 
     public function addAddon(string $username, string $addon): bool
@@ -202,25 +260,30 @@ class PleskClient
     }
 
     /**
-     * Test connection (REST API only). Returns ['success' => bool, 'message' => string, 'info' => array|null].
+     * Test connection (XML API). Returns ['success' => bool, 'message' => string, 'info' => array|null].
      */
     public function testConnection(): array
     {
-        if (! $this->server || ! $this->server->usesRestApi()) {
-            return ['success' => false, 'message' => 'REST API (api_username) required for connection test'];
+        if (! $this->server) {
+            return ['success' => false, 'message' => 'Server not configured'];
         }
 
         try {
-            $result = $this->makeRestRequest('GET', '/server');
+            $info = $this->getPleskXmlClient()->server()->getGeneralInfo();
 
             return [
                 'success' => true,
                 'message' => 'Connection successful',
                 'info' => [
-                    'hostname' => $result['hostname'] ?? null,
-                    'platform' => $result['platform'] ?? null,
-                    'panel_version' => $result['panel_version'] ?? null,
+                    'hostname' => $info->serverName ?? null,
+                    'server_guid' => $info->serverGuid ?? null,
+                    'mode' => $info->mode ?? null,
                 ],
+            ];
+        } catch (PleskApiException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
             ];
         } catch (Exception $e) {
             return [
@@ -231,298 +294,50 @@ class PleskClient
     }
 
     /**
-     * List service plans (REST API only). Returns array of plans with name, id, limits.
+     * List service plans (XML API). Returns array of plans with name, id, limits.
      *
      * @return array<int, array{name: string, id: int, disk_quota: mixed, bandwidth: mixed, domains: mixed, mailboxes: mixed, databases: mixed}>
      */
     public function getPackages(): array
     {
-        if (! $this->server || ! $this->server->usesRestApi()) {
+        if (! $this->server) {
             return [];
         }
 
-        $result = $this->makeRestRequest('GET', '/service-plans');
-        if (! is_array($result)) {
+        try {
+            $items = $this->getPleskXmlClient()->servicePlan()->getAll();
+            $plans = [];
+            foreach ($items as $plan) {
+                $plans[] = [
+                    'name' => $plan->name ?? '',
+                    'id' => $plan->id ?? 0,
+                    'disk_quota' => null,
+                    'bandwidth' => null,
+                    'domains' => null,
+                    'mailboxes' => null,
+                    'databases' => null,
+                ];
+            }
+
+            return $plans;
+        } catch (Exception $e) {
+            Log::warning('Plesk getPackages error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
+
             return [];
         }
-        $plans = [];
-        foreach ($result as $plan) {
-            $limits = $plan['limits'] ?? [];
-            $plans[] = [
-                'name' => $plan['name'] ?? '',
-                'id' => $plan['id'] ?? 0,
-                'disk_quota' => $limits['disk_space'] ?? null,
-                'bandwidth' => $limits['traffic'] ?? null,
-                'domains' => $limits['domains'] ?? null,
-                'mailboxes' => $limits['mailboxes'] ?? null,
-                'databases' => $limits['databases'] ?? null,
-            ];
-        }
-
-        return $plans;
     }
 
     protected function getBaseUrl(): string
     {
         $protocol = ($this->server->use_ssl ?? true) ? 'https' : 'http';
-        $port = (int) ($this->server->port ?? 8443);
-
-        return $protocol.'://'.$this->server->hostname.':'.$port;
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $data
-     * @return array<string, mixed>
-     */
-    protected function makeRestRequest(string $method, string $endpoint, ?array $data = null): array
-    {
-        $url = $this->getBaseUrl().'/api/v2'.$endpoint;
-        $options = [
-            'headers' => [
-                'Authorization' => 'Basic '.base64_encode($this->server->api_username.':'.$this->server->api_token),
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-            ],
-        ];
-        if ($data !== null) {
-            $options['json'] = $data;
+        $host = $this->server->hostname;
+        $port = $this->server->port;
+        $port = $port === null || $port === '' ? null : (int) $port;
+        if ($port !== null && $port > 0) {
+            return $protocol.'://'.$host.':'.$port;
         }
 
-        $response = $this->client->request($method, $url, $options);
-        $body = (string) $response->getBody();
-        $decoded = json_decode($body, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Invalid JSON response: '.$body);
-        }
-
-        return $decoded ?? [];
-    }
-
-    protected function createAccountRest(string $username, string $domain, string $package, string $password, string $email): bool
-    {
-        try {
-            $customer = $this->makeRestRequest('POST', '/customers', [
-                'name' => $username,
-                'login' => $username,
-                'password' => $password,
-                'email' => $email,
-            ]);
-            $customerId = $customer['id'] ?? null;
-            if (! $customerId) {
-                Log::error('Plesk REST create customer: no id in response', ['response' => $customer]);
-
-                return false;
-            }
-
-            $this->makeRestRequest('POST', '/domains', [
-                'name' => $domain,
-                'owner' => ['id' => (int) $customerId],
-                'plan' => ['name' => $package],
-                'hosting_type' => 'virtual',
-                'hosting_settings' => [
-                    'ftp_login' => $username,
-                    'ftp_password' => $password,
-                ],
-            ]);
-
-            Log::info('Plesk REST account created', ['server' => $this->server->hostname, 'domain' => $domain]);
-
-            return true;
-        } catch (GuzzleException $e) {
-            $message = $e->getMessage();
-            if (method_exists($e, 'getResponse') && $e->getResponse() !== null) {
-                $body = (string) $e->getResponse()->getBody();
-                $decoded = json_decode($body, true);
-                if (is_array($decoded) && isset($decoded['message'])) {
-                    $message = $decoded['message'];
-                }
-            }
-            Log::error('Plesk REST create account error', [
-                'server' => $this->server->hostname,
-                'error' => $message,
-            ]);
-
-            return false;
-        } catch (Exception $e) {
-            Log::error('Plesk REST create account error', [
-                'server' => $this->server->hostname,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
-    }
-
-    protected function createAccountXml(string $username, string $domain, string $package, string $password): bool
-    {
-        $xml = $this->buildXmlRequest('webspace.add', [
-            'gen_setup' => [
-                'name' => $domain,
-                'owner-login' => $username,
-                'owner-password' => $password,
-                'ip_address' => $this->server->ip_address,
-            ],
-            'hosting' => [
-                'vrt_hst' => [
-                    'property' => [
-                        ['name' => 'ftp_login', 'value' => $username],
-                        ['name' => 'ftp_password', 'value' => $password],
-                        ['name' => 'php', 'value' => 'true'],
-                        ['name' => 'ssl', 'value' => 'true'],
-                        ['name' => 'webstat', 'value' => 'awstats'],
-                        ['name' => 'www-root', 'value' => "/var/www/vhosts/{$domain}"],
-                    ],
-                ],
-            ],
-            'limits' => [
-                'overuse' => 'block',
-                'limit' => [
-                    ['name' => 'disk_space', 'value' => 'unlimited'],
-                    ['name' => 'max_traffic', 'value' => 'unlimited'],
-                    ['name' => 'max_subdom', 'value' => 'unlimited'],
-                    ['name' => 'max_dom', 'value' => 'unlimited'],
-                    ['name' => 'max_db', 'value' => 'unlimited'],
-                    ['name' => 'max_mail', 'value' => 'unlimited'],
-                    ['name' => 'max_wu', 'value' => 'unlimited'],
-                ],
-            ],
-            'plan-name' => $package,
-        ]);
-
-        return $this->makeXmlApiCall($xml);
-    }
-
-    protected function suspendAccountRest(string $username): bool
-    {
-        try {
-            $customers = $this->makeRestRequest('GET', '/customers?login='.urlencode($username));
-            $customers = is_array($customers) ? $customers : [];
-            if (isset($customers['id'])) {
-                $customers = [$customers];
-            }
-            $customerId = $customers[0]['id'] ?? null;
-            if (! $customerId) {
-                Log::warning('Plesk REST suspend: customer not found', ['login' => $username]);
-
-                return false;
-            }
-            $domains = $this->makeRestRequest('GET', '/domains?owner_id='.(int) $customerId);
-            $domains = is_array($domains) ? $domains : [];
-            if (isset($domains['id'])) {
-                $domains = [$domains];
-            }
-            foreach ($domains as $domain) {
-                $id = $domain['id'] ?? null;
-                if ($id !== null) {
-                    $this->makeRestRequest('PUT', '/domains/'.(int) $id, ['status' => 'disabled']);
-                }
-            }
-
-            return true;
-        } catch (Exception $e) {
-            Log::error('Plesk REST suspend error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
-
-            return false;
-        }
-    }
-
-    protected function unsuspendAccountRest(string $username): bool
-    {
-        try {
-            $customers = $this->makeRestRequest('GET', '/customers?login='.urlencode($username));
-            $customers = is_array($customers) ? $customers : [];
-            if (isset($customers['id'])) {
-                $customers = [$customers];
-            }
-            $customerId = $customers[0]['id'] ?? null;
-            if (! $customerId) {
-                return false;
-            }
-            $domains = $this->makeRestRequest('GET', '/domains?owner_id='.(int) $customerId);
-            $domains = is_array($domains) ? $domains : [];
-            if (isset($domains['id'])) {
-                $domains = [$domains];
-            }
-            foreach ($domains as $domain) {
-                $id = $domain['id'] ?? null;
-                if ($id !== null) {
-                    $this->makeRestRequest('PUT', '/domains/'.(int) $id, ['status' => 'active']);
-                }
-            }
-
-            return true;
-        } catch (Exception $e) {
-            Log::error('Plesk REST unsuspend error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
-
-            return false;
-        }
-    }
-
-    protected function changePackageRest(string $username, string $newPackage): bool
-    {
-        try {
-            $customers = $this->makeRestRequest('GET', '/customers?login='.urlencode($username));
-            $customers = is_array($customers) ? $customers : [];
-            if (isset($customers['id'])) {
-                $customers = [$customers];
-            }
-            $customerId = $customers[0]['id'] ?? null;
-            if (! $customerId) {
-                return false;
-            }
-            $domains = $this->makeRestRequest('GET', '/domains?owner_id='.(int) $customerId);
-            $domains = is_array($domains) ? $domains : [];
-            if (isset($domains['id'])) {
-                $domains = [$domains];
-            }
-            foreach ($domains as $domain) {
-                $id = $domain['id'] ?? null;
-                if ($id !== null) {
-                    $this->makeRestRequest('PUT', '/domains/'.(int) $id, ['plan' => ['name' => $newPackage]]);
-                }
-            }
-
-            return true;
-        } catch (Exception $e) {
-            Log::error('Plesk REST change package error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
-
-            return false;
-        }
-    }
-
-    protected function terminateAccountRest(string $username): bool
-    {
-        try {
-            $customers = $this->makeRestRequest('GET', '/customers?login='.urlencode($username));
-            $customers = is_array($customers) ? $customers : [];
-            if (isset($customers['id'])) {
-                $customers = [$customers];
-            }
-            $customerId = $customers[0]['id'] ?? null;
-            if (! $customerId) {
-                Log::warning('Plesk REST terminate: customer not found', ['login' => $username]);
-
-                return false;
-            }
-            $domains = $this->makeRestRequest('GET', '/domains?owner_id='.(int) $customerId);
-            $domains = is_array($domains) ? $domains : [];
-            if (isset($domains['id'])) {
-                $domains = [$domains];
-            }
-            foreach ($domains as $domain) {
-                $id = $domain['id'] ?? null;
-                if ($id !== null) {
-                    $this->makeRestRequest('DELETE', '/domains/'.(int) $id);
-                }
-            }
-            $this->makeRestRequest('DELETE', '/customers/'.(int) $customerId);
-
-            return true;
-        } catch (Exception $e) {
-            Log::error('Plesk REST terminate error', ['server' => $this->server->hostname, 'error' => $e->getMessage()]);
-
-            return false;
-        }
+        return $protocol.'://'.$host;
     }
 
     protected function makeXmlApiCall(string $xml): bool

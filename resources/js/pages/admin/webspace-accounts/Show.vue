@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { dashboard } from '@/routes';
+import { notify } from '@/composables/useNotify';
 import type { BreadcrumbItem } from '@/types';
 
 type WebspaceAccount = {
@@ -28,6 +30,25 @@ type Props = {
 
 const props = defineProps<Props>();
 
+const page = usePage();
+watch(
+    () => (page.props.flash as { error?: string; success?: string })?.error,
+    (message) => {
+        if (message) notify.error(message);
+    },
+    { immediate: true },
+);
+watch(
+    () => (page.props.flash as { error?: string; success?: string })?.success,
+    (message) => {
+        if (message) notify.success(message);
+    },
+    { immediate: true },
+);
+
+const canRetryPlesk = () =>
+    props.webspaceAccount.status === 'pending' || props.webspaceAccount.status === 'active';
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
     { title: 'Webspace-Accounts', href: '/admin/webspace-accounts' },
@@ -45,12 +66,23 @@ const stripeDashboardUrl = (subId: string | null) =>
         <Head :title="webspaceAccount.domain" />
 
         <div class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <Heading level="h1">{{ webspaceAccount.domain }}</Heading>
                     <Text class="mt-2" muted>
                         Webspace-Account · {{ webspaceAccount.hosting_plan.name }}
                     </Text>
+                </div>
+                <div v-if="canRetryPlesk()">
+                    <Form
+                        :action="`/admin/webspace-accounts/${webspaceAccount.id}/retry-plesk`"
+                        method="post"
+                        class="inline"
+                    >
+                        <Button type="submit" variant="outline">
+                            Plesk-Anlage erneut ausführen
+                        </Button>
+                    </Form>
                 </div>
             </div>
 

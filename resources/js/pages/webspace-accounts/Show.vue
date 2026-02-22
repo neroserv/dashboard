@@ -137,12 +137,16 @@ function copyToClipboard(text: string) {
                     <CardDescription>Direkt in Plesk einloggen oder Webmail öffnen</CardDescription>
                 </CardHeader>
                 <CardContent class="flex flex-wrap gap-3">
-                    <Link :href="`/webspace-accounts/${webspaceAccount.id}/plesk-login`">
+                    <a
+                        :href="`/webspace-accounts/${webspaceAccount.id}/plesk-login`"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
                         <Button>
                             <ExternalLink class="mr-2 h-4 w-4" />
                             In Plesk anmelden
                         </Button>
-                    </Link>
+                    </a>
                     <a
                         :href="webmailUrl"
                         target="_blank"

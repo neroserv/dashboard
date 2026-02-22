@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { dashboard } from '@/routes';
+import { notify } from '@/composables/useNotify';
 import type { BreadcrumbItem } from '@/types';
 
 type HostingPlan = {
@@ -28,6 +30,22 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+
+const page = usePage();
+watch(
+    () => (page.props.flash as { error?: string; success?: string })?.error,
+    (message) => {
+        if (message) notify.error(message);
+    },
+    { immediate: true },
+);
+watch(
+    () => (page.props.flash as { error?: string; success?: string })?.success,
+    (message) => {
+        if (message) notify.success(message);
+    },
+    { immediate: true },
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -57,7 +75,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     action="/webspace/checkout"
                     method="post"
                     class="space-y-6"
-                    v-slot="{ errors }"
+                    v-slot="{ errors, processing }"
                 >
                     <CardContent class="space-y-4">
                         <div class="space-y-2">
@@ -95,7 +113,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </div>
                     </CardContent>
                     <CardFooter class="flex gap-2">
-                        <Button type="submit">Weiter zur Zahlung</Button>
+                        <Button type="submit" :disabled="processing">
+                            {{ processing ? 'Wird weitergeleitet…' : 'Weiter zur Zahlung' }}
+                        </Button>
                         <Link href="/webspace">
                             <Button type="button" variant="outline">Abbrechen</Button>
                         </Link>
