@@ -173,7 +173,7 @@ onUnmounted(() => {
                             <Upload class="mr-1.5 h-3.5 w-3.5" />
                             JSON Import
                         </Button>
-                        <Button variant="outline" size="sm" class="border-emerald-500/50 bg-emerald-500/10 hover:border-emerald-500 dark:border-emerald-500/50 dark:bg-emerald-500/10" @click="handleSaveServer">
+                        <Button variant="outline" size="sm" class="border-primary/50 bg-primary/10 hover:border-primary dark:border-primary/50 dark:bg-primary/10" @click="handleSaveServer">
                             <Save class="mr-1.5 h-3.5 w-3.5" />
                             Server speichern
                         </Button>
@@ -217,7 +217,7 @@ onUnmounted(() => {
                             </p>
                             <p
                                 v-if="connectingFromNode"
-                                class="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
+                                class="mt-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-xs font-medium text-primary dark:border-primary/40 dark:bg-primary/10 dark:text-primary"
                             >
                                 Verbindungsmodus: Jetzt „in“ des Ziel-Nodes klicken.
                             </p>

@@ -25,7 +25,7 @@ class DunningPdfService
             Pdf::view('invoices.dunning', [
                 'invoice' => $invoice,
                 'dunningLetter' => $dunningLetter,
-                'company' => Setting::getInvoiceCompany(),
+                'company' => Setting::getInvoiceCompany($invoice->user?->brand),
             ])
                 ->format('a4')
                 ->disk('local')

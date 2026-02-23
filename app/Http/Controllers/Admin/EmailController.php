@@ -68,7 +68,8 @@ class EmailController extends Controller
             'action_text' => $actionText ? str_replace($search, $values, $actionText) : null,
         ];
         $actionUrl = $this->sampleActionUrl($emailTemplate->key);
-        $html = TransactionalTemplateMail::renderHtml($content, $actionUrl);
+        $brand = $request->attributes->get('current_brand');
+        $html = TransactionalTemplateMail::renderHtml($content, $actionUrl, $brand);
 
         return response()->json([
             'subject' => $content['subject'],
@@ -88,7 +89,7 @@ class EmailController extends Controller
         $content = $emailTemplate->replace($this->sampleReplacements($emailTemplate->key));
         $actionUrl = $this->sampleActionUrl($emailTemplate->key);
 
-        Mail::to($to)->send(new TransactionalTemplateMail($content, $actionUrl, isTest: true));
+        Mail::to($to)->send(new TransactionalTemplateMail($content, $actionUrl, isTest: true, brand: $request->attributes->get('current_brand')));
 
         return back()->with('success', 'Test-E-Mail wurde an '.$to.' gesendet.');
     }

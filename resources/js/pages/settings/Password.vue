@@ -111,7 +111,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
                                         <Text
                                             v-show="recentlySuccessful"
                                             variant="small"
-                                            class="text-emerald-700 dark:text-emerald-400"
+                                            class="text-primary"
                                         >
                                             Gespeichert.
                                         </Text>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { dashboard, login, register } from '@/routes';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Heading, Text, Link as TypographyLink } from '@/components/ui/typography';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Heading, Text } from '@/components/ui/typography';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Check, Sparkles, Globe, Zap } from 'lucide-vue-next';
+import { ArrowRight, Sparkles, Globe, Zap } from 'lucide-vue-next';
 
 withDefaults(
     defineProps<{
@@ -15,6 +16,19 @@ withDefaults(
         canRegister: true,
     },
 );
+
+const page = usePage();
+const appName = computed(() => (page.props.name as string) ?? 'PraxisHosting');
+const brand = computed(() => page.props.brand as { themeColors?: Record<string, string> } | null);
+const brandThemeStyle = computed(() => {
+    const colors = brand.value?.themeColors;
+    if (!colors || typeof colors !== 'object') return undefined;
+    const vars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(colors)) {
+        if (value) vars[`--${key.replace(/_/g, '-')}`] = value;
+    }
+    return Object.keys(vars).length ? vars : undefined;
+});
 </script>
 
 <template>
@@ -23,12 +37,12 @@ withDefaults(
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     </Head>
 
-    <div class="flex min-h-screen flex-col bg-gradient-to-br from-gray-50 via-white to-emerald-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-emerald-950/20">
+    <div :style="brandThemeStyle" class="flex min-h-screen flex-col bg-gradient-to-br from-gray-50 via-white to-primary/10 dark:from-gray-950 dark:via-gray-900 dark:to-primary/20">
         <!-- Header -->
         <header class="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/80 shadow-modern">
             <div class="container mx-auto px-6 py-4 flex justify-between items-center">
                 <div class="text-xl font-semibold gradient-primary bg-clip-text text-transparent">
-                    PraxisHosting
+                    {{ appName }}
                 </div>
                 <nav class="flex items-center gap-4">
                     <Link v-if="$page.props.auth.user" :href="dashboard.url()">

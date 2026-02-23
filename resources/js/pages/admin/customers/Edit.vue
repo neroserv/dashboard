@@ -13,6 +13,8 @@ import { index as customersIndex } from '@/routes/admin/customers';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
+type Brand = { id: number; key: string; name: string };
+
 type Customer = {
     id: number;
     name: string;
@@ -22,10 +24,13 @@ type Customer = {
     postal_code?: string | null;
     city?: string | null;
     country?: string | null;
+    brand_id?: number | null;
+    brand?: Brand | null;
 };
 
 type Props = {
     customer: Customer;
+    brands: Brand[];
     countries: Record<string, string>;
 };
 
@@ -38,6 +43,7 @@ const countryOptions = computed(() =>
 );
 
 const form = useForm({
+    brand_id: props.customer.brand_id ?? '',
     name: props.customer.name,
     email: props.customer.email,
     company: props.customer.company ?? '',
@@ -78,6 +84,25 @@ function submit() {
                 </CardHeader>
                 <CardContent>
                     <form class="space-y-4" @submit.prevent="submit">
+                        <div class="space-y-2">
+                            <Label for="brand_id">Marke</Label>
+                            <Select
+                                id="brand_id"
+                                v-model="form.brand_id"
+                                name="brand_id"
+                                :aria-invalid="!!form.errors.brand_id"
+                            >
+                                <option value="">– Keine –</option>
+                                <option
+                                    v-for="b in brands"
+                                    :key="b.id"
+                                    :value="b.id"
+                                >
+                                    {{ b.name }} ({{ b.key }})
+                                </option>
+                            </Select>
+                            <InputError :message="form.errors.brand_id" />
+                        </div>
                         <div class="space-y-2">
                             <Label for="name">Name</Label>
                             <Input

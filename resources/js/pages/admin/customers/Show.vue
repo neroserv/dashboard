@@ -6,6 +6,7 @@ import { pushAdminRecent } from '@/composables/useAdminRecent';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,6 +54,7 @@ type Customer = {
     postal_code?: string | null;
     city?: string | null;
     country?: string | null;
+    brand?: { id: number; key: string; name: string } | null;
     sites: Site[];
     customerBalance: CustomerBalance;
     balanceTransactions: BalanceTransaction[];
@@ -146,9 +148,10 @@ onMounted(() => {
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <Heading level="h1">{{ customer.name }}</Heading>
-                    <Text class="mt-2" muted>
-                        {{ customer.email }}
-                    </Text>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <Text muted>{{ customer.email }}</Text>
+                        <Badge v-if="customer.brand" variant="secondary">{{ customer.brand.name }}</Badge>
+                    </div>
                 </div>
                 <Link :href="`/admin/customers/${customer.id}/edit`">
                     <Button variant="outline" size="sm">

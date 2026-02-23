@@ -23,6 +23,7 @@ import {
     Shield,
     PackageCheck,
     GitBranch,
+    HardDrive,
 } from 'lucide-vue-next';
 import { index as supportIndex } from '@/routes/support';
 import modules from '@/routes/modules';
@@ -43,7 +44,19 @@ const activeUserModules = computed(() => (page.props.auth as { activeUserModules
 const adminOpenTicketsCount = computed(
     () => (page.props.auth as { adminOpenTicketsCount?: number })?.adminOpenTicketsCount ?? 0,
 );
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean>) ?? {});
+const brand = computed(() => page.props.brand as { themeColors?: Record<string, string> } | null);
 const { isLocked, unlock } = useInactivityLock();
+
+const brandThemeStyle = computed(() => {
+    const colors = brand.value?.themeColors;
+    if (!colors || typeof colors !== 'object') return undefined;
+    const vars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(colors)) {
+        if (value) vars[`--${key.replace(/_/g, '-')}`] = value;
+    }
+    return Object.keys(vars).length ? vars : undefined;
+});
 
 const sidebarItems = computed<NavItem[]>(() => {
     const supportItem: NavItem = {
@@ -54,9 +67,14 @@ const sidebarItems = computed<NavItem[]>(() => {
     };
     const items: NavItem[] = [
         { title: 'Dashboard', href: dashboard().url, icon: LayoutGrid },
-        { title: 'Meine Sites', href: sitesIndex().url, icon: Globe },
+        ...(brandFeatures.value.sites_editor !== false
+            ? [{ title: 'Meine Sites', href: sitesIndex().url, icon: Globe }]
+            : []),
         { title: 'Meine Rechnungen', href: billingIndex().url, icon: FileText },
         { title: 'Meine Domains', href: '/domains', icon: Globe },
+        ...(brandFeatures.value.webspace !== false
+            ? [{ title: 'Meine Webspaces', href: '/webspace-accounts', icon: HardDrive }]
+            : []),
         supportItem,
     ];
     if (activeUserModules.value.length > 0) {
@@ -105,6 +123,16 @@ const sidebarItems = computed<NavItem[]>(() => {
                         { title: 'TLD-Preise', href: '/admin/domains/tld-pricelist', icon: Globe },
                         { title: 'Mahnungen', href: '/admin/dunning-letters', icon: FileText },
                         { title: 'Abos', href: '/admin/subscriptions', icon: Repeat },
+                        { title: 'Produkte', href: '/admin/products', icon: Package },
+                    ],
+                },
+                {
+                    title: 'Hosting',
+                    icon: PackageCheck,
+                    children: [
+                        { title: 'Hosting-Server', href: '/admin/hosting-servers', icon: GitBranch },
+                        { title: 'Hosting-Pläne', href: '/admin/hosting-plans', icon: Package },
+                        { title: 'Webspace-Accounts', href: '/admin/webspace-accounts', icon: LayoutGrid },
                     ],
                 },
                 {
@@ -134,8 +162,6 @@ const sidebarItems = computed<NavItem[]>(() => {
                             icon: MessageCircle,
                             ...(adminOpenTicketsCount.value > 0 && { badge: adminOpenTicketsCount.value }),
                         },
-                        { title: 'Ticket-Kategorien', href: '/admin/ticket-categories', icon: LayoutGrid },
-                        { title: 'Ticket-Prioritäten', href: '/admin/ticket-priorities', icon: LayoutGrid },
                     ],
                 },
                 {
@@ -144,6 +170,7 @@ const sidebarItems = computed<NavItem[]>(() => {
                     children: [
                         { title: 'Einstellungen', href: '/admin/settings', icon: Settings },
                         { title: 'Kunden', href: adminCustomersIndex().url, icon: Users },
+                        { title: 'Legacy-Migration', href: '/admin/legacy-migration', icon: Archive },
                     ],
                 },
             ],
@@ -154,11 +181,13 @@ const sidebarItems = computed<NavItem[]>(() => {
 </script>
 
 <template>
-    <MainLayout :sidebar-items="sidebarItems" :breadcrumbs="breadcrumbs">
-        <slot />
-        <PinUnlockOverlay
-            v-if="isLocked"
-            @unlocked="unlock"
-        />
-    </MainLayout>
+    <div :style="brandThemeStyle">
+        <MainLayout :sidebar-items="sidebarItems" :breadcrumbs="breadcrumbs">
+            <slot />
+            <PinUnlockOverlay
+                v-if="isLocked"
+                @unlocked="unlock"
+            />
+        </MainLayout>
+    </div>
 </template>

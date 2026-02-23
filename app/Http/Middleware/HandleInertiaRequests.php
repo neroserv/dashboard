@@ -71,10 +71,28 @@ class HandleInertiaRequests extends Middleware
             'info' => $request->session()->get('info'),
         ]);
 
+        $currentBrand = $request->attributes->get('current_brand');
+        if ($currentBrand === null && \App\Models\Brand::getDefault() !== null) {
+            $currentBrand = \App\Models\Brand::getDefault();
+        }
+        $brandPayload = null;
+        $brandFeatures = [];
+        if ($currentBrand) {
+            $brandPayload = [
+                'key' => $currentBrand->key,
+                'name' => $currentBrand->name,
+                'logoUrl' => $currentBrand->logo_url,
+                'themeColors' => $currentBrand->theme_colors,
+            ];
+            $brandFeatures = $currentBrand->getFeaturesArray();
+        }
+
         return [
             ...parent::share($request),
             'flash' => $flash,
-            'name' => Setting::get('app_name') ?: config('app.name'),
+            'name' => $currentBrand?->name ?? Setting::get('app_name') ?: config('app.name'),
+            'brand' => $brandPayload,
+            'brandFeatures' => $brandFeatures,
             'auth' => [
                 'user' => $user,
                 'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,

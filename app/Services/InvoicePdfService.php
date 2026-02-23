@@ -26,7 +26,7 @@ class InvoicePdfService
         try {
             Pdf::view('invoices.pdf', [
                 'invoice' => $invoice,
-                'company' => Setting::getInvoiceCompany(),
+                'company' => Setting::getInvoiceCompany($invoice->user?->brand),
             ])
                 ->format('a4')
                 ->disk('local')

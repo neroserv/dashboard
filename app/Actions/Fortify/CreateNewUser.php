@@ -24,7 +24,10 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
+        $currentBrand = request()->attributes->get('current_brand');
+
         return User::create([
+            'brand_id' => $currentBrand?->id,
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],

@@ -24,8 +24,8 @@
     </div>
 
     {{-- Rechnungsempfänger --}}
-    <div class="border-l-4 border-emerald-600 bg-gray-50/80 rounded-r-lg pl-5 pr-4 py-4 mb-8">
-        <h2 class="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-2">Rechnungsempfänger</h2>
+    <div class="border-l-4 border-primary bg-gray-50/80 rounded-r-lg pl-5 pr-4 py-4 mb-8">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-primary mb-2">Rechnungsempfänger</h2>
         <div class="text-gray-700">
             @if($invoice->user->company)<div class="font-medium text-gray-900">{{ $invoice->user->company }}</div>@endif
             <div>{{ $invoice->user->name }}</div>
@@ -52,10 +52,10 @@
     {{-- Positionstabelle --}}
     <table class="w-full text-left border-collapse">
         <thead>
-            <tr class="border-b-2 border-emerald-600 bg-emerald-50/50">
-                <th class="py-3 pr-4 font-semibold text-emerald-800 uppercase text-xs tracking-wider w-12">Pos.</th>
-                <th class="py-3 pr-4 font-semibold text-emerald-800 uppercase text-xs tracking-wider">Beschreibung</th>
-                <th class="py-3 pl-4 text-right font-semibold text-emerald-800 uppercase text-xs tracking-wider w-28">Betrag</th>
+            <tr class="border-b-2 border-primary bg-primary/5">
+                <th class="py-3 pr-4 font-semibold text-primary uppercase text-xs tracking-wider w-12">Pos.</th>
+                <th class="py-3 pr-4 font-semibold text-primary uppercase text-xs tracking-wider">Beschreibung</th>
+                <th class="py-3 pl-4 text-right font-semibold text-primary uppercase text-xs tracking-wider w-28">Betrag</th>
             </tr>
         </thead>
         <tbody>
@@ -90,10 +90,10 @@
 
     {{-- Summen --}}
     <div class="flex justify-end mt-6">
-        <table class="w-72 border-t-2 border-emerald-600">
+        <table class="w-72 border-t-2 border-primary">
             <tr>
                 <td class="py-3 pr-4 font-semibold text-gray-800">Gesamtbetrag</td>
-                <td class="py-3 pl-4 text-right font-bold text-emerald-700 tabular-nums text-base">{{ number_format($invoice->amount, 2, ',', '.') }} €</td>
+                <td class="py-3 pl-4 text-right font-bold text-primary tabular-nums text-base">{{ number_format($invoice->amount, 2, ',', '.') }} €</td>
             </tr>
         </table>
     </div>

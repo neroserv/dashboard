@@ -22,14 +22,14 @@ const props = withDefaults(defineProps<Props>(), {
     disabled: false,
 });
 
-const baseClasses = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-modern disabled:pointer-events-none disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2';
+const baseClasses = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-modern disabled:pointer-events-none disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2';
 
 const variantClasses: Record<ButtonVariant, string> = {
-    default: 'gradient-primary text-white shadow-emerald hover:shadow-emerald/80 active:scale-[0.98] dark:shadow-emerald/50',
-    outline: 'border-2 border-gray-300 bg-white text-gray-900 shadow-modern hover:bg-gray-50 hover:border-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700',
+    default: 'gradient-primary text-white shadow-primary hover:shadow-primary/80 active:scale-[0.98] dark:shadow-primary/50',
+    outline: 'border-2 border-gray-300 bg-white text-gray-900 shadow-modern hover:bg-gray-50 hover:border-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700',
     ghost: 'text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800',
     destructive: 'bg-red-600 text-white shadow-modern-md hover:bg-red-700 active:scale-[0.98] dark:bg-red-600 dark:hover:bg-red-700',
-    link: 'text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400',
+    link: 'text-primary underline-offset-4 hover:underline',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

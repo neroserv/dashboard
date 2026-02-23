@@ -17,10 +17,10 @@ const isActive = computed(() => activeTab.value === props.value);
 const triggerClasses = computed(() =>
     cn(
         'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-modern',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         'disabled:pointer-events-none disabled:opacity-50',
         isActive.value
-            ? 'gradient-primary text-white shadow-emerald'
+            ? 'gradient-primary text-white shadow-primary'
             : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100',
         props.class,
     ),

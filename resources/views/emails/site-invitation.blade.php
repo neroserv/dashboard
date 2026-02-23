@@ -3,7 +3,7 @@
 @section('title', 'Einladung zur Site')
 
 @section('content')
-    <h1 class="text-xl font-bold text-emerald-700 mt-0 mb-4">Sie wurden eingeladen!</h1>
+    <h1 class="text-xl font-bold text-primary mt-0 mb-4">Sie wurden eingeladen!</h1>
 
     <p class="mb-4">Hallo,</p>
 
@@ -12,7 +12,7 @@
         <strong>{{ $invitation->site->name }}</strong> mitzuarbeiten.
     </p>
 
-    <div class="border-l-4 border-emerald-600 bg-gray-50 rounded-r-lg pl-5 pr-4 py-4 mb-6">
+    <div class="border-l-4 border-primary bg-gray-50 rounded-r-lg pl-5 pr-4 py-4 mb-6">
         <p class="m-0"><strong>Site:</strong> {{ $invitation->site->name }}</p>
         <p class="mt-2 mb-0"><strong>Rolle:</strong> {{ ucfirst($invitation->role) }}</p>
     </div>

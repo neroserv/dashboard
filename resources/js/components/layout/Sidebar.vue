@@ -147,7 +147,7 @@ const linkClasses = (href: string) =>
     cn(
         'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-modern',
         'hover:bg-gray-100 dark:hover:bg-gray-800',
-        isCurrentUrl(href) && 'gradient-primary text-white shadow-emerald',
+        isCurrentUrl(href) && 'gradient-primary text-white shadow-primary',
         !isCurrentUrl(href) && 'text-gray-700 dark:text-gray-300',
         effectiveCollapsed.value && 'justify-center',
     );
@@ -286,7 +286,7 @@ const groupTriggerClasses = (item: NavItem) =>
                                                             :class="[
                                                                 'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-modern',
                                                                 isCurrentUrl(sub.href!)
-                                                                    ? 'gradient-primary text-white shadow-emerald'
+                                                                    ? 'gradient-primary text-white shadow-primary'
                                                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
                                                             ]"
                                                             :aria-current="isCurrentUrl(sub.href!) ? 'page' : undefined"
@@ -311,7 +311,7 @@ const groupTriggerClasses = (item: NavItem) =>
                                             :class="[
                                                 'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-modern',
                                                 isCurrentUrl(child.href)
-                                                    ? 'gradient-primary text-white shadow-emerald'
+                                                    ? 'gradient-primary text-white shadow-primary'
                                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
                                             ]"
                                             :aria-current="isCurrentUrl(child.href) ? 'page' : undefined"

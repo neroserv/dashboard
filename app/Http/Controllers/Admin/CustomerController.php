@@ -11,6 +11,7 @@ use App\Models\AdminActivityLog;
 use App\Models\AiTokenBalance;
 use App\Models\AiTokenTransaction;
 use App\Models\BalanceTransaction;
+use App\Models\Brand;
 use App\Models\CustomerBalance;
 use App\Models\CustomerNote;
 use App\Models\User;
@@ -25,14 +26,21 @@ class CustomerController extends Controller
     public function edit(User $customer): Response
     {
         return Inertia::render('admin/customers/Edit', [
-            'customer' => $customer->only(['id', 'name', 'email', 'company', 'street', 'postal_code', 'city', 'country']),
+            'customer' => array_merge($customer->only(['id', 'name', 'email', 'company', 'street', 'postal_code', 'city', 'country']), [
+                'brand_id' => $customer->brand_id,
+                'brand' => $customer->brand ? ['id' => $customer->brand->id, 'key' => $customer->brand->key, 'name' => $customer->brand->name] : null,
+            ]),
+            'brands' => Brand::query()->orderBy('key')->get(['id', 'key', 'name']),
             'countries' => config('countries', []),
         ]);
     }
 
     public function update(UpdateCustomerRequest $request, User $customer): RedirectResponse
     {
-        $old = $customer->only(['name', 'email', 'company', 'street', 'postal_code', 'city', 'country']);
+        if ($request->input('brand_id') === '' || $request->input('brand_id') === null) {
+            $request->merge(['brand_id' => null]);
+        }
+        $old = $customer->only(['name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'brand_id']);
         $customer->update($request->validated());
 
         AdminActivityLog::log(
@@ -63,6 +71,7 @@ class CustomerController extends Controller
     public function index(Request $request): Response
     {
         $customers = User::query()
+            ->with('brand:id,key,name')
             ->withCount('sites')
             ->latest()
             ->paginate(15)
@@ -76,6 +85,7 @@ class CustomerController extends Controller
     public function show(User $customer): Response
     {
         $customer->load([
+            'brand:id,key,name',
             'sites.template',
             'customerBalance',
             'balanceTransactions' => fn ($q) => $q->latest()->limit(20),

@@ -21,7 +21,7 @@ class InvoiceEInvoiceService
     {
         $invoice->load(['user', 'siteSubscription.site']);
 
-        $company = Setting::getInvoiceCompany();
+        $company = Setting::getInvoiceCompany($invoice->user?->brand);
         $supplierName = $company['company_name'];
         $supplierStreet = $company['company_street'];
         $supplierCity = $company['company_city'];

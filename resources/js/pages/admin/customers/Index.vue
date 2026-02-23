@@ -16,6 +16,7 @@ type Customer = {
     name: string;
     email: string;
     sites_count: number;
+    brand?: { id: number; key: string; name: string } | null;
 };
 
 type Props = {
@@ -60,6 +61,7 @@ const handlePagination = (url: string) => {
                             <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead>E-Mail</TableHead>
+                                <TableHead>Marke</TableHead>
                                 <TableHead>Anzahl Sites</TableHead>
                                 <TableHead class="text-right">Aktionen</TableHead>
                             </TableRow>
@@ -68,6 +70,10 @@ const handlePagination = (url: string) => {
                             <TableRow v-for="customer in customers.data" :key="customer.id">
                                 <TableCell class="font-medium">{{ customer.name }}</TableCell>
                                 <TableCell>{{ customer.email }}</TableCell>
+                                <TableCell>
+                                    <Badge v-if="customer.brand" variant="secondary">{{ customer.brand.name }}</Badge>
+                                    <span v-else class="text-muted-foreground text-sm">–</span>
+                                </TableCell>
                                 <TableCell>
                                     <Badge variant="info">{{ customer.sites_count }}</Badge>
                                 </TableCell>
@@ -81,7 +87,7 @@ const handlePagination = (url: string) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="customers.data.length === 0">
-                                <TableCell colspan="4" class="text-center text-gray-500 dark:text-gray-400">
+                                <TableCell colspan="5" class="text-center text-gray-500 dark:text-gray-400">
                                     Keine Kunden vorhanden
                                 </TableCell>
                             </TableRow>

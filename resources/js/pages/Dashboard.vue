@@ -34,7 +34,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <Card hover>
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium">Sites</CardTitle>
-                        <Globe class="h-4 w-4 text-emerald-700" />
+                        <Globe class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
                         <div class="text-2xl font-bold">12</div>
@@ -47,7 +47,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <Card hover>
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium">Templates</CardTitle>
-                        <FileText class="h-4 w-4 text-emerald-700" />
+                        <FileText class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
                         <div class="text-2xl font-bold">8</div>
@@ -60,7 +60,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <Card hover>
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium">Benutzer</CardTitle>
-                        <Users class="h-4 w-4 text-emerald-700" />
+                        <Users class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
                         <div class="text-2xl font-bold">1,234</div>
@@ -73,7 +73,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <Card hover>
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle class="text-sm font-medium">Wachstum</CardTitle>
-                        <TrendingUp class="h-4 w-4 text-emerald-700" />
+                        <TrendingUp class="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
                         <div class="text-2xl font-bold">+24%</div>

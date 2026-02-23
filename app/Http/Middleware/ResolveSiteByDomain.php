@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Http\Controllers\SiteSeoController;
+use App\Models\Brand;
 use App\Models\Domain;
 use App\Models\Setting;
 use App\Services\SiteRenderService;
@@ -55,6 +56,10 @@ class ResolveSiteByDomain
             $mainAppHosts = Setting::getMainAppHosts();
             Log::debug('ResolveSiteByDomain no domain', ['host' => $host, 'mainAppHosts' => $mainAppHosts]);
             if (in_array($host, $mainAppHosts, true)) {
+                return $next($request);
+            }
+            // Brand portal domains (e.g. gaming.praxishosting.test) → main app, not a site
+            if (Brand::resolveByHost($host) !== null) {
                 return $next($request);
             }
 

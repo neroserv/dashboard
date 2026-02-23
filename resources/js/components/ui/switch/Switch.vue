@@ -31,7 +31,7 @@ const switchClasses = computed(() =>
     cn(
         'peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
         'transition-modern-slow',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50',
         checked.value ? 'gradient-primary' : 'bg-gray-300 dark:bg-gray-700',
         props.class,

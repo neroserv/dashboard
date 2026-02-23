@@ -21,7 +21,7 @@ const sizeClasses: Record<SpinnerSize, string> = {
 
 const spinnerClasses = computed(() =>
     cn(
-        'animate-spin rounded-full border-emerald-700 border-t-transparent',
+        'animate-spin rounded-full border-primary border-t-transparent',
         sizeClasses[props.size],
         props.class,
     ),

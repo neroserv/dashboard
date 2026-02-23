@@ -34,14 +34,15 @@ class Setting extends Model
 
     /**
      * Invoice company (Rechnungssteller) for PDF/XML. Settings override config.
-     * Logo: bei lokalem Pfad wird es als Data-URL eingebettet (PDF zeigt es ohne Netzwerkabruf).
+     * When $brand is given and has invoice_company data, it overrides. Logo: bei lokalem Pfad wird es als Data-URL eingebettet.
      *
      * @return array{company_name: string, company_street: string, company_postal_code: string, company_city: string, company_country: string, company_vat_id: string|null, company_logo_url: string|null, company_logo_data_url: string|null, ustg_19_text: string}
      */
-    public static function getInvoiceCompany(): array
+    public static function getInvoiceCompany(?Brand $brand = null): array
     {
         $config = config('billing.invoice', []);
-        $logo = static::get('invoice_company_logo', $config['company_logo'] ?? null);
+        $brandOverrides = $brand?->invoice_company ?? [];
+        $logo = $brandOverrides['company_logo'] ?? static::get('invoice_company_logo', $config['company_logo'] ?? null);
         $logoUrl = null;
         $logoDataUrl = null;
 
@@ -60,7 +61,7 @@ class Setting extends Model
             }
         }
 
-        return [
+        $base = [
             'company_name' => (string) static::get('invoice_company_name', $config['company_name'] ?? config('app.name')),
             'company_street' => (string) static::get('invoice_company_street', $config['company_street'] ?? ''),
             'company_postal_code' => (string) static::get('invoice_company_postal_code', $config['company_postal_code'] ?? ''),
@@ -71,6 +72,17 @@ class Setting extends Model
             'company_logo_data_url' => $logoDataUrl,
             'ustg_19_text' => (string) static::get('invoice_ustg_19_text', $config['ustg_19_text'] ?? 'Gemäß § 19 UStG wird keine Umsatzsteuer ausgewiesen (Kleinunternehmerregelung).'),
         ];
+
+        foreach (['company_name', 'company_street', 'company_postal_code', 'company_city', 'company_country', 'company_vat_id', 'ustg_19_text'] as $key) {
+            if (isset($brandOverrides[$key]) && $brandOverrides[$key] !== null && $brandOverrides[$key] !== '') {
+                $base[$key] = (string) $brandOverrides[$key];
+            }
+        }
+        if (isset($brandOverrides['company_vat_id']) && ($brandOverrides['company_vat_id'] === null || $brandOverrides['company_vat_id'] === '')) {
+            $base['company_vat_id'] = null;
+        }
+
+        return $base;
     }
 
     private static function mimeForPath(string $path): string

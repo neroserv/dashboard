@@ -9,7 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import InputError from '@/components/InputError.vue';
+import { Link } from '@inertiajs/vue3';
+import { Package, ListOrdered, Flag } from 'lucide-vue-next';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { countriesSortedByName } from '@/lib/countries';
@@ -81,7 +84,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="System-Einstellungen" />
 
-        <div class="space-y-6">
+        <div class="w-full space-y-6">
             <div>
                 <Heading level="h1">System-Einstellungen</Heading>
                 <Text class="mt-2" muted>
@@ -90,8 +93,8 @@ const breadcrumbs: BreadcrumbItem[] = [
             </div>
 
             <form @submit.prevent="form.put('/admin/settings')">
-                <Tabs default-tab="allgemein" class="max-w-2xl">
-                    <TabsList class="mb-4">
+                <Tabs default-tab="allgemein" class="w-full">
+                    <TabsList class="mb-4 flex-wrap h-auto gap-1">
                         <TabsTrigger value="allgemein">Allgemein</TabsTrigger>
                         <TabsTrigger value="sicherheit">Sicherheit</TabsTrigger>
                         <TabsTrigger value="rechnung">Rechnung</TabsTrigger>
@@ -99,6 +102,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <TabsTrigger value="domains">Domains</TabsTrigger>
                         <TabsTrigger value="mail">Mail</TabsTrigger>
                         <TabsTrigger value="support">Support</TabsTrigger>
+                        <TabsTrigger value="system">Marken & Tickets</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="allgemein">
@@ -461,6 +465,53 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <CardFooter>
                                 <Button type="submit" :disabled="form.processing">Speichern</Button>
                             </CardFooter>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="system">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Marken, Ticket-Kategorien & Prioritäten</CardTitle>
+                                <CardDescription>Weitere Systemeinstellungen – jeweils eigene Verwaltungsseite</CardDescription>
+                            </CardHeader>
+                            <CardContent class="space-y-4">
+                                <Link
+                                    href="/admin/brands"
+                                    class="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-modern hover:bg-muted/50"
+                                >
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                        <Package class="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-medium">Marken</div>
+                                        <div class="text-sm text-muted-foreground">Portal-Marken (B2B, Gaming), Domains, Theme-Farben, Features</div>
+                                    </div>
+                                </Link>
+                                <Link
+                                    href="/admin/ticket-categories"
+                                    class="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-modern hover:bg-muted/50"
+                                >
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                        <ListOrdered class="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-medium">Ticket-Kategorien</div>
+                                        <div class="text-sm text-muted-foreground">Kategorien für Support-Tickets</div>
+                                    </div>
+                                </Link>
+                                <Link
+                                    href="/admin/ticket-priorities"
+                                    class="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-modern hover:bg-muted/50"
+                                >
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                        <Flag class="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-medium">Ticket-Prioritäten</div>
+                                        <div class="text-sm text-muted-foreground">Prioritäten für Support-Tickets</div>
+                                    </div>
+                                </Link>
+                            </CardContent>
                         </Card>
                     </TabsContent>
                 </Tabs>

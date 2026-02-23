@@ -38,7 +38,7 @@ const handleClick = (url: string | null) => {
                 'flex h-10 items-center justify-center rounded-lg px-4 text-sm font-medium transition-modern',
                 'disabled:pointer-events-none disabled:opacity-50',
                 link.active
-                    ? 'gradient-primary text-white shadow-emerald'
+                    ? 'gradient-primary text-white shadow-primary'
                     : 'bg-white text-gray-900 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700',
                 !link.url && 'cursor-not-allowed opacity-50',
             )"

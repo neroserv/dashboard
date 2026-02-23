@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Product extends Model
@@ -11,6 +12,7 @@ class Product extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'brand_id',
         'name',
         'key',
         'type',
@@ -36,6 +38,11 @@ class Product extends Model
      *
      * @return MorphTo<Template|HostingPlan, Product>
      */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
+    }
+
     public function productable(): MorphTo
     {
         return $this->morphTo();

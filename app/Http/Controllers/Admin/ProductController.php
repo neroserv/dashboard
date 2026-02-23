@@ -15,7 +15,7 @@ class ProductController extends Controller
         $this->authorize('viewAny', Product::class);
 
         $products = Product::query()
-            ->with('productable')
+            ->with(['productable', 'brand:id,key,name'])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->paginate(15)

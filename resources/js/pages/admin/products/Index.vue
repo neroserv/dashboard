@@ -26,6 +26,7 @@ type Product = {
     edit_url: string | null;
     stripe_product_id: string | null;
     is_active: boolean;
+    brand?: { id: number; key: string; name: string } | null;
 };
 
 type Props = {
@@ -73,6 +74,7 @@ const handlePagination = (url: string) => {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Key</TableHead>
                                 <TableHead>Typ</TableHead>
+                                <TableHead>Marke</TableHead>
                                 <TableHead>Verknüpftes Angebot</TableHead>
                                 <TableHead>Stripe Produkt-ID</TableHead>
                                 <TableHead>Status</TableHead>
@@ -91,6 +93,10 @@ const handlePagination = (url: string) => {
                                     <Badge variant="secondary">
                                         {{ typeLabels[product.type] ?? product.type }}
                                     </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge v-if="product.brand" variant="outline">{{ product.brand.name }}</Badge>
+                                    <span v-else class="text-muted-foreground text-sm">Alle</span>
                                 </TableCell>
                                 <TableCell>{{ product.productable_name }}</TableCell>
                                 <TableCell>
@@ -114,7 +120,7 @@ const handlePagination = (url: string) => {
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="props.products.data.length === 0">
-                                <TableCell colspan="7" class="text-center text-gray-500 dark:text-gray-400">
+                                <TableCell colspan="8" class="text-center text-gray-500 dark:text-gray-400">
                                     Keine Produkte vorhanden
                                 </TableCell>
                             </TableRow>

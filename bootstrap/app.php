@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Middleware\EnsureBillingProfile;
+use App\Http\Middleware\EnsureBrandFeatureSites;
+use App\Http\Middleware\EnsureUserBrandMatchesDomain;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ResolveBrandFromDomain;
 use App\Http\Middleware\ResolveSiteByDomain;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -27,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/verify-domain', // Caddy On-Demand TLS verification (GET, no session)
         ]);
 
+        $middleware->prepend(ResolveBrandFromDomain::class);
         $middleware->prepend(ResolveSiteByDomain::class);
 
         $middleware->web(append: [
@@ -38,6 +42,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'billing.profile' => EnsureBillingProfile::class,
+            'brand.domain' => EnsureUserBrandMatchesDomain::class,
+            'brand.feature.sites' => EnsureBrandFeatureSites::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -23,6 +23,8 @@ class TransactionalMailChannel
             return;
         }
 
-        Mail::to($to)->send(new TransactionalTemplateMail($content, $actionUrl, isTest: false));
+        $brand = method_exists($notifiable, 'brand') ? $notifiable->brand : null;
+
+        Mail::to($to)->send(new TransactionalTemplateMail($content, $actionUrl, isTest: false, brand: $brand));
     }
 }

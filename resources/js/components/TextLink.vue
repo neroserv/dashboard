@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
     <Link
         :href="href"
         :class="cn(
-            'text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400',
+            'text-primary underline-offset-4 hover:underline',
             'transition-modern',
             $attrs.class,
         )"

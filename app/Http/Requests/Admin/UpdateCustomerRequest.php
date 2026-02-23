@@ -20,6 +20,7 @@ class UpdateCustomerRequest extends FormRequest
         $customer = $this->route('customer');
 
         return [
+            'brand_id' => ['nullable', 'exists:brands,id'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($customer->id)],
             'company' => ['nullable', 'string', 'max:255'],

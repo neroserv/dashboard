@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DiscountCodeController;
@@ -68,7 +69,7 @@ Route::get('site/{site:slug}/{pageSlug?}', [SiteRenderController::class, 'show']
     ->middleware(DisableCacheForSiteRender::class)
     ->name('site-render.show');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('domains', [\App\Http\Controllers\DomainShopController::class, 'index'])->name('domains.index');
     Route::get('domains/search', [\App\Http\Controllers\DomainShopController::class, 'search'])->name('domains.search');
     Route::post('domains/check-availability', [\App\Http\Controllers\DomainShopController::class, 'checkAvailability'])->name('domains.check-availability');
@@ -113,41 +114,44 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('billing.profile')
         ->name('billing.ai-tokens.checkout');
 
-    Route::get('sites/{site}/design', [SiteController::class, 'design'])->name('sites.design');
-    Route::get('sites/{site}/preview/{pageSlug?}', [SiteRenderController::class, 'preview'])
-        ->name('sites.preview')
-        ->where('pageSlug', '[a-z0-9\-]+');
-    Route::resource('sites', SiteController::class);
-    Route::post('sites/{site}/subscription/cancel', [SiteSubscriptionController::class, 'cancel'])->name('sites.subscription.cancel');
-    Route::post('sites/{site}/preview', [SiteRenderController::class, 'storePreviewDraft'])->name('sites.preview.store');
-    Route::get('sites/{site}/designer/state', [\App\Http\Controllers\SiteDesignerController::class, 'state'])->name('sites.designer.state');
-    Route::post('sites/{site}/designer/draft', [\App\Http\Controllers\SiteDesignerController::class, 'draft'])->name('sites.designer.draft');
-    Route::post('sites/{site}/designer/publish', [\App\Http\Controllers\SiteDesignerController::class, 'publish'])->name('sites.designer.publish');
-    Route::patch('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'updateBlock'])->name('sites.designer.blocks.update')->where('blockId', '[a-zA-Z0-9_\-]+');
-    Route::post('sites/{site}/designer/blocks', [\App\Http\Controllers\SiteDesignerController::class, 'storeBlock'])->name('sites.designer.blocks.store');
-    Route::delete('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'destroyBlock'])->name('sites.designer.blocks.destroy')->where('blockId', '[a-zA-Z0-9_\-]+');
-    Route::post('sites/{site}/designer/upload', [\App\Http\Controllers\SiteDesignerController::class, 'upload'])->name('sites.designer.upload');
-    Route::get('sites/{site}/images', [SiteController::class, 'indexImages'])->name('sites.images.index');
-    Route::post('sites/{site}/images', [SiteController::class, 'uploadImage'])->name('sites.images.store');
-    Route::delete('sites/{site}/images', [SiteController::class, 'destroyImage'])->name('sites.images.destroy');
-    Route::get('sites/{site}/collaborators', [SiteCollaboratorController::class, 'index'])->name('sites.collaborators.index');
-    Route::post('sites/{site}/collaborators', [SiteCollaboratorController::class, 'store'])->name('sites.collaborators.store');
-    Route::delete('sites/{site}/collaborators/{user}', [SiteCollaboratorController::class, 'destroy'])->name('sites.collaborators.destroy');
-    Route::delete('sites/{site}/invitations/{invitation}', [SiteCollaboratorController::class, 'destroyInvitation'])->name('sites.invitations.destroy');
-    Route::get('sites/{site}/versions', [\App\Http\Controllers\SiteVersionController::class, 'index'])->name('sites.versions.index');
-    Route::post('sites/{site}/versions/{version}/publish', [\App\Http\Controllers\SiteVersionController::class, 'publish'])->name('sites.versions.publish');
-    Route::post('sites/{site}/versions/{version}/rollback', [\App\Http\Controllers\SiteVersionController::class, 'rollback'])->name('sites.versions.rollback');
-    Route::get('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'index'])->name('sites.domains.index');
-    Route::post('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'store'])->name('sites.domains.store');
-    Route::post('sites/{site}/domains/{domain}/verify', [\App\Http\Controllers\SiteDomainController::class, 'verify'])->name('sites.domains.verify');
-    Route::post('sites/{site}/domains/{domain}/set-primary', [\App\Http\Controllers\SiteDomainController::class, 'setPrimary'])->name('sites.domains.set-primary');
-    Route::delete('sites/{site}/domains/{domain}', [\App\Http\Controllers\SiteDomainController::class, 'destroy'])->name('sites.domains.destroy');
+    Route::middleware('brand.feature.sites')->group(function () {
+        Route::get('sites/{site}/design', [SiteController::class, 'design'])->name('sites.design');
+        Route::get('sites/{site}/preview/{pageSlug?}', [SiteRenderController::class, 'preview'])
+            ->name('sites.preview')
+            ->where('pageSlug', '[a-z0-9\-]+');
+        Route::resource('sites', SiteController::class);
+        Route::post('sites/{site}/subscription/cancel', [SiteSubscriptionController::class, 'cancel'])->name('sites.subscription.cancel');
+        Route::post('sites/{site}/preview', [SiteRenderController::class, 'storePreviewDraft'])->name('sites.preview.store');
+        Route::get('sites/{site}/designer/state', [\App\Http\Controllers\SiteDesignerController::class, 'state'])->name('sites.designer.state');
+        Route::post('sites/{site}/designer/draft', [\App\Http\Controllers\SiteDesignerController::class, 'draft'])->name('sites.designer.draft');
+        Route::post('sites/{site}/designer/publish', [\App\Http\Controllers\SiteDesignerController::class, 'publish'])->name('sites.designer.publish');
+        Route::patch('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'updateBlock'])->name('sites.designer.blocks.update')->where('blockId', '[a-zA-Z0-9_\-]+');
+        Route::post('sites/{site}/designer/blocks', [\App\Http\Controllers\SiteDesignerController::class, 'storeBlock'])->name('sites.designer.blocks.store');
+        Route::delete('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'destroyBlock'])->name('sites.designer.blocks.destroy')->where('blockId', '[a-zA-Z0-9_\-]+');
+        Route::post('sites/{site}/designer/upload', [\App\Http\Controllers\SiteDesignerController::class, 'upload'])->name('sites.designer.upload');
+        Route::get('sites/{site}/images', [SiteController::class, 'indexImages'])->name('sites.images.index');
+        Route::post('sites/{site}/images', [SiteController::class, 'uploadImage'])->name('sites.images.store');
+        Route::delete('sites/{site}/images', [SiteController::class, 'destroyImage'])->name('sites.images.destroy');
+        Route::get('sites/{site}/collaborators', [SiteCollaboratorController::class, 'index'])->name('sites.collaborators.index');
+        Route::post('sites/{site}/collaborators', [SiteCollaboratorController::class, 'store'])->name('sites.collaborators.store');
+        Route::delete('sites/{site}/collaborators/{user}', [SiteCollaboratorController::class, 'destroy'])->name('sites.collaborators.destroy');
+        Route::delete('sites/{site}/invitations/{invitation}', [SiteCollaboratorController::class, 'destroyInvitation'])->name('sites.invitations.destroy');
+        Route::get('sites/{site}/versions', [\App\Http\Controllers\SiteVersionController::class, 'index'])->name('sites.versions.index');
+        Route::post('sites/{site}/versions/{version}/publish', [\App\Http\Controllers\SiteVersionController::class, 'publish'])->name('sites.versions.publish');
+        Route::post('sites/{site}/versions/{version}/rollback', [\App\Http\Controllers\SiteVersionController::class, 'rollback'])->name('sites.versions.rollback');
+        Route::get('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'index'])->name('sites.domains.index');
+        Route::post('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'store'])->name('sites.domains.store');
+        Route::post('sites/{site}/domains/{domain}/verify', [\App\Http\Controllers\SiteDomainController::class, 'verify'])->name('sites.domains.verify');
+        Route::post('sites/{site}/domains/{domain}/set-primary', [\App\Http\Controllers\SiteDomainController::class, 'setPrimary'])->name('sites.domains.set-primary');
+        Route::delete('sites/{site}/domains/{domain}', [\App\Http\Controllers\SiteDomainController::class, 'destroy'])->name('sites.domains.destroy');
+
+        Route::get('modules/newsletter/sites/{site}', [ModuleController::class, 'newsletterSite'])->name('modules.newsletter.site');
+        Route::post('modules/newsletter/sites/{site}/posts', [ModuleController::class, 'storePost'])->name('modules.newsletter.posts.store');
+        Route::get('modules/contact/sites/{site}', [ModuleController::class, 'contactSubmissions'])->name('modules.contact.submissions');
+    });
 
     Route::get('modules/newsletter', [ModuleController::class, 'newsletter'])->name('modules.newsletter.index');
-    Route::get('modules/newsletter/sites/{site}', [ModuleController::class, 'newsletterSite'])->name('modules.newsletter.site');
-    Route::post('modules/newsletter/sites/{site}/posts', [ModuleController::class, 'storePost'])->name('modules.newsletter.posts.store');
     Route::get('modules/contact', [ModuleController::class, 'contact'])->name('modules.contact.index');
-    Route::get('modules/contact/sites/{site}', [ModuleController::class, 'contactSubmissions'])->name('modules.contact.submissions');
 
     Route::get('workflow-builder', [WorkflowController::class, 'index'])->name('workflow-builder.index');
     Route::get('workflow-builder/api/list', [WorkflowController::class, 'list'])->name('workflow-builder.list');
@@ -193,6 +197,9 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::post('emails/{emailTemplate:key}/send-test', [EmailController::class, 'sendTest'])->name('emails.send-test');
     Route::get('settings', [SystemSettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
+    Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
+    Route::get('brands/{brand}/edit', [BrandController::class, 'edit'])->name('brands.edit');
+    Route::put('brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
     Route::resource('discount-codes', DiscountCodeController::class)->except(['show']);
     Route::resource('vouchers', VoucherController::class)->except(['show', 'destroy']);
 

@@ -32,18 +32,22 @@ const checked = computed({
 const checkboxClasses = computed(() =>
     cn(
         'peer h-4 w-4 shrink-0 rounded border-2 border-gray-300 bg-white',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'dark:border-gray-700 dark:bg-gray-800',
         'transition-modern',
-        checked.value && 'gradient-primary border-emerald-700',
+        checked.value && 'gradient-primary border-primary',
         props.class,
     ),
 );
 </script>
 
 <template>
-    <div class="relative inline-flex items-center">
+    <label
+        class="relative inline-flex items-center"
+        :class="[disabled ? 'cursor-not-allowed' : 'cursor-pointer']"
+        :for="id"
+    >
         <input
             :id="id"
             :name="name"
@@ -52,13 +56,13 @@ const checkboxClasses = computed(() =>
             :value="value"
             :disabled="disabled"
             :required="required"
-            class="sr-only peer"
+            class="sr-only"
         />
         <div :class="checkboxClasses">
             <Check
                 v-if="checked"
-                class="h-3 w-3 text-white stroke-[3] absolute inset-0 m-auto"
+                class="h-3 w-3 text-white stroke-[3] absolute inset-0 m-auto pointer-events-none"
             />
         </div>
-    </div>
+    </label>
 </template>

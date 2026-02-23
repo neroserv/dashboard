@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Models\Brand;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -19,7 +20,8 @@ class TransactionalTemplateMail extends Mailable
     public function __construct(
         public array $content,
         public ?string $actionUrl = null,
-        public bool $isTest = false
+        public bool $isTest = false,
+        public ?Brand $brand = null
     ) {}
 
     public function envelope(): Envelope
@@ -57,9 +59,9 @@ class TransactionalTemplateMail extends Mailable
      *
      * @param  array{subject: string, greeting: string, body: string, action_text: string|null}  $content
      */
-    public static function renderHtml(array $content, ?string $actionUrl): string
+    public static function renderHtml(array $content, ?string $actionUrl, ?Brand $brand = null): string
     {
-        $mailable = new self($content, $actionUrl, false);
+        $mailable = new self($content, $actionUrl, false, $brand);
 
         return $mailable->replacePlaceholders($mailable->getCompiledHtml());
     }
@@ -97,18 +99,39 @@ class TransactionalTemplateMail extends Mailable
 
     private function getGlobalHeader(): string
     {
+        if ($this->brand !== null) {
+            $custom = $this->brand->mail_header;
+            if ($custom !== null && trim($custom) !== '') {
+                return trim($custom);
+            }
+
+            $color = $this->brandPrimaryColor();
+
+            return '<span style="font-size: 18px; font-weight: 600; color: '.$color.';">'.e($this->brand->name).'</span>';
+        }
+
         $custom = config('maizzle.header');
         if ($custom !== null && trim((string) $custom) !== '') {
             return trim((string) $custom);
         }
 
         $appName = e(config('app.name'));
+        $color = $this->brandPrimaryColor();
 
-        return '<span style="font-size: 18px; font-weight: 600; color: #059669;">'.$appName.'</span>';
+        return '<span style="font-size: 18px; font-weight: 600; color: '.$color.';">'.$appName.'</span>';
     }
 
     private function getGlobalFooter(): string
     {
+        if ($this->brand !== null) {
+            $custom = $this->brand->mail_footer;
+            if ($custom !== null && trim($custom) !== '') {
+                return trim($custom);
+            }
+
+            return 'Diese E-Mail wurde von '.e($this->brand->name).' gesendet.';
+        }
+
         $custom = config('maizzle.footer');
         if ($custom !== null && trim((string) $custom) !== '') {
             return trim((string) $custom);
@@ -137,12 +160,49 @@ class TransactionalTemplateMail extends Mailable
 
         $url = e($this->actionUrl);
         $text = e($this->content['action_text']);
+        $primary = $this->brandPrimaryColor();
+        $primaryHover = $this->brandPrimaryHoverColor();
 
         return sprintf(
-            '<a href="%s" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #059669 0%%, #047857 100%%); color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px;">%s</a>',
+            '<a href="%s" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, %s 0%%, %s 100%%); color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px;">%s</a>',
             $url,
+            $primary,
+            $primaryHover,
             $text
         );
+    }
+
+    private function brandPrimaryColor(): string
+    {
+        $colors = $this->brand?->theme_colors;
+        if (is_array($colors) && ! empty($colors['primary'])) {
+            return $this->sanitizeCssColor($colors['primary']);
+        }
+
+        return '#059669';
+    }
+
+    private function brandPrimaryHoverColor(): string
+    {
+        $colors = $this->brand?->theme_colors;
+        if (is_array($colors) && ! empty($colors['primary_hover'])) {
+            return $this->sanitizeCssColor($colors['primary_hover']);
+        }
+
+        return '#047857';
+    }
+
+    private function sanitizeCssColor(string $value): string
+    {
+        $value = trim($value);
+        if (preg_match('/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/', $value)) {
+            return $value;
+        }
+        if (preg_match('/^rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$/', $value)) {
+            return $value;
+        }
+
+        return '#059669';
     }
 
     private function fallbackHtml(): string

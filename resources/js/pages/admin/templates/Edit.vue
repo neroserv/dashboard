@@ -692,7 +692,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 </div>
                                 <div class="flex items-center gap-3">
                                 <div class="flex items-center gap-2">
-                                    <Sparkles :class="expertMode ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4 text-muted-foreground'" />
+                                    <Sparkles :class="expertMode ? 'h-4 w-4 text-primary' : 'h-4 w-4 text-muted-foreground'" />
                                     <Label for="expert-mode" class="text-sm font-normal cursor-pointer">
                                         Expert-Modus
                                     </Label>
@@ -762,7 +762,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                                     :class="[
                                                         'relative rounded-lg p-3 transition-all',
                                                         isExpertField(field.path)
-                                                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-200 dark:border-emerald-800'
+                                                            ? 'bg-primary/5 dark:bg-primary/10 border-2 border-primary/30 dark:border-primary/40'
                                                             : 'border border-transparent'
                                                     ]"
                                                 >
@@ -797,7 +797,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                                             :class="[
                                                                 'mt-7 p-1.5 rounded-md transition-colors flex-shrink-0',
                                                                 isExpertField(field.path)
-                                                                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900'
+                                                                    ? 'text-primary bg-primary/10'
                                                                     : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                                                             ]"
                                                             :title="isExpertField(field.path) ? 'Als Expert-Feld entfernen' : 'Als Expert-Feld markieren'"
