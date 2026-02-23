@@ -7,9 +7,6 @@ use App\Models\AdminActivityLog;
 use App\Models\DiscountCode;
 use App\Models\EmailTemplate;
 use App\Models\Invoice;
-use App\Models\OrderConfirmation;
-use App\Models\Quote;
-use App\Models\Reminder;
 use App\Models\Site;
 use App\Models\Template;
 use App\Models\TemplatePage;
@@ -77,9 +74,6 @@ class ActivityLogController extends Controller
             'invoice_created' => 'Rechnung erstellt',
             'invoice_updated' => 'Rechnung aktualisiert',
             'invoice_dunning_letter_added' => 'Mahnung hinzugefügt',
-            'quote_created' => 'Angebot erstellt',
-            'order_confirmation_created' => 'Auftragsbestätigung erstellt',
-            'communication_created' => 'Erinnerung erfasst',
             'email_template_updated' => 'E-Mail-Vorlage aktualisiert',
             'system_settings_updated' => 'Systemeinstellungen geändert',
             'discount_code_created' => 'Rabattcode erstellt',
@@ -105,9 +99,6 @@ class ActivityLogController extends Controller
             TicketPriority::class => 'Ticket-Priorität',
             TicketTodo::class => 'Ticket-To-do',
             Invoice::class => 'Rechnung',
-            Quote::class => 'Angebot',
-            OrderConfirmation::class => 'Auftragsbestätigung',
-            Reminder::class => 'Erinnerung',
             EmailTemplate::class => 'E-Mail-Vorlage',
             DiscountCode::class => 'Rabattcode',
             Voucher::class => 'Gutschein',

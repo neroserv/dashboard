@@ -90,12 +90,6 @@ function detailUrl(entry: ActivityLogEntry): string {
     if (entry.model_type.includes('Invoice')) {
         return `/admin/invoices/${entry.model_id}`;
     }
-    if (entry.model_type.includes('Quote')) {
-        return `/admin/quotes/${entry.model_id}`;
-    }
-    if (entry.model_type.includes('OrderConfirmation')) {
-        return `/admin/order-confirmations/${entry.model_id}`;
-    }
     if (entry.model_type.includes('DiscountCode')) {
         return `/admin/discount-codes/${entry.model_id}/edit`;
     }

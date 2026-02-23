@@ -55,7 +55,6 @@ const sidebarItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
         { title: 'Dashboard', href: dashboard().url, icon: LayoutGrid },
         { title: 'Meine Sites', href: sitesIndex().url, icon: Globe },
-        { title: 'Workflow Builder', href: '/workflow-builder', icon: GitBranch },
         { title: 'Meine Rechnungen', href: billingIndex().url, icon: FileText },
         { title: 'Meine Domains', href: '/domains', icon: Globe },
         supportItem,
@@ -104,10 +103,7 @@ const sidebarItems = computed<NavItem[]>(() => {
                         { title: 'Rechnungen', href: '/admin/invoices', icon: FileText },
                         { title: 'Domains', href: '/admin/domains', icon: Globe },
                         { title: 'TLD-Preise', href: '/admin/domains/tld-pricelist', icon: Globe },
-                        { title: 'Angebote', href: '/admin/quotes', icon: FileText },
-                        { title: 'Auftragsbestätigungen', href: '/admin/order-confirmations', icon: FileText },
                         { title: 'Mahnungen', href: '/admin/dunning-letters', icon: FileText },
-                        { title: 'Kommunikation & Erinnerungen', href: '/admin/communications', icon: Mail },
                         { title: 'Abos', href: '/admin/subscriptions', icon: Repeat },
                     ],
                 },
@@ -147,7 +143,6 @@ const sidebarItems = computed<NavItem[]>(() => {
                     icon: Settings,
                     children: [
                         { title: 'Einstellungen', href: '/admin/settings', icon: Settings },
-                        { title: 'Legacy-Migration', href: '/admin/legacy-migration', icon: Archive },
                         { title: 'Kunden', href: adminCustomersIndex().url, icon: Users },
                     ],
                 },

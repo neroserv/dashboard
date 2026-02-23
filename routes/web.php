@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
-use App\Http\Controllers\Admin\CommunicationController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DiscountCodeController;
@@ -11,9 +10,7 @@ use App\Http\Controllers\Admin\HostingPlanController;
 use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\LegacyMigrationController;
-use App\Http\Controllers\Admin\OrderConfirmationController;
 use App\Http\Controllers\Admin\ProductController;
-use App\Http\Controllers\Admin\QuoteController;
 use App\Http\Controllers\Admin\ResellerDomainController;
 use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SiteController as AdminSiteController;
@@ -178,23 +175,7 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::get('invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoices.edit');
     Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
 
-    Route::get('quotes', [QuoteController::class, 'index'])->name('quotes.index');
-    Route::get('quotes/create', [QuoteController::class, 'create'])->name('quotes.create');
-    Route::post('quotes', [QuoteController::class, 'store'])->name('quotes.store');
-    Route::get('quotes/{quote}', [QuoteController::class, 'show'])->name('quotes.show');
-    Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
-
-    Route::get('order-confirmations', [OrderConfirmationController::class, 'index'])->name('order-confirmations.index');
-    Route::get('order-confirmations/create', [OrderConfirmationController::class, 'create'])->name('order-confirmations.create');
-    Route::post('order-confirmations', [OrderConfirmationController::class, 'store'])->name('order-confirmations.store');
-    Route::get('order-confirmations/{order_confirmation}', [OrderConfirmationController::class, 'show'])->name('order-confirmations.show');
-    Route::get('order-confirmations/{order_confirmation}/pdf', [OrderConfirmationController::class, 'pdf'])->name('order-confirmations.pdf');
-
     Route::get('dunning-letters', [DunningLetterController::class, 'index'])->name('dunning-letters.index');
-
-    Route::get('communications', [CommunicationController::class, 'index'])->name('communications.index');
-    Route::get('communications/create', [CommunicationController::class, 'create'])->name('communications.create');
-    Route::post('communications', [CommunicationController::class, 'store'])->name('communications.store');
 
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::get('sites', [AdminSiteController::class, 'index'])->name('sites.index');

@@ -143,26 +143,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Quotes for this customer.
-     *
-     * @return HasMany<Quote>
-     */
-    public function quotes(): HasMany
-    {
-        return $this->hasMany(Quote::class);
-    }
-
-    /**
-     * Order confirmations for this customer.
-     *
-     * @return HasMany<OrderConfirmation>
-     */
-    public function orderConfirmations(): HasMany
-    {
-        return $this->hasMany(OrderConfirmation::class);
-    }
-
-    /**
      * Admin notes on this customer.
      *
      * @return HasMany<CustomerNote>
