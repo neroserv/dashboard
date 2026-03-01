@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\AddAiTokensFromStripeWebhook;
+use App\Listeners\AddBalanceFromStripeWebhook;
 use App\Listeners\CreateLocalInvoiceFromStripeWebhook;
 use App\Listeners\LogStripeWebhookReceived;
 use App\Listeners\SendLoginNotification;
@@ -79,6 +80,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(WebhookReceived::class, LogStripeWebhookReceived::class);
         Event::listen(WebhookReceived::class, AddAiTokensFromStripeWebhook::class);
+        Event::listen(WebhookReceived::class, AddBalanceFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SyncSiteSubscriptionFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SyncWebspaceSubscriptionFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, CreateLocalInvoiceFromStripeWebhook::class);

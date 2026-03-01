@@ -43,6 +43,9 @@ class BrandController extends Controller
             'features.domains_shop' => ['boolean'],
             'features.ai_tokens' => ['boolean'],
             'features.gaming' => ['boolean'],
+            'features.prepaid_balance' => ['boolean'],
+            'features.balance_topup' => ['boolean'],
+            'features.balance_period_months' => ['nullable', 'integer', 'min:1', 'max:24'],
             'salutation' => ['nullable', 'string', 'in:formal,informal'],
             'mail_header' => ['nullable', 'string', 'max:2000'],
             'mail_footer' => ['nullable', 'string', 'max:2000'],
@@ -54,6 +57,9 @@ class BrandController extends Controller
         $validated['is_default'] = filter_var($validated['is_default'] ?? false, FILTER_VALIDATE_BOOLEAN);
         if ($validated['is_default']) {
             Brand::query()->where('id', '!=', $brand->id)->update(['is_default' => false]);
+        }
+        if (isset($validated['features']['balance_period_months'])) {
+            $validated['features']['balance_period_months'] = max(1, min(24, (int) $validated['features']['balance_period_months']));
         }
 
         $brand->update($validated);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\AiTokenCheckoutRequest;
+use App\Models\Brand;
 use App\Services\AiTokenStripePriceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
@@ -15,6 +16,14 @@ class AiTokenController extends Controller
 {
     public function checkout(AiTokenCheckoutRequest $request, AiTokenStripePriceService $aiTokenStripePriceService): Response|RedirectResponse
     {
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        if (! ($brandFeatures['ai_tokens'] ?? true)) {
+            return redirect()
+                ->route('billing.index')
+                ->with('error', 'AI-Tokens sind für diese Marke nicht aktiviert.');
+        }
+
         $user = $request->user();
         $tokenAmount = (int) $request->validated('token_amount');
 

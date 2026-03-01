@@ -21,7 +21,7 @@ type Brand = {
     is_default: boolean;
     logo_url: string | null;
     theme_colors: Record<string, string> | null;
-    features: Record<string, boolean> | null;
+    features: Record<string, boolean | number> | null;
     salutation: string | null;
     mail_header: string | null;
     mail_footer: string | null;
@@ -63,6 +63,9 @@ const form = useForm({
     feature_domains_shop: props.brand.features?.domains_shop ?? true,
     feature_ai_tokens: props.brand.features?.ai_tokens ?? true,
     feature_gaming: props.brand.features?.gaming ?? false,
+    feature_prepaid_balance: props.brand.features?.prepaid_balance ?? false,
+    feature_balance_topup: props.brand.features?.balance_topup ?? false,
+    feature_balance_period_months: props.brand.features?.balance_period_months ?? 1,
     salutation: props.brand.salutation ?? 'formal',
     mail_header: props.brand.mail_header ?? '',
     mail_footer: props.brand.mail_footer ?? '',
@@ -88,6 +91,9 @@ const submit = () => {
             domains_shop: data.feature_domains_shop,
             ai_tokens: data.feature_ai_tokens,
             gaming: data.feature_gaming,
+            prepaid_balance: data.feature_prepaid_balance,
+            balance_topup: data.feature_balance_topup,
+            balance_period_months: Math.max(1, Math.min(24, Number(data.feature_balance_period_months) || 1)),
         },
         salutation: data.salutation,
         mail_header: data.mail_header,
@@ -194,6 +200,37 @@ const submit = () => {
                     <div class="flex items-center gap-2">
                         <Checkbox id="feat_gaming" v-model="form.feature_gaming" />
                         <Label for="feat_gaming">Gaming (Game-Server / Pterodactyl)</Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Prepaid / Guthaben</CardTitle>
+                    <CardDescription>
+                        Guthaben anzeigen, Selbstaufladung und Zahlung mit Guthaben im Checkout. Vertragslaufzeit bei Guthaben-Zahlung (Webspace/Game-Server).
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <Checkbox id="feat_prepaid_balance" v-model="form.feature_prepaid_balance" />
+                        <Label for="feat_prepaid_balance">Prepaid: Guthaben anzeigen & mit Guthaben bezahlen</Label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <Checkbox id="feat_balance_topup" v-model="form.feature_balance_topup" />
+                        <Label for="feat_balance_topup">Selbstaufladung (Guthaben per Stripe aufladen)</Label>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Label for="balance_period_months" class="shrink-0">Vertragslaufzeit bei Guthaben-Zahlung (Monate)</Label>
+                        <Input
+                            id="balance_period_months"
+                            v-model.number="form.feature_balance_period_months"
+                            type="number"
+                            min="1"
+                            max="24"
+                            class="w-20"
+                        />
+                        <span class="text-muted-foreground text-sm">(1–24 Monate, z. B. 1 für monatlich)</span>
                     </div>
                 </CardContent>
             </Card>

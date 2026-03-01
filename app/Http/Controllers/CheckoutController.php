@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Brand;
 use App\Models\GameServerAccount;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
@@ -201,6 +202,13 @@ class CheckoutController extends Controller
             Log::debug('Checkout success: early return', ['reason' => 'email_mismatch', 'customer_email' => $customerEmail, 'user_email' => $userEmail]);
 
             return redirect()->route('sites.index')->with('error', 'Ungültige Checkout-Session (E-Mail stimmt nicht überein).');
+        }
+
+        if ($session->mode === 'payment') {
+            $metadata = $session->metadata ? $session->metadata->toArray() : [];
+            if (($metadata['type'] ?? '') === 'game_server_renewal') {
+                return $this->handleGamingRenewalSuccess($request, $user, $session, $metadata);
+            }
         }
 
         $subscriptionId = $session->subscription;
@@ -502,27 +510,75 @@ class CheckoutController extends Controller
         }
 
         $serverName = $payload['server_name'] ?? $plan->name.' #'.($user->gameServerAccounts()->count() + 1);
+        $optionChoices = $payload['option_choices'] ?? [];
+        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
+        $metadata = [
+            'type' => 'game_server',
+            'hosting_plan_id' => (string) $plan->id,
+            'user_id' => (string) $user->id,
+            'server_name' => $serverName,
+        ];
+        if (! empty($optionChoices)) {
+            $metadata['option_choices'] = json_encode($optionChoices);
+        }
 
         try {
-            $checkout = Checkout::customer($user)
-                ->allowPromotionCodes()
-                ->create($priceId, [
-                    'mode' => StripeSession::MODE_SUBSCRIPTION,
+            if ($optionSurcharge > 0) {
+                $stripe = new StripeClient(config('cashier.secret'));
+                $currency = config('cashier.currency', 'eur');
+                $surchargeCents = (int) round($optionSurcharge * 100);
+                $lineItems = [
+                    [
+                        'price' => $priceId,
+                        'quantity' => 1,
+                    ],
+                    [
+                        'price_data' => [
+                            'currency' => $currency,
+                            'product_data' => [
+                                'name' => 'Game-Server Optionen ('.$plan->name.')',
+                            ],
+                            'unit_amount' => $surchargeCents,
+                            'recurring' => ['interval' => 'month'],
+                        ],
+                        'quantity' => 1,
+                    ],
+                ];
+                $params = [
+                    'mode' => 'subscription',
                     'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
                     'cancel_url' => route('gaming.checkout', ['plan' => $plan->id]),
+                    'line_items' => $lineItems,
                     'subscription_data' => [
-                        'metadata' => [
-                            'type' => 'game_server',
-                            'hosting_plan_id' => (string) $plan->id,
-                            'user_id' => (string) $user->id,
-                            'server_name' => $serverName,
-                        ],
+                        'metadata' => $metadata,
                     ],
-                ]);
+                    'allow_promotion_codes' => true,
+                ];
+                if ($user->stripe_id) {
+                    $params['customer'] = $user->stripe_id;
+                } else {
+                    $params['customer_email'] = $user->email;
+                }
+                $session = $stripe->checkout->sessions->create($params);
+                $stripeUrl = $session->url;
+                if (! $stripeUrl || ! str_starts_with($stripeUrl, 'https://')) {
+                    throw new InvalidRequestException('Stripe Checkout Session URL could not be created.');
+                }
+            } else {
+                $checkout = Checkout::customer($user)
+                    ->allowPromotionCodes()
+                    ->create($priceId, [
+                        'mode' => StripeSession::MODE_SUBSCRIPTION,
+                        'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
+                        'cancel_url' => route('gaming.checkout', ['plan' => $plan->id]),
+                        'subscription_data' => [
+                            'metadata' => $metadata,
+                        ],
+                    ]);
+                $stripeUrl = $checkout->redirect()->getTargetUrl();
+            }
 
             $request->session()->forget('checkout_gaming');
-
-            $stripeUrl = $checkout->redirect()->getTargetUrl();
             $request->session()->put('stripe_checkout_redirect_url', $stripeUrl);
 
             return redirect()->route('checkout.redirect-to-stripe');
@@ -532,6 +588,38 @@ class CheckoutController extends Controller
             return redirect()->route('gaming.checkout', ['plan' => $plan->id])
                 ->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Handle successful Stripe one-time payment for game server renewal.
+     */
+    protected function handleGamingRenewalSuccess(Request $request, \App\Models\User $user, \Stripe\Checkout\Session $session, array $metadata): RedirectResponse
+    {
+        $accountId = (int) ($metadata['game_server_account_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+
+        if ($userId !== $user->id || $accountId < 1) {
+            Log::debug('Checkout success gaming renewal: invalid metadata');
+
+            return redirect()->route('gaming-accounts.index')->with('error', 'Ungültige Zahlungsdaten.');
+        }
+
+        $account = GameServerAccount::find($accountId);
+        if (! $account || $account->user_id !== $user->id) {
+            return redirect()->route('gaming-accounts.index')->with('error', 'Game-Server nicht gefunden.');
+        }
+
+        $periodMonths = max(1, min(12, (int) ($metadata['period_months'] ?? 1)));
+        $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+            ? $account->current_period_ends_at
+            : now();
+        $account->update([
+            'current_period_ends_at' => $from->copy()->addMonths($periodMonths),
+        ]);
+
+        return redirect()
+            ->route('gaming-accounts.show', $account)
+            ->with('success', 'Der Game-Server wurde erfolgreich verlängert.');
     }
 
     /**
@@ -627,6 +715,14 @@ class CheckoutController extends Controller
             'skip_scripts' => (bool) ($config['skip_scripts'] ?? false),
             'oom_killer' => (bool) ($config['oom_killer'] ?? false),
         ];
+        $optionChoices = [];
+        if (! empty($metadata['option_choices'])) {
+            $decoded = json_decode($metadata['option_choices'], true);
+            if (is_array($decoded)) {
+                $optionChoices = $decoded;
+            }
+        }
+        $params = $this->mergeGamingOptionChoicesIntoParams($params, $optionChoices);
 
         $account = $user->gameServerAccounts()->create([
             'hosting_plan_id' => $plan->id,
@@ -640,6 +736,7 @@ class CheckoutController extends Controller
             'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
             'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
             'renewal_type' => 'auto',
+            'option_values' => ! empty($optionChoices) ? $optionChoices : null,
         ]);
 
         try {
@@ -671,6 +768,278 @@ class CheckoutController extends Controller
             return redirect()->route('gaming-accounts.show', $account->id)
                 ->with('error', 'Der Game-Server konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
+    }
+
+    /**
+     * Merge customer option_choices into Pterodactyl createAccount params. Keys like memory, disk, nest_id, egg_id override config defaults.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $optionChoices
+     * @return array<string, mixed>
+     */
+    protected function mergeGamingOptionChoicesIntoParams(array $params, array $optionChoices): array
+    {
+        if (empty($optionChoices)) {
+            return $params;
+        }
+        $intKeys = ['memory', 'disk', 'swap', 'io', 'cpu', 'nest_id', 'egg_id', 'node', 'databases', 'backups', 'additional_allocations'];
+        foreach ($optionChoices as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if ($key === 'location_ids') {
+                $params['location_ids'] = is_array($value) ? array_map('intval', $value) : [(int) $value];
+
+                continue;
+            }
+            if ($key === 'port_range') {
+                $params['port_range'] = is_array($value) ? array_map('strval', $value) : [(string) $value];
+
+                continue;
+            }
+            if (in_array($key, $intKeys, true)) {
+                $params[$key] = (int) $value;
+            } else {
+                $params[$key] = $value;
+            }
+        }
+        if (isset($params['additional_allocations'])) {
+            $params['allocations'] = 1 + (int) $params['additional_allocations'];
+        }
+
+        return $params;
+    }
+
+    /**
+     * Create GameServerAccount and Pterodactyl server after payment with balance (no Stripe).
+     */
+    public function processGamingBalanceCheckout(Request $request, \App\Models\User $user, array $payload): RedirectResponse
+    {
+        $planId = (int) ($payload['hosting_plan_id'] ?? 0);
+        $userId = (int) ($payload['user_id'] ?? 0);
+        $serverName = $payload['server_name'] ?? null;
+
+        if ($userId !== $user->id || $planId < 1) {
+            Log::debug('Gaming balance checkout: invalid payload');
+
+            return redirect()->route('gaming-accounts.index')->with('error', 'Ungültige Bestelldaten.');
+        }
+
+        $plan = HostingPlan::find($planId);
+        if (! $plan || ! $plan->is_active || $plan->panel_type !== 'pterodactyl') {
+            return redirect()->route('gaming.index')->with('error', 'Paket nicht gefunden.');
+        }
+
+        $server = null;
+        if ($plan->hosting_server_id) {
+            $server = HostingServer::query()
+                ->where('id', $plan->hosting_server_id)
+                ->where('is_active', true)
+                ->where('panel_type', 'pterodactyl')
+                ->first();
+        }
+        if (! $server) {
+            $server = HostingServer::query()
+                ->where('is_active', true)
+                ->where('panel_type', 'pterodactyl')
+                ->first();
+        }
+
+        $serverName = $serverName ?: $plan->name.' #'.($user->gameServerAccounts()->count() + 1);
+        $periodMonths = $this->getBalancePeriodMonths($request, $user);
+        $periodEndsAt = now()->addMonths($periodMonths);
+
+        if (! $server) {
+            $account = $user->gameServerAccounts()->create([
+                'hosting_plan_id' => $plan->id,
+                'hosting_server_id' => null,
+                'product_id' => $plan->product?->id,
+                'name' => $serverName,
+                'status' => 'pending',
+                'stripe_subscription_id' => null,
+                'stripe_price_id' => null,
+                'current_period_ends_at' => $periodEndsAt,
+                'cancel_at_period_end' => false,
+                'ends_at' => null,
+                'renewal_type' => 'manual',
+            ]);
+
+            return redirect()->route('gaming-accounts.show', $account->id)
+                ->with('error', 'Für dieses Paket ist kein Pterodactyl-Panel-Server zugewiesen. Bitte im Admin unter Hosting-Pakete beim betreffenden Paket einen Panel-Server angeben.');
+        }
+
+        $password = Str::password(20);
+        $config = $plan->config ?? [];
+        $locationIds = $config['location_ids'] ?? [];
+        if (! is_array($locationIds)) {
+            $locationIds = $locationIds ? [$locationIds] : [];
+        }
+        $portRange = $config['port_range'] ?? [];
+        if (! is_array($portRange)) {
+            $portRange = $portRange ? [$portRange] : [];
+        }
+        $params = [
+            'email' => $user->email,
+            'username' => str_replace([' ', '.'], '_', Str::lower($user->name)).'_'.Str::random(4),
+            'first_name' => $user->name,
+            'last_name' => '',
+            'password' => $password,
+            'server_name' => $serverName,
+            'nest_id' => (int) ($config['nest_id'] ?? 1),
+            'egg_id' => (int) ($config['egg_id'] ?? 1),
+            'memory' => (int) ($config['memory'] ?? 512),
+            'disk' => (int) ($config['disk'] ?? 5120),
+            'swap' => (int) ($config['swap'] ?? 0),
+            'io' => (int) ($config['io'] ?? 500),
+            'cpu' => (int) ($config['cpu'] ?? 0),
+            'databases' => (int) ($config['databases'] ?? 0),
+            'backups' => (int) ($config['backups'] ?? 0),
+            'allocations' => 1 + (int) ($config['additional_allocations'] ?? 0),
+            'location_ids' => $locationIds,
+            'node' => isset($config['node']) ? (int) $config['node'] : null,
+            'dedicated_ip' => (bool) ($config['dedicated_ip'] ?? false),
+            'port_range' => $portRange,
+            'start_on_completion' => ($config['start_on_completion'] ?? true),
+            'skip_scripts' => (bool) ($config['skip_scripts'] ?? false),
+            'oom_killer' => (bool) ($config['oom_killer'] ?? false),
+        ];
+        $params = $this->mergeGamingOptionChoicesIntoParams($params, $payload['option_choices'] ?? []);
+
+        $account = $user->gameServerAccounts()->create([
+            'hosting_plan_id' => $plan->id,
+            'hosting_server_id' => $server->id,
+            'product_id' => $plan->product?->id,
+            'name' => $serverName,
+            'status' => 'pending',
+            'stripe_subscription_id' => null,
+            'stripe_price_id' => null,
+            'current_period_ends_at' => $periodEndsAt,
+            'cancel_at_period_end' => false,
+            'ends_at' => null,
+            'renewal_type' => 'manual',
+            'option_values' => ! empty($payload['option_choices']) ? $payload['option_choices'] : null,
+        ]);
+
+        try {
+            $ptero = app(PterodactylClient::class);
+            $ptero->setServer($server);
+            $ptero->createAccount($params);
+            $created = $ptero->getLastCreatedServerData();
+            $account->update([
+                'pterodactyl_server_id' => $created['pterodactyl_server_id'] ?? null,
+                'pterodactyl_user_id' => $created['pterodactyl_user_id'] ?? null,
+                'identifier' => $created['identifier'] ?? null,
+                'credentials_encrypted' => Crypt::encryptString(json_encode([
+                    'email' => $user->email,
+                    'password' => $password,
+                ])),
+                'status' => 'active',
+            ]);
+            Log::debug('Gaming balance checkout: Pterodactyl server created', ['account_id' => $account->id]);
+
+            return redirect()->route('gaming-accounts.show', $account->id)
+                ->with('success', 'Ihr Game-Server wurde erfolgreich eingerichtet. Sie können sich im Panel anmelden.');
+        } catch (\Throwable $e) {
+            Log::error('Gaming balance checkout: Pterodactyl createAccount exception', [
+                'account_id' => $account->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('gaming-accounts.show', $account->id)
+                ->with('error', 'Der Game-Server konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
+        }
+    }
+
+    /**
+     * Create WebspaceAccount and Plesk account after payment with balance (no Stripe).
+     */
+    public function processWebspaceBalanceCheckout(Request $request, \App\Models\User $user, array $payload): RedirectResponse
+    {
+        $planId = (int) ($payload['hosting_plan_id'] ?? 0);
+        $domain = $payload['domain'] ?? '';
+        $userId = (int) ($payload['user_id'] ?? 0);
+
+        if ($userId !== $user->id || $planId < 1 || $domain === '') {
+            Log::debug('Webspace balance checkout: invalid payload');
+
+            return redirect()->route('webspace-accounts.index')->with('error', 'Ungültige Bestelldaten.');
+        }
+
+        $plan = HostingPlan::find($planId);
+        if (! $plan || ! $plan->is_active) {
+            return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
+        }
+
+        $server = HostingServer::where('is_active', true)->first();
+        $periodMonths = $this->getBalancePeriodMonths($request, $user);
+        $periodEndsAt = now()->addMonths($periodMonths);
+
+        if (! $server) {
+            Log::error('Webspace balance checkout: no active HostingServer');
+            $account = $user->webspaceAccounts()->create([
+                'hosting_plan_id' => $plan->id,
+                'domain' => $domain,
+                'plesk_username' => 'webspace_'.Str::random(8),
+                'status' => 'pending',
+                'stripe_subscription_id' => null,
+                'stripe_price_id' => null,
+                'current_period_ends_at' => $periodEndsAt,
+                'cancel_at_period_end' => false,
+                'ends_at' => null,
+                'renewal_type' => 'manual',
+            ]);
+            if ($plan->product?->id) {
+                $account->update(['product_id' => $plan->product->id]);
+            }
+
+            return redirect()->route('webspace-accounts.show', $account->id)
+                ->with('error', 'Webspace wird eingerichtet. Es ist kein aktiver Hosting-Server konfiguriert – bitte kontaktieren Sie uns.');
+        }
+
+        $pleskUsername = 'ws'.str_pad((string) ((WebspaceAccount::max('id') ?? 0) + 1), 4, '0', STR_PAD_LEFT).Str::lower(Str::random(6));
+        $password = Str::password(20);
+
+        $account = $user->webspaceAccounts()->create([
+            'hosting_plan_id' => $plan->id,
+            'hosting_server_id' => $server->id,
+            'domain' => $domain,
+            'plesk_username' => $pleskUsername,
+            'plesk_password_encrypted' => Crypt::encryptString($password),
+            'status' => 'pending',
+            'stripe_subscription_id' => null,
+            'stripe_price_id' => null,
+            'current_period_ends_at' => $periodEndsAt,
+            'cancel_at_period_end' => false,
+            'ends_at' => null,
+            'renewal_type' => 'manual',
+        ]);
+        if ($plan->product?->id) {
+            $account->update(['product_id' => $plan->product->id]);
+        }
+
+        $ok = false;
+        try {
+            $plesk = app(PleskClient::class);
+            $plesk->setServer($server);
+            $ok = $plesk->createAccount($pleskUsername, $domain, $plan->plesk_package_name, $password);
+        } catch (\Throwable $e) {
+            Log::error('Webspace balance checkout: Plesk createAccount exception', [
+                'account_id' => $account->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('webspace-accounts.show', $account->id)
+                ->with('error', 'Der Webspace konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
+        }
+
+        if ($ok) {
+            $account->update(['status' => 'active']);
+            Log::debug('Webspace balance checkout: Plesk account created', ['account_id' => $account->id]);
+            $user->notify(new WebspaceOrderCompletedNotification($account, $password));
+        }
+
+        return redirect()->route('webspace-accounts.show', $account->id)
+            ->with('success', $ok ? 'Ihr Webspace wurde erfolgreich eingerichtet.' : 'Ihr Webspace wird eingerichtet. Bei Fragen kontaktieren Sie uns.');
     }
 
     /**
@@ -779,6 +1148,18 @@ class CheckoutController extends Controller
 
         return redirect()->route('webspace-accounts.show', $account->id)
             ->with('error', 'Der Webspace konnte auf dem Server nicht automatisch angelegt werden. Bitte kontaktieren Sie uns und nennen Sie Ihre Domain: '.$domain);
+    }
+
+    /**
+     * Vertragslaufzeit in Monaten bei Guthaben-Zahlung (Webspace/Game-Server).
+     * Aus Marken-Features oder Config.
+     */
+    protected function getBalancePeriodMonths(Request $request, \App\Models\User $user): int
+    {
+        $brand = $request->attributes->get('current_brand') ?? $user->brand ?? Brand::getDefault();
+        $features = $brand?->getFeaturesArray() ?? [];
+
+        return max(1, min(24, (int) ($features['balance_period_months'] ?? config('billing.balance_period_months', 1))));
     }
 
     protected function getPriceIdForTemplate(Template $template): ?string

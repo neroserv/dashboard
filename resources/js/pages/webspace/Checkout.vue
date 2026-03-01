@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { watch, ref, computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -27,9 +27,18 @@ type HostingPlan = {
 type Props = {
     hostingPlans: HostingPlan[];
     selectedPlan: HostingPlan | null;
+    canPayWithBalance?: boolean;
+    customerBalance?: number;
+    amountRequired?: number;
 };
 
 const props = defineProps<Props>();
+
+const paymentMethod = ref<'stripe' | 'balance'>('stripe');
+const canSubmitWithBalance = computed(() =>
+    props.canPayWithBalance &&
+    (props.customerBalance ?? 0) >= (props.amountRequired ?? 0)
+);
 
 const page = usePage();
 watch(
@@ -110,6 +119,31 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 </option>
                             </select>
                             <InputError :message="errors.hosting_plan_id" />
+                        </div>
+                        <div v-if="props.canPayWithBalance && props.selectedPlan" class="space-y-2 rounded-md border p-4">
+                            <Label class="text-base">Zahlungsart</Label>
+                            <div class="flex flex-col gap-2">
+                                <label class="flex items-center gap-2">
+                                    <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" />
+                                    <span>Mit Karte (Stripe) zahlen</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="paymentMethod"
+                                        type="radio"
+                                        name="payment_method"
+                                        value="balance"
+                                        :disabled="!canSubmitWithBalance"
+                                    />
+                                    <span>Mit Guthaben bezahlen</span>
+                                    <span v-if="canSubmitWithBalance" class="text-muted-foreground text-sm">
+                                        (Aktuell {{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
+                                    </span>
+                                    <span v-else class="text-muted-foreground text-sm">
+                                        – Guthaben reicht nicht aus (mind. {{ (props.amountRequired ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € nötig)
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </CardContent>
                     <CardFooter class="flex gap-2">

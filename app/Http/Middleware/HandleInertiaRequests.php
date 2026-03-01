@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CustomerBalance;
 use App\Models\Setting;
 use App\Models\Ticket;
 use App\Services\SiteRenderService;
@@ -87,19 +88,30 @@ class HandleInertiaRequests extends Middleware
             $brandFeatures = $currentBrand->getFeaturesArray();
         }
 
+        $customerBalance = null;
+        if ($user && ($brandFeatures['prepaid_balance'] ?? false)) {
+            $row = CustomerBalance::where('user_id', $user->id)->first();
+            $customerBalance = $row ? (float) $row->balance : 0.0;
+        }
+
+        $authPayload = [
+            'user' => $user,
+            'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,
+            'openTicketsCount' => $openTicketsCount,
+            'adminOpenTicketsCount' => $adminOpenTicketsCount,
+            'activeUserModules' => $activeUserModules,
+        ];
+        if ($customerBalance !== null) {
+            $authPayload['customerBalance'] = $customerBalance;
+        }
+
         return [
             ...parent::share($request),
             'flash' => $flash,
             'name' => $currentBrand?->name ?? Setting::get('app_name') ?: config('app.name'),
             'brand' => $brandPayload,
             'brandFeatures' => $brandFeatures,
-            'auth' => [
-                'user' => $user,
-                'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,
-                'openTicketsCount' => $openTicketsCount,
-                'adminOpenTicketsCount' => $adminOpenTicketsCount,
-                'activeUserModules' => $activeUserModules,
-            ],
+            'auth' => $authPayload,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

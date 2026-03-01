@@ -116,12 +116,17 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('webspace-accounts/{webspace_account}', [WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
 
     Route::get('gaming', [GamingController::class, 'index'])->name('gaming.index');
+    Route::get('gaming/checkout/pterodactyl-nests', [GamingController::class, 'pterodactylNests'])->name('gaming.checkout.pterodactyl-nests');
+    Route::get('gaming/checkout/pterodactyl-eggs', [GamingController::class, 'pterodactylEggs'])->name('gaming.checkout.pterodactyl-eggs');
     Route::get('gaming/checkout', [GamingController::class, 'checkout'])->name('gaming.checkout');
     Route::post('gaming/checkout', [GamingController::class, 'storeCheckout'])->middleware('billing.profile')->name('gaming.checkout.store');
     Route::get('gaming-accounts', [GamingAccountController::class, 'index'])->name('gaming-accounts.index');
     Route::get('gaming-accounts/{game_server_account}', [GamingAccountController::class, 'show'])->name('gaming-accounts.show');
     Route::get('gaming-accounts/{game_server_account}/overview', [GamingAccountController::class, 'overview'])->name('gaming-accounts.overview');
     Route::post('gaming-accounts/{game_server_account}/power', [GamingAccountController::class, 'power'])->name('gaming-accounts.power');
+    Route::post('gaming-accounts/{game_server_account}/renew', [GamingAccountController::class, 'renew'])
+        ->middleware('billing.profile')
+        ->name('gaming-accounts.renew');
 
     Route::get('invoices/{invoice}/pdf', [CustomerInvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
     Route::get('invoices/{invoice}/xml', [CustomerInvoiceController::class, 'downloadXml'])->name('invoices.xml');
@@ -130,6 +135,9 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::post('billing/ai-tokens/checkout', [AiTokenController::class, 'checkout'])
         ->middleware('billing.profile')
         ->name('billing.ai-tokens.checkout');
+    Route::post('billing/balance/checkout', [BillingController::class, 'balanceCheckout'])
+        ->middleware('billing.profile')
+        ->name('billing.balance.checkout');
 
     Route::middleware('brand.feature.sites')->group(function () {
         Route::get('sites/{site}/design', [SiteController::class, 'design'])->name('sites.design');

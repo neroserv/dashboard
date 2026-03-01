@@ -20,10 +20,12 @@ import {
     TableHead,
     TableCell,
 } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
 import billing from '@/routes/billing';
 import type { BreadcrumbItem } from '@/types';
-import { ExternalLink, Sparkles } from 'lucide-vue-next';
+import { ExternalLink, Sparkles, Wallet } from 'lucide-vue-next';
+import { ref } from 'vue';
 
 type Invoice = {
     id: number;
@@ -45,20 +47,50 @@ type AiTokenPackage = {
     label: string;
 };
 
+type BalanceTransactionItem = {
+    id: number;
+    amount: number;
+    type: string;
+    description: string | null;
+    created_at: string;
+};
+
 type Props = {
     invoices: Invoice[];
     billingPortalUrl: string;
     paymentMethodSummary: PaymentMethodSummary | null;
+    aiTokensEnabled: boolean;
     aiTokenBalance: number;
     aiTokenPackages: AiTokenPackage[];
+    prepaidEnabled?: boolean;
+    customerBalance?: number;
+    balanceTransactions?: BalanceTransactionItem[];
+    balanceTopUpEnabled?: boolean;
+    balanceTopUpMinAmount?: number;
+    balanceCheckoutUrl?: string;
 };
 
 const props = defineProps<Props>();
+
+const balanceTopUpAmount = ref<number>(props.balanceTopUpMinAmount ?? 5);
+const balanceTopUpSubmitting = ref(false);
 
 function checkoutAiTokens(amount: number): void {
     router.post(billing.aiTokens.checkout.url(), { token_amount: amount }, {
         preserveScroll: true,
         preserveState: true,
+    });
+}
+
+function submitBalanceTopUp(): void {
+    const url = props.balanceCheckoutUrl;
+    const min = props.balanceTopUpMinAmount ?? 5;
+    if (!url || balanceTopUpAmount.value < min) return;
+    balanceTopUpSubmitting.value = true;
+    router.post(url, { amount: balanceTopUpAmount.value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => { balanceTopUpSubmitting.value = false; },
     });
 }
 
@@ -147,8 +179,66 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </CardContent>
             </Card>
 
-            <!-- AI Tokens -->
-            <Card v-if="props.aiTokenPackages?.length">
+            <!-- Guthaben (Prepaid) -->
+            <Card v-if="props.prepaidEnabled">
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2">
+                        <Wallet class="h-5 w-5" />
+                        Guthaben
+                    </CardTitle>
+                    <CardDescription>
+                        Aktueller Stand: {{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+                        <template v-if="props.balanceTopUpEnabled">
+                            – Guthaben können Sie per Karte aufladen (Mindestbetrag {{ (props.balanceTopUpMinAmount ?? 5).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €).
+                        </template>
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <Table v-if="props.balanceTransactions?.length">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Datum</TableHead>
+                                <TableHead>Betrag</TableHead>
+                                <TableHead>Beschreibung</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow v-for="tx in props.balanceTransactions" :key="tx.id">
+                                <TableCell>{{ tx.created_at }}</TableCell>
+                                <TableCell>
+                                    <span :class="tx.amount >= 0 ? 'text-green-600' : 'text-red-600'">
+                                        {{ tx.amount >= 0 ? '+' : '' }}{{ tx.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+                                    </span>
+                                </TableCell>
+                                <TableCell>{{ tx.description || tx.type }}</TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                    <p v-else class="text-muted text-sm">Noch keine Transaktionen.</p>
+                    <div v-if="props.balanceTopUpEnabled && props.balanceCheckoutUrl" class="flex flex-wrap items-end gap-2 pt-2">
+                        <label class="flex flex-col gap-1 text-sm">
+                            <span>Betrag (€)</span>
+                            <Input
+                                v-model.number="balanceTopUpAmount"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                class="w-24"
+                            />
+                        </label>
+                        <Button
+                            :disabled="balanceTopUpSubmitting || balanceTopUpAmount < (props.balanceTopUpMinAmount ?? 5)"
+                            size="sm"
+                            @click="submitBalanceTopUp"
+                        >
+                            {{ balanceTopUpSubmitting ? 'Wird weitergeleitet…' : 'Guthaben aufladen' }}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- AI Tokens (nur wenn für diese Marke aktiviert) -->
+            <Card v-if="props.aiTokensEnabled && props.aiTokenPackages?.length">
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
                         <Sparkles class="h-5 w-5" />

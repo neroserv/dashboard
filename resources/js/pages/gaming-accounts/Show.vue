@@ -28,9 +28,11 @@ import {
     PowerOff,
     RotateCw,
     Loader2,
+    CalendarPlus,
 } from 'lucide-vue-next';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { notify } from '@/composables/useNotify';
+import PaymentMethodModal from '@/components/PaymentMethodModal.vue';
 
 type GameServerAccount = {
     id: number;
@@ -64,12 +66,31 @@ type Props = {
     loginUrl: string | null;
     userEmail: string;
     serverOverview: ServerOverview | null;
+    canRenew?: boolean;
+    renewalAmount?: number;
+    canPayWithBalance?: boolean;
+    customerBalance?: number;
+    renewUrl?: string;
 };
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    canRenew: false,
+    renewalAmount: 0,
+    canPayWithBalance: false,
+    customerBalance: 0,
+    renewUrl: '',
+});
 
 const powerLoading = ref<string | null>(null);
 const liveOverview = ref<ServerOverview | null>(props.serverOverview ?? null);
+const renewModalOpen = ref(false);
+
+const renewalPeriodOptions: { months: 1 | 3 | 6 | 12; label: string }[] = [
+    { months: 1, label: '30 Tage (1 Monat)' },
+    { months: 3, label: '3 Monate' },
+    { months: 6, label: '6 Monate' },
+    { months: 12, label: '12 Monate' },
+];
 
 const displayOverview = computed(() => liveOverview.value ?? props.serverOverview ?? null);
 
@@ -216,7 +237,17 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                 Zum Pterodactyl-Panel
                             </Button>
                         </Link>
-                        <Link href="/billing/portal">
+                        <template v-if="canRenew && renewUrl">
+                            <Button
+                                variant="default"
+                                class="w-full justify-start gap-2"
+                                @click="renewModalOpen = true"
+                            >
+                                <CalendarPlus class="h-4 w-4" />
+                                Verlängern
+                            </Button>
+                        </template>
+                        <Link v-if="!canRenew" href="/billing/portal">
                             <Button variant="outline" class="w-full justify-start gap-2">
                                 Abo verwalten
                             </Button>
@@ -593,5 +624,19 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                 </Tabs>
             </div>
         </div>
+
+        <PaymentMethodModal
+            v-if="canRenew && renewUrl"
+            :open="renewModalOpen"
+            :amount="renewalAmount"
+            title="Verlängerung bezahlen"
+            description="Game-Server verlängern."
+            :can-pay-with-balance="canPayWithBalance"
+            :customer-balance="customerBalance"
+            :submit-url="renewUrl"
+            :period-options="renewalPeriodOptions"
+            :base-amount-per-month="renewalAmount"
+            @update:open="renewModalOpen = $event"
+        />
     </AppLayout>
 </template>

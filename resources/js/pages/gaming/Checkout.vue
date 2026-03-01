@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { watch, ref, computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
@@ -8,23 +8,116 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
+import { Select } from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import { notify } from '@/composables/useNotify';
 import type { BreadcrumbItem } from '@/types';
+import { Gamepad2, CreditCard, Wallet, Server } from 'lucide-vue-next';
+
+type PlanOptionChoice = { value: string; label: string; price_delta?: number };
+
+type PlanOption = {
+    id: string;
+    name: string;
+    type: 'free' | 'choice' | 'text' | 'range_slider' | 'select';
+    price_per_unit: number;
+    sort_order: number;
+    choices?: PlanOptionChoice[];
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    source?: 'pterodactyl_nests' | 'pterodactyl_eggs';
+    placeholder?: string;
+    max_length?: number;
+};
 
 type HostingPlan = {
     id: number;
     name: string;
     price: string;
-    config?: { memory?: number; disk?: number; cpu?: number };
+    config?: {
+        memory?: number;
+        disk?: number;
+        cpu?: number;
+        nest_id?: number;
+        egg_id?: number;
+        plan_options?: PlanOption[];
+        [k: string]: unknown;
+    };
 };
 
 type Props = {
     hostingPlans: HostingPlan[];
     selectedPlan: HostingPlan | null;
+    canPayWithBalance?: boolean;
+    customerBalance?: number;
+    amountRequired?: number;
+    pterodactylEggs?: { id: number; name: string }[];
 };
 
 const props = defineProps<Props>();
+
+const paymentMethod = ref<'stripe' | 'balance'>('stripe');
+const selectedPlanId = ref<string>(String(props.selectedPlan?.id ?? ''));
+const optionChoices = ref<Record<string, string | number>>({});
+
+const currentPlan = computed((): HostingPlan | null => {
+    const id = Number(selectedPlanId.value);
+    if (!id) return null;
+    return props.hostingPlans.find((p) => p.id === id) ?? null;
+});
+
+const planOptions = computed((): PlanOption[] => {
+    const opts = currentPlan.value?.config?.plan_options;
+    if (!Array.isArray(opts)) return [];
+    return [...opts].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+});
+
+function optionSurcharge(opt: PlanOption, value: string | number | undefined): number {
+    if (opt.type === 'free') return 0;
+    if (value === undefined || value === '') return 0;
+    if (opt.type === 'choice' || opt.type === 'select') {
+        const choice = opt.choices?.find((c) => String(c.value) === String(value));
+        return Number(choice?.price_delta ?? 0);
+    }
+    if (opt.type === 'range_slider') {
+        const num = Number(value);
+        const min = Number(opt.min ?? 0);
+        const step = Number(opt.step ?? 1);
+        if (step <= 0) return 0;
+        return Number(opt.price_per_unit ?? 0) * ((num - min) / step);
+    }
+    if (opt.type === 'text') return Number(opt.price_per_unit ?? 0);
+    return 0;
+}
+
+const totalOptionSurcharge = computed(() => {
+    let sum = 0;
+    for (const opt of planOptions.value) {
+        sum += optionSurcharge(opt, optionChoices.value[opt.id]);
+    }
+    return sum;
+});
+
+/** Pro Option: Name + Aufpreis für die Zusammenfassung (nur Optionen mit gewähltem Wert) */
+const optionSurchargeItems = computed(() => {
+    const items: { name: string; surcharge: number }[] = [];
+    for (const opt of planOptions.value) {
+        const value = optionChoices.value[opt.id];
+        if (value === undefined || value === '') continue;
+        const surcharge = optionSurcharge(opt, value);
+        items.push({ name: opt.name, surcharge });
+    }
+    return items;
+});
+
+const basePrice = computed(() => Number(currentPlan.value?.price ?? 0));
+const totalAmount = computed(() => basePrice.value + totalOptionSurcharge.value);
+
+const canSubmitWithBalance = computed(() =>
+    Boolean(props.canPayWithBalance && (props.customerBalance ?? 0) >= totalAmount.value),
+);
 
 const page = usePage();
 watch(
@@ -42,6 +135,83 @@ watch(
     { immediate: true },
 );
 
+watch(
+    () => selectedPlanId.value,
+    (planId) => {
+        if (!planId) {
+            optionChoices.value = {};
+            return;
+        }
+        const plan = props.hostingPlans.find((p) => String(p.id) === planId) ?? null;
+        if (!plan) return;
+        const next: Record<string, string | number> = {};
+        const opts = plan.config?.plan_options ?? [];
+        for (const opt of opts) {
+            const existing = optionChoices.value[opt.id];
+            if (existing !== undefined) {
+                next[opt.id] = existing;
+            } else if (opt.type === 'range_slider' && typeof opt.min === 'number') {
+                next[opt.id] = opt.min;
+            } else if (opt.type === 'choice' || opt.type === 'select') {
+                const first = opt.choices?.[0];
+                if (first) next[opt.id] = first.value;
+            }
+        }
+        optionChoices.value = next;
+    },
+    { immediate: true },
+);
+
+const dynamicNests = ref<{ id: number; name: string }[]>([]);
+watch(
+    () => props.selectedPlan?.id,
+    async (planId) => {
+        if (!planId) {
+            dynamicNests.value = [];
+            return;
+        }
+        const hasNestOption = planOptions.value.some((o) => o.source === 'pterodactyl_nests');
+        if (!hasNestOption) {
+            dynamicNests.value = [];
+            return;
+        }
+        try {
+            const url = new URL('/gaming/checkout/pterodactyl-nests', window.location.origin);
+            url.searchParams.set('hosting_plan_id', String(planId));
+            const res = await fetch(url.toString());
+            if (!res.ok) return;
+            const data = await res.json();
+            dynamicNests.value = Array.isArray(data.nests) ? data.nests : [];
+        } catch {
+            dynamicNests.value = [];
+        }
+    },
+    { immediate: true },
+);
+
+const dynamicEggs = ref<{ id: number; name: string }[]>([]);
+watch(
+    () => [selectedPlanId.value, optionChoices.value['nest_id']] as const,
+    async ([planId, nestId]) => {
+        if (!planId || nestId === undefined || nestId === '') {
+            dynamicEggs.value = [];
+            return;
+        }
+        try {
+            const url = new URL('/gaming/checkout/pterodactyl-eggs', window.location.origin);
+            url.searchParams.set('hosting_plan_id', String(planId));
+            url.searchParams.set('nest_id', String(nestId));
+            const res = await fetch(url.toString());
+            if (!res.ok) return;
+            const data = await res.json();
+            dynamicEggs.value = Array.isArray(data.eggs) ? data.eggs : [];
+        } catch {
+            dynamicEggs.value = [];
+        }
+    },
+    { immediate: true },
+);
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
     { title: 'Game Server', href: '/gaming' },
@@ -53,69 +223,274 @@ const breadcrumbs: BreadcrumbItem[] = [
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Game Server buchen" />
 
-        <div class="space-y-6">
-            <div>
-                <Heading level="h1">Game Server buchen</Heading>
-                <Text class="mt-2" muted>
-                    Paket wählen und optional einen Namen für Ihren Server angeben
-                </Text>
+        <div class="w-full space-y-8">
+            <div class="flex items-center gap-3">
+         
+                <div>
+                    <Heading level="h1" class="tracking-tight">Game Server buchen</Heading>
+                    <Text class="mt-1" muted>
+                        Paket wählen, Optionen anpassen und zur Kasse
+                    </Text>
+                </div>
             </div>
 
-            <Card class="max-w-xl">
-                <CardHeader>
-                    <CardTitle>Bestellung</CardTitle>
-                    <CardDescription>Game-Server-Paket und optionaler Server-Name</CardDescription>
-                </CardHeader>
-                <Form
-                    action="/gaming/checkout"
-                    method="post"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <CardContent class="space-y-4">
-                        <div class="space-y-2">
-                            <Label for="hosting_plan_id">Paket *</Label>
-                            <select
-                                id="hosting_plan_id"
-                                name="hosting_plan_id"
-                                required
-                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                :aria-invalid="!!errors.hosting_plan_id"
-                            >
-                                <option value="">Bitte wählen</option>
-                                <option
-                                    v-for="plan in props.hostingPlans"
-                                    :key="plan.id"
-                                    :value="plan.id"
-                                    :selected="props.selectedPlan?.id === plan.id"
-                                >
-                                    {{ plan.name }} – {{ plan.price }} €/Monat
-                                </option>
-                            </select>
-                            <InputError :message="errors.hosting_plan_id" />
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="server_name">Server-Name (optional)</Label>
-                            <Input
-                                id="server_name"
-                                name="server_name"
-                                type="text"
-                                placeholder="Mein Minecraft Server"
-                                :aria-invalid="!!errors.server_name"
-                            />
-                            <InputError :message="errors.server_name" />
-                        </div>
-                    </CardContent>
-                    <CardFooter class="flex gap-2">
-                        <Button type="submit" :disabled="processing">
-                            {{ processing ? 'Wird weitergeleitet…' : 'Weiter zur Zahlung' }}
-                        </Button>
-                        <Link href="/gaming">
-                            <Button type="button" variant="outline">Abbrechen</Button>
-                        </Link>
-                    </CardFooter>
-                </Form>
-            </Card>
+            <Form
+                action="/gaming/checkout"
+                method="post"
+                class="block"
+                v-slot="{ errors, processing }"
+            >
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
+                    <Card class="flex flex-col lg:h-full lg:min-h-0">
+                        <CardHeader>
+                                <CardTitle class="flex items-center gap-2 text-lg">
+                                    <Server class="h-5 w-5" />
+                                    Paket & Optionen
+                                </CardTitle>
+                                <CardDescription>Wählen Sie Ihr Game-Server-Paket und passen Sie optionale Erweiterungen an.</CardDescription>
+                            </CardHeader>
+                            <CardContent class="flex flex-1 flex-col space-y-5">
+                                <div class="space-y-2">
+                                    <Label for="hosting_plan_id">Paket *</Label>
+                                    <select
+                                        id="hosting_plan_id"
+                                        name="hosting_plan_id"
+                                        v-model="selectedPlanId"
+                                        required
+                                        class="flex h-11 w-full rounded-lg border border-input bg-background px-4 py-2 text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        :aria-invalid="!!errors.hosting_plan_id"
+                                    >
+                                        <option value="">Bitte wählen</option>
+                                        <option
+                                            v-for="plan in props.hostingPlans"
+                                            :key="plan.id"
+                                            :value="String(plan.id)"
+                                        >
+                                            {{ plan.name }} – {{ plan.price }} €/Monat
+                                        </option>
+                                    </select>
+                                    <InputError :message="errors.hosting_plan_id" />
+                                </div>
+
+                                <template v-if="planOptions.length > 0 && currentPlan">
+                                    <div class="space-y-4 rounded-lg border bg-muted/30 p-5">
+                                        <h3 class="font-semibold">Paket-Optionen</h3>
+                                        <div class="grid gap-4 sm:grid-cols-2">
+                                            <div
+                                                v-for="opt in planOptions"
+                                                :key="opt.id"
+                                                class="space-y-2"
+                                                :class="opt.type === 'range_slider' ? 'sm:col-span-2' : ''"
+                                            >
+                                                <Label class="text-sm font-medium">{{ opt.name }}</Label>
+                                                <template v-if="opt.type === 'free'">
+                                                    <label class="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            :name="`option_choices[${opt.id}]`"
+                                                            value="1"
+                                                            :checked="optionChoices[opt.id] !== undefined && optionChoices[opt.id] !== ''"
+                                                            class="h-4 w-4 rounded border-input"
+                                                            @change="if (($event.target as HTMLInputElement).checked) { optionChoices[opt.id] = '1'; } else { delete optionChoices[opt.id]; }"
+                                                        />
+                                                        <span class="text-sm">Inklusive</span>
+                                                    </label>
+                                                </template>
+                                                <template v-else-if="opt.type === 'choice' || (opt.type === 'select' && !opt.source)">
+                                                    <Select
+                                                        :model-value="String(optionChoices[opt.id] ?? '')"
+                                                        class="h-10"
+                                                        :name="`option_choices[${opt.id}]`"
+                                                        @update:model-value="(v) => { optionChoices[opt.id] = v; }"
+                                                    >
+                                                        <option value="">Bitte wählen</option>
+                                                        <option
+                                                            v-for="ch in (opt.choices ?? [])"
+                                                            :key="ch.value"
+                                                            :value="ch.value"
+                                                        >
+                                                            {{ ch.label }}
+                                                            <template v-if="(ch.price_delta ?? 0) > 0">
+                                                                (+ {{ Number(ch.price_delta).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
+                                                            </template>
+                                                        </option>
+                                                    </Select>
+                                                </template>
+                                                <template v-else-if="opt.type === 'select' && opt.source === 'pterodactyl_nests'">
+                                                    <Select
+                                                        :model-value="String(optionChoices[opt.id] ?? '')"
+                                                        class="h-10"
+                                                        :name="`option_choices[${opt.id}]`"
+                                                        @update:model-value="(v) => { optionChoices[opt.id] = v; }"
+                                                    >
+                                                        <option value="">Bitte wählen</option>
+                                                        <option
+                                                            v-for="n in dynamicNests"
+                                                            :key="n.id"
+                                                            :value="String(n.id)"
+                                                        >
+                                                            {{ n.name }}
+                                                        </option>
+                                                    </Select>
+                                                </template>
+                                                <template v-else-if="opt.type === 'select' && opt.source === 'pterodactyl_eggs'">
+                                                    <Select
+                                                        :model-value="String(optionChoices[opt.id] ?? '')"
+                                                        class="h-10"
+                                                        :name="`option_choices[${opt.id}]`"
+                                                        :disabled="dynamicEggs.length === 0"
+                                                        @update:model-value="(v) => { optionChoices[opt.id] = v; }"
+                                                    >
+                                                        <option value="">
+                                                            {{ dynamicEggs.length === 0 ? 'Bitte zuerst Nest wählen' : 'Bitte wählen' }}
+                                                        </option>
+                                                        <option
+                                                            v-for="e in dynamicEggs"
+                                                            :key="e.id"
+                                                            :value="String(e.id)"
+                                                        >
+                                                            {{ e.name }}
+                                                        </option>
+                                                    </Select>
+                                                </template>
+                                                <template v-else-if="opt.type === 'text'">
+                                                    <Input
+                                                        :model-value="String(optionChoices[opt.id] ?? '')"
+                                                        class="h-10"
+                                                        :placeholder="opt.placeholder"
+                                                        :maxlength="opt.max_length"
+                                                        :name="`option_choices[${opt.id}]`"
+                                                        @update:model-value="(v) => { optionChoices[opt.id] = v || ''; }"
+                                                    />
+                                                </template>
+                                                <template v-else-if="opt.type === 'range_slider'">
+                                                    <div class="flex items-center gap-3">
+                                                        <input
+                                                            type="range"
+                                                            :min="opt.min ?? 0"
+                                                            :max="opt.max ?? 100"
+                                                            :step="opt.step ?? 1"
+                                                            :value="Number(optionChoices[opt.id] ?? opt.min ?? 0)"
+                                                            class="h-2 flex-1 accent-primary"
+                                                            @input="optionChoices[opt.id] = Number(($event.target as HTMLInputElement).value)"
+                                                        />
+                                                        <input
+                                                            type="hidden"
+                                                            :name="`option_choices[${opt.id}]`"
+                                                            :value="optionChoices[opt.id] ?? opt.min ?? 0"
+                                                        />
+                                                        <span class="min-w-[4rem] text-right text-sm tabular-nums">
+                                                            {{ optionChoices[opt.id] ?? opt.min ?? 0 }} {{ opt.unit ?? '' }}
+                                                        </span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <div class="space-y-2">
+                                    <Label for="server_name">Server-Name (optional)</Label>
+                                    <Input
+                                        id="server_name"
+                                        name="server_name"
+                                        type="text"
+                                        class="h-11"
+                                        placeholder="z. B. Mein Minecraft Server"
+                                        :aria-invalid="!!errors.server_name"
+                                    />
+                                    <InputError :message="errors.server_name" />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                    <div class="lg:contents">
+                        <Card class="flex flex-col border-2 border-primary/20 bg-primary/5 lg:h-full lg:min-h-0 lg:sticky lg:top-6">
+                            <CardHeader>
+                                <CardTitle class="text-lg">Zusammenfassung</CardTitle>
+                                <CardDescription v-if="currentPlan">
+                                    {{ currentPlan.name }}
+                                </CardDescription>
+                                <CardDescription v-else>
+                                    Wählen Sie ein Paket
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent class="flex flex-1 flex-col space-y-4">
+                                <template v-if="currentPlan">
+                                    <div class="space-y-2 text-sm">
+                                        <div class="flex justify-between">
+                                            <span class="text-muted-foreground">Basis-Preis</span>
+                                            <span class="tabular-nums">{{ basePrice.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €/Monat</span>
+                                        </div>
+                                        <template v-for="item in optionSurchargeItems" :key="item.name">
+                                            <div class="flex justify-between">
+                                                <span class="text-muted-foreground">{{ item.name }}</span>
+                                                <span class="tabular-nums">
+                                                    {{ item.surcharge > 0 ? `+ ${item.surcharge.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €` : 'inkl.' }}
+                                                </span>
+                                            </div>
+                                        </template>
+                                        <div class="border-t pt-3 text-base font-semibold">
+                                            <div class="flex justify-between">
+                                                <span>Gesamt</span>
+                                                <span class="tabular-nums">{{ totalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €/Monat</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-if="props.canPayWithBalance" class="mt-auto space-y-2 border-t pt-4">
+                                        <p class="text-sm font-medium">Zahlungsart</p>
+                                        <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                            <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" class="h-4 w-4 border-input text-primary" />
+                                            <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                <CreditCard class="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span class="text-sm">Karte (Stripe)</span>
+                                            </div>
+                                        </label>
+                                        <label
+                                            class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                                            :class="{ 'opacity-60': !canSubmitWithBalance }"
+                                        >
+                                            <input
+                                                v-model="paymentMethod"
+                                                type="radio"
+                                                name="payment_method"
+                                                value="balance"
+                                                :disabled="!canSubmitWithBalance"
+                                                class="h-4 w-4 border-input text-primary"
+                                            />
+                                            <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                <Wallet class="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span class="text-sm">Guthaben</span>
+                                                <span v-if="canSubmitWithBalance" class="truncate text-xs text-muted-foreground">
+                                                    ({{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
+                                                </span>
+                                                <span v-else class="text-xs text-destructive">(nicht ausreichend)</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div class="mt-auto flex flex-col gap-2">
+                                    <Button type="submit" class="w-full" size="lg" :disabled="processing">
+                                        {{ processing ? 'Wird weitergeleitet…' : 'Weiter zur Zahlung' }}
+                                    </Button>
+                                    <Link href="/gaming" class="block">
+                                        <Button type="button" variant="outline" class="w-full">Abbrechen</Button>
+                                    </Link>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <p class="text-sm text-muted-foreground">Bitte wählen Sie links ein Paket aus.</p>
+                                    <div class="mt-auto flex flex-col gap-2">
+                                        <Button type="submit" class="w-full" size="lg" disabled>Paket wählen</Button>
+                                        <Link href="/gaming" class="block">
+                                            <Button type="button" variant="outline" class="w-full">Abbrechen</Button>
+                                        </Link>
+                                    </div>
+                                </template>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </Form>
         </div>
     </AppLayout>
 </template>

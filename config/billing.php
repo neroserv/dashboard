@@ -136,4 +136,27 @@ return [
     'dunning_fee_level_2' => (float) env('BILLING_DUNNING_FEE_LEVEL_2', 5),
     'dunning_fee_level_3' => (float) env('BILLING_DUNNING_FEE_LEVEL_3', 10),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Balance Top-Up (Guthaben aufladen)
+    |--------------------------------------------------------------------------
+    |
+    | Minimum amount in EUR for customer self top-up via Stripe Checkout.
+    |
+    */
+
+    'balance_topup_min_amount' => (float) env('BALANCE_TOPUP_MIN_AMOUNT', 5),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Balance Period (Guthaben-Zahlung Vertragslaufzeit)
+    |--------------------------------------------------------------------------
+    |
+    | Default contract period in months when a customer pays with balance (Webspace/Gameserver).
+    | Can be overridden per brand in Admin → Marken → Prepaid.
+    |
+    */
+
+    'balance_period_months' => (int) env('BALANCE_PERIOD_MONTHS', 1),
+
 ];

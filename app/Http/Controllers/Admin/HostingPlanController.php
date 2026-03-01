@@ -19,6 +19,56 @@ use Inertia\Response;
 
 class HostingPlanController extends Controller
 {
+    /**
+     * Option IDs available for plan_options when panel_type is pterodactyl (same keys as config in Edit form).
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    protected static function availableOptionIdsPterodactyl(): array
+    {
+        $keys = [
+            'memory' => 'RAM (memory)',
+            'disk' => 'Disk',
+            'cpu' => 'CPU',
+            'swap' => 'Swap',
+            'io' => 'IO',
+            'nest_id' => 'Nest',
+            'egg_id' => 'Egg',
+            'node' => 'Node',
+            'location_ids' => 'Location(s)',
+            'databases' => 'Databases',
+            'backups' => 'Backups',
+            'additional_allocations' => 'Additional Allocations',
+            'port_array' => 'Port Array',
+            'port_range' => 'Port Range',
+            'cpu_pinning' => 'CPU Pinning',
+        ];
+
+        $out = [];
+        foreach ($keys as $value => $label) {
+            $out[] = ['value' => $value, 'label' => $label];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Option IDs available for plan_options when panel_type is plesk.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    protected static function availableOptionIdsPlesk(): array
+    {
+        return [
+            ['value' => 'disk_gb', 'label' => 'Disk (GB)'],
+            ['value' => 'traffic_gb', 'label' => 'Traffic (GB)'],
+            ['value' => 'domains', 'label' => 'Domains'],
+            ['value' => 'subdomains', 'label' => 'Subdomains'],
+            ['value' => 'mailboxes', 'label' => 'Mailboxes'],
+            ['value' => 'databases', 'label' => 'Databases'],
+        ];
+    }
+
     protected function currentBrand(Request $request): ?Brand
     {
         $brand = $request->attributes->get('current_brand');
@@ -135,6 +185,8 @@ class HostingPlanController extends Controller
         return Inertia::render('admin/hosting-plans/Create', [
             'allowedPanelTypes' => $allowedPanelTypes,
             'pterodactylHostingServers' => $pterodactylHostingServers,
+            'availableOptionIdsPterodactyl' => static::availableOptionIdsPterodactyl(),
+            'availableOptionIdsPlesk' => static::availableOptionIdsPlesk(),
         ]);
     }
 
@@ -219,6 +271,8 @@ class HostingPlanController extends Controller
             'hostingPlan' => $hostingPlan,
             'allowedPanelTypes' => $allowedPanelTypes,
             'pterodactylHostingServers' => $pterodactylHostingServers,
+            'availableOptionIdsPterodactyl' => static::availableOptionIdsPterodactyl(),
+            'availableOptionIdsPlesk' => static::availableOptionIdsPlesk(),
         ]);
     }
 

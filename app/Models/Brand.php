@@ -72,7 +72,7 @@ class Brand extends Model
     }
 
     /**
-     * @return array<string, bool>
+     * @return array<string, bool|int>
      */
     public function getFeaturesArray(): array
     {
@@ -82,9 +82,21 @@ class Brand extends Model
             'domains_shop' => true,
             'ai_tokens' => true,
             'gaming' => false,
+            'prepaid_balance' => false,
+            'balance_topup' => false,
+            'balance_period_months' => 1,
         ];
         $features = $this->features ?? [];
+        $boolKeys = ['sites_editor', 'webspace', 'domains_shop', 'ai_tokens', 'gaming', 'prepaid_balance', 'balance_topup'];
+        foreach ($boolKeys as $key) {
+            if (array_key_exists($key, $features)) {
+                $defaults[$key] = (bool) $features[$key];
+            }
+        }
+        if (isset($features['balance_period_months']) && is_numeric($features['balance_period_months'])) {
+            $defaults['balance_period_months'] = max(1, min(24, (int) $features['balance_period_months']));
+        }
 
-        return array_merge($defaults, array_map(fn ($v) => (bool) $v, $features));
+        return $defaults;
     }
 }

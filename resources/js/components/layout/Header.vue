@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { logout } from '@/routes';
+import { index as billingIndex } from '@/routes/billing';
 import { cn } from '@/lib/utils';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Avatar } from '@/components/ui/avatar';
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown';
-import { Bell, Search, Settings, LogOut, Menu } from 'lucide-vue-next';
+import { Bell, Search, Settings, LogOut, Menu, Wallet } from 'lucide-vue-next';
 
 import type { BreadcrumbItem } from '@/types';
 
@@ -24,6 +25,16 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const openMobileSidebar = inject<() => void>('openMobileSidebar', () => {});
+
+const page = usePage();
+const showBalance = computed(
+    () =>
+        (page.props.brandFeatures as Record<string, boolean> | undefined)?.prepaid_balance === true &&
+        typeof (page.props.auth as { customerBalance?: number })?.customerBalance === 'number',
+);
+const customerBalance = computed(
+    () => (page.props.auth as { customerBalance?: number })?.customerBalance ?? 0,
+);
 
 const headerClasses = computed(() =>
     cn(
@@ -48,6 +59,17 @@ const headerClasses = computed(() =>
         </div>
 
         <div class="flex items-center gap-2">
+            <!-- Guthaben (Prepaid) -->
+            <Link
+                v-if="showBalance"
+                :href="billingIndex.url()"
+                class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-modern hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+                <Wallet class="h-4 w-4 text-primary" />
+                <span class="hidden sm:inline">Guthaben:</span>
+                <span class="font-semibold">{{ customerBalance.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €</span>
+            </Link>
+
             <!-- Search -->
             <button class="rounded-lg p-2 transition-modern hover:bg-gray-100 dark:hover:bg-gray-800">
                 <Search class="h-5 w-5 text-gray-600 dark:text-gray-400" />

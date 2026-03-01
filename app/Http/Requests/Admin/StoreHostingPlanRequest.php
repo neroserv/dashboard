@@ -62,6 +62,24 @@ class StoreHostingPlanRequest extends FormRequest
             $rules['config.cpu_pinning'] = ['nullable', 'string', 'max:255'];
         }
 
+        $rules['config.plan_options'] = ['nullable', 'array'];
+        $rules['config.plan_options.*.id'] = ['required', 'string', 'max:64'];
+        $rules['config.plan_options.*.name'] = ['required', 'string', 'max:255'];
+        $rules['config.plan_options.*.type'] = ['required', 'string', 'in:free,choice,text,range_slider,select'];
+        $rules['config.plan_options.*.price_per_unit'] = ['nullable', 'numeric', 'min:0'];
+        $rules['config.plan_options.*.sort_order'] = ['nullable', 'integer', 'min:0'];
+        $rules['config.plan_options.*.choices'] = ['nullable', 'array'];
+        $rules['config.plan_options.*.choices.*.value'] = ['required', 'string'];
+        $rules['config.plan_options.*.choices.*.label'] = ['required', 'string'];
+        $rules['config.plan_options.*.choices.*.price_delta'] = ['nullable', 'numeric', 'min:0'];
+        $rules['config.plan_options.*.min'] = ['nullable', 'numeric'];
+        $rules['config.plan_options.*.max'] = ['nullable', 'numeric'];
+        $rules['config.plan_options.*.step'] = ['nullable', 'numeric', 'min:0'];
+        $rules['config.plan_options.*.unit'] = ['nullable', 'string', 'max:32'];
+        $rules['config.plan_options.*.source'] = ['nullable', 'string', 'in:pterodactyl_nests,pterodactyl_eggs'];
+        $rules['config.plan_options.*.placeholder'] = ['nullable', 'string', 'max:255'];
+        $rules['config.plan_options.*.max_length'] = ['nullable', 'integer', 'min:0', 'max:10000'];
+
         return $rules;
     }
 }

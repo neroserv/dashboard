@@ -19,13 +19,37 @@ type PterodactylServer = { id: number; name: string; hostname: string };
 
 type PterodactylOption = { id: number; name: string };
 
+type PlanOptionChoice = { value: string; label: string; price_delta?: number };
+
+type PlanOption = {
+    id: string;
+    name: string;
+    type: 'free' | 'choice' | 'text' | 'range_slider' | 'select';
+    price_per_unit: number;
+    sort_order: number;
+    choices?: PlanOptionChoice[];
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    source?: 'pterodactyl_nests' | 'pterodactyl_eggs';
+    placeholder?: string;
+    max_length?: number;
+};
+
+type AvailableOptionId = { value: string; label: string };
+
 type Props = {
     allowedPanelTypes: PanelTypeOption[];
     pterodactylHostingServers: PterodactylServer[];
+    availableOptionIdsPterodactyl: AvailableOptionId[];
+    availableOptionIdsPlesk: AvailableOptionId[];
 };
 
 const props = withDefaults(defineProps<Props>(), {
     pterodactylHostingServers: () => [],
+    availableOptionIdsPterodactyl: () => [],
+    availableOptionIdsPlesk: () => [],
 });
 
 const isActive = ref(true);
@@ -63,6 +87,7 @@ const config = ref({
     dedicated_ip: false,
     start_on_completion: true,
     oom_killer: false,
+    plan_options: [] as PlanOption[],
 });
 
 async function fetchPterodactylOptions(nestId?: number) {
@@ -109,6 +134,56 @@ function refreshOptions() {
     if (hostingServerId.value) fetchPterodactylOptions(nestId);
 }
 
+const availableOptionIds = computed((): AvailableOptionId[] => {
+    return panelType.value === 'pterodactyl' ? props.availableOptionIdsPterodactyl : props.availableOptionIdsPlesk;
+});
+
+const planOptions = computed({
+    get: () => (config.value.plan_options as PlanOption[]) ?? [],
+    set: (val: PlanOption[]) => {
+        config.value.plan_options = val;
+    },
+});
+
+function addPlanOption() {
+    const opts = (config.value.plan_options as PlanOption[]) ?? [];
+    opts.push({
+        id: '',
+        name: '',
+        type: 'free',
+        price_per_unit: 0,
+        sort_order: opts.length,
+    });
+    config.value.plan_options = opts;
+}
+
+function removePlanOption(index: number) {
+    const opts = [...(config.value.plan_options as PlanOption[])];
+    opts.splice(index, 1);
+    config.value.plan_options = opts;
+}
+
+function movePlanOption(index: number, direction: -1 | 1) {
+    const opts = [...(config.value.plan_options as PlanOption[])];
+    const ni = index + direction;
+    if (ni < 0 || ni >= opts.length) return;
+    [opts[index], opts[ni]] = [opts[ni], opts[index]];
+    opts.forEach((o, i) => (o.sort_order = i));
+    config.value.plan_options = opts;
+}
+
+function addChoice(opt: PlanOption) {
+    const choices = opt.choices ?? [];
+    choices.push({ value: '', label: '', price_delta: 0 });
+    opt.choices = choices;
+}
+
+function removeChoice(opt: PlanOption, idx: number) {
+    const choices = opt.choices ?? [];
+    choices.splice(idx, 1);
+    opt.choices = choices.length ? choices : undefined;
+}
+
 const portRangeInput = ref('');
 function addPortRange() {
     const v = portRangeInput.value.trim();
@@ -141,17 +216,18 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </Text>
             </div>
 
-            <Card class="max-w-2xl">
-                <CardHeader>
-                    <CardTitle>Paket-Details</CardTitle>
-                    <CardDescription>Panel-Typ, Name und Limits</CardDescription>
-                </CardHeader>
-                <Form
-                    action="/admin/hosting-plans"
-                    method="post"
-                    class="space-y-6"
-                    v-slot="{ errors }"
-                >
+            <Form
+                action="/admin/hosting-plans"
+                method="post"
+                class="block"
+                v-slot="{ errors }"
+            >
+                <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <Card class="max-w-2xl xl:max-w-none">
+                        <CardHeader>
+                            <CardTitle>Paket-Details</CardTitle>
+                            <CardDescription>Panel-Typ, Name und Limits</CardDescription>
+                        </CardHeader>
                     <CardContent class="space-y-4">
                         <div class="space-y-2">
                             <Label for="panel_type">Panel-Typ *</Label>
@@ -538,6 +614,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <input type="hidden" name="mailboxes" value="0" />
                             <input type="hidden" name="databases" value="0" />
                         </template>
+
                         <div class="space-y-2">
                             <Label for="price">Preis (€/Monat) *</Label>
                             <Input
@@ -578,8 +655,168 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <Button type="button" variant="outline">Abbrechen</Button>
                         </Link>
                     </CardFooter>
-                </Form>
-            </Card>
+                    </Card>
+
+                    <Card class="xl:max-w-none">
+                        <CardHeader>
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <CardTitle>Paket-Optionen (Kundenauswahl)</CardTitle>
+                                    <CardDescription>
+                                        Optionen, die Kunden beim Checkout auswählen können. ID = Feld aus dem Paket-Formular. Bei Select: Optionen an Nests/Eggs binden möglich.
+                                    </CardDescription>
+                                </div>
+                                <Button type="button" variant="outline" size="sm" @click="addPlanOption">
+                                    Option hinzufügen
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent class="space-y-4">
+                            <div v-if="planOptions.length === 0" class="text-sm text-muted-foreground rounded-md border border-dashed p-4">
+                                Noch keine Optionen. Klicken Sie auf „Option hinzufügen“.
+                            </div>
+                            <div v-else class="space-y-4">
+                                <div
+                                    v-for="(opt, idx) in planOptions"
+                                    :key="idx"
+                                    class="rounded-lg border p-4 space-y-3 bg-muted/30"
+                                >
+                                    <input type="hidden" :name="`config[plan_options][${idx}][id]`" :value="opt.id" />
+                                    <input type="hidden" :name="`config[plan_options][${idx}][name]`" :value="opt.name" />
+                                    <input type="hidden" :name="`config[plan_options][${idx}][type]`" :value="opt.type" />
+                                    <input type="hidden" :name="`config[plan_options][${idx}][price_per_unit]`" :value="opt.price_per_unit" />
+                                    <input type="hidden" :name="`config[plan_options][${idx}][sort_order]`" :value="idx" />
+                                    <div class="flex flex-wrap items-start gap-2">
+                                        <div class="space-y-1 min-w-[120px]">
+                                            <Label class="text-xs">ID</Label>
+                                            <Select
+                                                :model-value="availableOptionIds.some(o => o.value === opt.id) ? opt.id : '__custom__'"
+                                                class="h-9"
+                                                @update:model-value="(v: string) => { opt.id = v === '__custom__' ? '' : v; }"
+                                            >
+                                                <option value="">Bitte wählen</option>
+                                                <option v-for="o in availableOptionIds" :key="o.value" :value="o.value">{{ o.label }}</option>
+                                                <option value="__custom__">Benutzerdefiniert</option>
+                                            </Select>
+                                            <Input
+                                                v-if="!availableOptionIds.some(o => o.value === opt.id)"
+                                                v-model="opt.id"
+                                                class="mt-1 h-8 text-sm"
+                                                placeholder="z. B. opt_ram"
+                                            />
+                                        </div>
+                                        <div class="space-y-1 flex-1 min-w-[120px]">
+                                            <Label class="text-xs">Name</Label>
+                                            <Input v-model="opt.name" class="h-9" placeholder="z. B. Arbeitsspeicher" />
+                                        </div>
+                                        <div class="space-y-1 min-w-[90px]">
+                                            <Label class="text-xs">Typ</Label>
+                                            <Select v-model="opt.type" class="h-9">
+                                                <option value="free">Kostenlos</option>
+                                                <option value="choice">Auswahl</option>
+                                                <option value="text">Text</option>
+                                                <option value="range_slider">Range</option>
+                                                <option value="select">Select</option>
+                                            </Select>
+                                        </div>
+                                        <div class="space-y-1 w-20">
+                                            <Label class="text-xs">Preis (€)</Label>
+                                            <Input
+                                                v-model.number="opt.price_per_unit"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                class="h-9"
+                                                :disabled="opt.type === 'free'"
+                                            />
+                                        </div>
+                                        <div class="flex gap-1 items-end">
+                                            <Button type="button" variant="ghost" size="sm" class="h-9" :disabled="idx === 0" @click="movePlanOption(idx, -1)">↑</Button>
+                                            <Button type="button" variant="ghost" size="sm" class="h-9" :disabled="idx === planOptions.length - 1" @click="movePlanOption(idx, 1)">↓</Button>
+                                            <Button type="button" variant="ghost" size="sm" class="h-9 text-destructive" @click="removePlanOption(idx)">Entfernen</Button>
+                                        </div>
+                                    </div>
+                                    <div v-if="opt.type === 'choice' || (opt.type === 'select' && !opt.source)" class="ml-0 space-y-2">
+                                        <Label class="text-xs">Optionen (value, label, Aufpreis €)</Label>
+                                        <div v-for="(ch, cIdx) in (opt.choices ?? [])" :key="cIdx" class="flex gap-2 items-center">
+                                            <Input v-model="ch.value" placeholder="value" class="h-8 flex-1 max-w-[80px]" />
+                                            <Input v-model="ch.label" placeholder="Label" class="h-8 flex-1" />
+                                            <Input v-model.number="ch.price_delta" type="number" step="0.01" min="0" placeholder="0" class="h-8 w-16" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][choices][${cIdx}][value]`" :value="ch.value" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][choices][${cIdx}][label]`" :value="ch.label" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][choices][${cIdx}][price_delta]`" :value="ch.price_delta ?? 0" />
+                                            <Button type="button" variant="ghost" size="sm" class="h-8 shrink-0 text-destructive" @click="removeChoice(opt, cIdx)">×</Button>
+                                        </div>
+                                        <Button type="button" variant="outline" size="sm" class="h-8" @click="addChoice(opt)">+ Option</Button>
+                                    </div>
+                                    <div v-if="opt.type === 'select' && showPterodactylFields" class="ml-0 space-y-2">
+                                        <Label class="text-xs">Optionen binden an</Label>
+                                        <Select v-model="opt.source" class="h-9 w-full">
+                                            <option :value="undefined">Statisch (manuell oben)</option>
+                                            <option value="pterodactyl_nests">Pterodactyl Nests</option>
+                                            <option value="pterodactyl_eggs">Pterodactyl Eggs (vom Nest)</option>
+                                        </Select>
+                                        <input type="hidden" :name="`config[plan_options][${idx}][source]`" :value="opt.source ?? ''" />
+                                        <p v-if="opt.source === 'pterodactyl_nests'" class="text-xs text-muted-foreground">
+                                            Optionen = verfügbare Nests des Panel-Servers.
+                                            <template v-if="pterodactylOptions.nests.length"> Aktuell {{ pterodactylOptions.nests.length }} Nests.</template>
+                                            <template v-else> Bitte „Optionen aktualisieren“ beim Panel-Server klicken.</template>
+                                        </p>
+                                        <p v-else-if="opt.source === 'pterodactyl_eggs'" class="text-xs text-muted-foreground">
+                                            Optionen = Eggs des im Plan gewählten Nests (Checkout).
+                                            <template v-if="pterodactylOptions.eggs.length"> Vorschau: {{ pterodactylOptions.eggs.length }} Eggs.</template>
+                                            <template v-else> Nest im Plan wählen und Optionen aktualisieren.</template>
+                                        </p>
+                                        <ul v-if="opt.source === 'pterodactyl_nests' && pterodactylOptions.nests.length" class="text-xs text-muted-foreground list-disc list-inside max-h-24 overflow-y-auto">
+                                            <li v-for="n in pterodactylOptions.nests" :key="n.id">{{ n.name }} (ID {{ n.id }})</li>
+                                        </ul>
+                                        <ul v-else-if="opt.source === 'pterodactyl_eggs' && pterodactylOptions.eggs.length" class="text-xs text-muted-foreground list-disc list-inside max-h-24 overflow-y-auto">
+                                            <li v-for="e in pterodactylOptions.eggs" :key="e.id">{{ e.name }} (ID {{ e.id }})</li>
+                                        </ul>
+                                    </div>
+                                    <div v-if="opt.type === 'select' && opt.source && (opt.choices?.length ?? 0) > 0" class="ml-0 text-xs text-muted-foreground">
+                                        Statische Optionen werden bei gebundener Quelle ignoriert; Anzeige kommt aus Nests/Eggs.
+                                    </div>
+                                    <div v-if="opt.type === 'range_slider'" class="ml-0 grid grid-cols-2 gap-2">
+                                        <div class="space-y-1">
+                                            <Label class="text-xs">Min</Label>
+                                            <Input v-model.number="opt.min" type="number" class="h-8" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][min]`" :value="opt.min !== undefined && opt.min !== null ? opt.min : ''" />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <Label class="text-xs">Max</Label>
+                                            <Input v-model.number="opt.max" type="number" class="h-8" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][max]`" :value="opt.max !== undefined && opt.max !== null ? opt.max : ''" />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <Label class="text-xs">Step</Label>
+                                            <Input v-model.number="opt.step" type="number" min="0" class="h-8" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][step]`" :value="opt.step !== undefined && opt.step !== null ? opt.step : ''" />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <Label class="text-xs">Einheit</Label>
+                                            <Input v-model="opt.unit" class="h-8" placeholder="MB" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][unit]`" :value="opt.unit ?? ''" />
+                                        </div>
+                                    </div>
+                                    <div v-if="opt.type === 'text'" class="ml-0 flex gap-2">
+                                        <div class="space-y-1 flex-1">
+                                            <Label class="text-xs">Placeholder</Label>
+                                            <Input v-model="opt.placeholder" class="h-8" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][placeholder]`" :value="opt.placeholder ?? ''" />
+                                        </div>
+                                        <div class="space-y-1 w-20">
+                                            <Label class="text-xs">Max. Länge</Label>
+                                            <Input v-model.number="opt.max_length" type="number" min="0" class="h-8" />
+                                            <input type="hidden" :name="`config[plan_options][${idx}][max_length]`" :value="opt.max_length ?? ''" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </Form>
         </div>
     </AppLayout>
 </template>

@@ -22,6 +22,7 @@ class DomainCheckoutRequest extends FormRequest
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'tld' => ['nullable', 'string', 'max:20'],
             'use_profile_contact' => ['required', 'boolean'],
+            'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
         ];
         if (! $this->boolean('use_profile_contact')) {
             $rules['contact'] = ['required', 'array'];

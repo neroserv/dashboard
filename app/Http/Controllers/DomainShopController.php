@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientBalanceException;
 use App\Http\Requests\CheckDomainAvailabilityRequest;
 use App\Http\Requests\DomainCheckoutRequest;
+use App\Models\Brand;
+use App\Models\CustomerBalance;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\ResellerDomain;
+use App\Services\BalancePaymentService;
 use App\Services\DomainPricingService;
 use App\Services\InvoicePdfService;
 use App\Services\SkrimeApiService;
@@ -92,12 +96,23 @@ class DomainShopController extends Controller
         $user = $request->user();
         $profileContact = app(SkrimeContactService::class)->fromUserForDisplay($user);
 
-        return Inertia::render('domains/Checkout', [
+        $payload = [
             'domain' => $domain,
             'sale_price' => (float) $salePrice,
             'tld' => $tld ?? '',
             'profile_contact' => $profileContact,
-        ]);
+        ];
+
+        $currentBrand = $request->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        if ($brandFeatures['prepaid_balance'] ?? false) {
+            $customerBalance = CustomerBalance::where('user_id', $user->id)->first();
+            $payload['canPayWithBalance'] = true;
+            $payload['customerBalance'] = $customerBalance ? (float) $customerBalance->balance : 0.0;
+            $payload['amountRequired'] = (float) $salePrice;
+        }
+
+        return Inertia::render('domains/Checkout', $payload);
     }
 
     public function storeCheckout(DomainCheckoutRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): RedirectResponse
@@ -118,6 +133,57 @@ class DomainShopController extends Controller
             : $this->normalizeContact($data['contact'] ?? []);
 
         $salePrice = (float) $data['sale_price'];
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        $paymentMethod = $data['payment_method'] ?? 'stripe';
+
+        if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
+            try {
+                app(BalancePaymentService::class)->pay($user, $salePrice, 'domain_purchase', 'Domain-Registrierung: '.$data['domain'], [
+                    'description' => 'Domain-Registrierung '.$data['domain'],
+                ]);
+            } catch (InsufficientBalanceException $e) {
+                return redirect()->route('domains.checkout', ['domain' => $data['domain'], 'sale_price' => $salePrice, 'tld' => $data['tld'] ?? ''])
+                    ->with('error', $e->getMessage());
+            }
+
+            if (! config('skrime.api_key') || ! config('skrime.base_url')) {
+                Log::warning('Domain checkout balance: Skrime API nicht konfiguriert.');
+
+                return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte kontaktieren Sie uns.');
+            }
+
+            $domain = $data['domain'];
+            $nameservers = config('skrime.default_nameservers', []);
+
+            try {
+                $orderData = $skrime->orderDomain($domain, $contact, $nameservers);
+            } catch (\Throwable $e) {
+                Log::error('Domain checkout balance: Skrime orderDomain fehlgeschlagen.', [
+                    'domain' => $domain,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return redirect()->route('domains.index')->with('error', 'Domain-Bestellung bei Skrime fehlgeschlagen: '.$e->getMessage());
+            }
+
+            $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
+            ResellerDomain::create([
+                'domain' => $data['domain'],
+                'user_id' => $user->id,
+                'skrime_id' => $orderData['id'] ?? null,
+                'status' => $orderData['state'] ?? 'active',
+                'registered_at' => now(),
+                'expires_at' => $expiresAt,
+                'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
+                'purchase_price' => (float) ($data['purchase_price'] ?? 0),
+                'sale_price' => $salePrice,
+                'tld' => $data['tld'] ?? null,
+            ]);
+
+            return redirect()->route('domains.index')->with('success', 'Domain '.$data['domain'].' wurde registriert.');
+        }
+
         $token = Str::random(32);
         $request->session()->put('domain_checkout_'.$token, [
             'domain' => $data['domain'],
