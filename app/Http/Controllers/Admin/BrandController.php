@@ -35,6 +35,7 @@ class BrandController extends Controller
             'domains.*' => ['string', 'max:255'],
             'is_default' => ['boolean'],
             'logo_url' => ['nullable', 'string', 'max:500'],
+            'logo_collapsed_url' => ['nullable', 'string', 'max:500'],
             'theme_colors' => ['nullable', 'array'],
             'theme_colors.*' => ['nullable', 'string', 'max:50'],
             'features' => ['nullable', 'array'],

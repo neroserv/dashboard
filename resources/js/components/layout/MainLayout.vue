@@ -1,9 +1,31 @@
 <script setup lang="ts">
-import { ref, computed, provide } from 'vue';
+import { ref, computed, provide, onMounted, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import Sidebar from './Sidebar.vue';
 import Header from './Header.vue';
 import type { BreadcrumbItem, NavItem } from '@/types';
+
+const SIDEBAR_COLLAPSED_KEY = 'app-sidebar-collapsed';
+
+function loadSidebarCollapsed(): boolean {
+    if (typeof localStorage === 'undefined') {
+        return false;
+    }
+    try {
+        const raw = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+        return raw === '1';
+    } catch {
+        return false;
+    }
+}
+
+function saveSidebarCollapsed(value: boolean): void {
+    try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, value ? '1' : '0');
+    } catch {
+        // ignore
+    }
+}
 
 interface Props {
     sidebarItems: NavItem[];
@@ -17,6 +39,16 @@ const user = computed(() => page.props.auth?.user as any);
 const isSidebarCollapsed = ref(false);
 const isSidebarOpenMobile = ref(false);
 
+onMounted(() => {
+    isSidebarCollapsed.value = loadSidebarCollapsed();
+});
+
+watch(isSidebarCollapsed, (value) => {
+    if (typeof localStorage !== 'undefined') {
+        saveSidebarCollapsed(value);
+    }
+});
+
 function openMobileSidebar() {
     isSidebarOpenMobile.value = true;
 }
@@ -25,7 +57,17 @@ function closeMobileSidebar() {
     isSidebarOpenMobile.value = false;
 }
 
+function toggleSidebarCollapsed() {
+    isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
+function expandSidebar() {
+    isSidebarCollapsed.value = false;
+}
+
 provide('isSidebarCollapsed', isSidebarCollapsed);
+provide('toggleSidebarCollapsed', toggleSidebarCollapsed);
+provide('expandSidebar', expandSidebar);
 provide('isSidebarOpenMobile', computed(() => isSidebarOpenMobile.value));
 provide('openMobileSidebar', openMobileSidebar);
 provide('closeMobileSidebar', closeMobileSidebar);

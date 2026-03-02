@@ -83,6 +83,7 @@ class HandleInertiaRequests extends Middleware
                 'key' => $currentBrand->key,
                 'name' => $currentBrand->name,
                 'logoUrl' => $currentBrand->logo_url,
+                'logoCollapsedUrl' => $currentBrand->logo_collapsed_url,
                 'themeColors' => $currentBrand->theme_colors,
             ];
             $brandFeatures = $currentBrand->getFeaturesArray();

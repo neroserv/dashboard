@@ -1,29 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
 import { cn } from '@/lib/utils';
 import AppLogo from '@/components/AppLogo.vue';
 import { Avatar } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-    Tooltip,
     TooltipContent,
     TooltipProvider,
+    TooltipRoot,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useAppearance } from '@/composables/useAppearance';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { Moon, Sun, Menu, X, ChevronDown, ChevronRight } from 'lucide-vue-next';
+import { Moon, Sun, ChevronDown, ChevronRight } from 'lucide-vue-next';
 import type { NavItem } from '@/types';
 
 const isMobile = useMediaQuery('(max-width: 1023px)');
 
-const STORAGE_KEY = 'app-sidebar-open';
+const STORAGE_KEY = 'app-sidebar-open-groups';
 
 function loadStoredOpenKeys(): Set<string> {
     try {
-        const raw = sessionStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const arr = JSON.parse(raw) as string[];
             return new Set(Array.isArray(arr) ? arr : []);
@@ -60,9 +61,30 @@ const isCollapsed = computed({
     set: (value) => emit('update:collapsed', value),
 });
 
-const effectiveCollapsed = computed(() => isCollapsed.value && !isMobile.value);
+const effectiveCollapsed = computed(() => isCollapsed.value);
 
 const openGroupKeys = ref<Set<string>>(new Set());
+const openCollapsedGroupTitle = ref<string | null>(null);
+
+const openCollapsedGroupItem = computed(() =>
+    props.items.find((i) => i.children?.length && i.title === openCollapsedGroupTitle.value) ?? null,
+);
+
+const collapsedGroupDialogOpen = ref(false);
+
+function openCollapsedGroupModal(title: string) {
+    openCollapsedGroupTitle.value = title;
+    collapsedGroupDialogOpen.value = true;
+}
+
+function closeCollapsedGroupModal() {
+    openCollapsedGroupTitle.value = null;
+    collapsedGroupDialogOpen.value = false;
+}
+
+watch(collapsedGroupDialogOpen, (open) => {
+    if (!open) openCollapsedGroupTitle.value = null;
+});
 
 const { appearance, updateAppearance } = useAppearance();
 const { isCurrentUrl } = useCurrentUrl();
@@ -104,7 +126,7 @@ function setGroupOpen(key: string, open: boolean): void {
     }
     openGroupKeys.value = next;
     try {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
     } catch {
         // ignore
     }
@@ -115,31 +137,43 @@ function toggleTheme() {
     updateAppearance(newAppearance);
 }
 
+const expandSidebar = inject<(() => void) | null>('expandSidebar', null);
+
 function closeSidebar() {
     if (isMobile.value) {
         emit('close-mobile');
+    } else if (isCollapsed.value) {
+        if (expandSidebar) {
+            expandSidebar();
+        } else {
+            isCollapsed.value = false;
+        }
     } else {
-        isCollapsed.value = !isCollapsed.value;
+        isCollapsed.value = true;
     }
 }
 
 function onNavClick(e: MouseEvent) {
-    if (isMobile.value && (e.target as HTMLElement).closest('a')) {
+    const el = e.target as HTMLElement;
+    if (isMobile.value && el.closest('a')) {
         emit('close-mobile');
     }
 }
 
+const sidebarRef = ref<HTMLElement | null>(null);
+
 const sidebarClasses = computed(() =>
     cn(
-        'fixed left-0 top-0 z-50 h-screen transition-modern-slow',
+        'fixed left-0 top-0 z-50 h-screen overflow-x-hidden transition-modern-slow',
         'bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950',
         'border-r border-gray-200 dark:border-gray-800',
         'shadow-modern-lg',
         // Mobile: overlay, full sidebar width when open
         'lg:z-40',
-        isMobile.value ? 'w-64' : effectiveCollapsed.value ? 'w-20' : 'w-64',
+        effectiveCollapsed.value ? 'w-20' : 'w-64',
         isMobile.value && !props.mobileOpen && '-translate-x-full',
         isMobile.value && props.mobileOpen && 'translate-x-0',
+        effectiveCollapsed.value && 'sidebar--icons-only',
     ),
 );
 
@@ -169,28 +203,16 @@ const groupTriggerClasses = (item: NavItem) =>
         aria-hidden="true"
         @click="emit('close-mobile')"
     />
-    <aside :class="sidebarClasses" aria-label="Hauptnavigation">
+    <aside ref="sidebarRef" :class="sidebarClasses" aria-label="Hauptnavigation">
         <TooltipProvider :delay-duration="300">
             <div class="flex h-full flex-col">
-            <!-- Header -->
-            <div class="flex h-16 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
-                <div v-if="!effectiveCollapsed" class="flex items-center gap-2">
-                    <AppLogo class="h-8" />
-                </div>
-                <button
-                    type="button"
-                    :aria-label="isMobile ? 'Menü schließen' : isCollapsed ? 'Sidebar öffnen' : 'Sidebar schließen'"
-                    @click="closeSidebar"
-                    class="rounded-lg p-2 transition-modern hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                    <X v-if="isMobile" class="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <Menu v-else-if="isCollapsed" class="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <X v-else class="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                </button>
+            <!-- Header: Logo (eingeklappt = kleines Logo aus Marken-Einstellungen) -->
+            <div class="flex h-16 shrink-0 items-center justify-center border-b border-gray-200 px-2 dark:border-gray-800">
+                <AppLogo :variant="effectiveCollapsed ? 'collapsed' : 'default'" :class="effectiveCollapsed ? 'h-8 w-8' : 'h-8 w-full'" />
             </div>
 
             <!-- Navigation -->
-            <nav class="flex-1 space-y-1 overflow-y-auto p-4" @click="onNavClick">
+            <nav class="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-4" @click="onNavClick">
                 <template v-for="(item, idx) in items" :key="item.title + String(idx)">
                     <div
                         v-if="idx > 0 && item.children?.length && !effectiveCollapsed"
@@ -215,7 +237,7 @@ const groupTriggerClasses = (item: NavItem) =>
                                 {{ item.badge }}
                             </span>
                         </Link>
-                        <Tooltip v-else>
+                        <TooltipRoot v-else>
                             <TooltipTrigger as-child>
                                 <Link
                                     :href="item.href"
@@ -234,7 +256,7 @@ const groupTriggerClasses = (item: NavItem) =>
                                 {{ item.title }}
                                 <template v-if="item.badge"> ({{ item.badge }})</template>
                             </TooltipContent>
-                        </Tooltip>
+                        </TooltipRoot>
                     </template>
 
                     <!-- Group: collapsible with children -->
@@ -330,47 +352,80 @@ const groupTriggerClasses = (item: NavItem) =>
                             </CollapsibleContent>
                         </Collapsible>
 
-                        <!-- Collapsed: icon + tooltip with child links -->
-                        <Tooltip v-else>
-                            <TooltipTrigger as-child>
-                                <button
-                                    type="button"
-                                    :class="cn(groupTriggerClasses(item), 'flex w-full justify-center')"
-                                    :aria-label="item.title"
-                                >
-                                    <component :is="item.icon" v-if="item.icon" class="h-5 w-5 shrink-0" />
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" class="max-w-xs p-0" :side-offset="8">
-                                <nav class="flex flex-col py-1" aria-label="Untermenü">
-                                    <template v-for="(child, cIdx) in item.children" :key="child.title + String(cIdx)">
-                                        <template v-if="child.children?.length">
-                                            <div class="px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                                                {{ child.title }}
-                                            </div>
-                                            <Link
-                                                v-for="(sub, sIdx) in child.children"
-                                                :key="sub.title + String(sIdx)"
-                                                v-show="sub.href"
-                                                :href="sub.href!"
-                                                class="flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-accent"
+                        <!-- Collapsed: icon only, click opens modal with tree -->
+                        <div v-else class="w-full" @click.stop>
+                            <button
+                                type="button"
+                                data-collapsed-group-btn
+                                :data-group="item.title"
+                                :class="cn(groupTriggerClasses(item), 'flex w-full justify-center min-w-[2.5rem] min-h-[2.5rem]', openCollapsedGroupTitle === item.title && 'bg-gray-100 dark:bg-gray-800')"
+                                :aria-label="item.title"
+                                :aria-expanded="openCollapsedGroupTitle === item.title"
+                                @click.prevent.stop="openCollapsedGroupTitle === item.title ? closeCollapsedGroupModal() : openCollapsedGroupModal(item.title)"
+                            >
+                                <component :is="item.icon" v-if="item.icon" class="h-5 w-5 shrink-0" />
+                            </button>
+                        </div>
+                    </template>
+                </template>
+            </nav>
+
+            <!-- Modal mit Baumansicht wenn Sidebar eingeklappt und Untermenü geöffnet (Teleport damit Portal außerhalb der Sidebar rendert) -->
+            <Teleport to="body">
+                <Dialog v-model:open="collapsedGroupDialogOpen">
+                    <DialogContent
+                        class="max-h-[85vh] max-w-md overflow-hidden flex flex-col"
+                        :show-close-button="true"
+                    >
+                        <template v-if="openCollapsedGroupItem">
+                            <DialogHeader>
+                                <DialogTitle class="flex items-center gap-2">
+                                    <component :is="openCollapsedGroupItem.icon" v-if="openCollapsedGroupItem.icon" class="h-5 w-5 shrink-0" />
+                                    {{ openCollapsedGroupItem.title }}
+                                </DialogTitle>
+                            </DialogHeader>
+                            <nav class="overflow-y-auto flex-1 py-2 -mx-2" aria-label="Navigation">
+                                <div class="space-y-0.5 border-l border-gray-200 pl-3 dark:border-gray-700">
+                                    <template v-for="(child, cIdx) in openCollapsedGroupItem.children" :key="child.title + String(cIdx)">
+                                        <Collapsible v-if="child.children?.length" class="group">
+                                            <CollapsibleTrigger
+                                                class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                                             >
-                                                <component :is="sub.icon" v-if="sub.icon" class="h-3.5 w-3.5 shrink-0" />
-                                                {{ sub.title }}
-                                                <span
-                                                    v-if="sub.badge"
-                                                    class="ml-auto rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary"
-                                                >
-                                                    {{ sub.badge }}
-                                                </span>
-                                            </Link>
-                                        </template>
+                                                <ChevronRight class="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                                                <component :is="child.icon" v-if="child.icon" class="h-4 w-4 shrink-0" />
+                                                {{ child.title }}
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent>
+                                                <div class="ml-4 mt-0.5 space-y-0.5 border-l border-gray-200 pl-3 dark:border-gray-700">
+                                                    <Link
+                                                        v-for="(sub, sIdx) in child.children"
+                                                        :key="sub.title + String(sIdx)"
+                                                        v-show="sub.href"
+                                                        :href="sub.href!"
+                                                        class="flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-modern text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                                                        :class="isCurrentUrl(sub.href!) && 'gradient-primary text-white shadow-primary'"
+                                                        @click="closeCollapsedGroupModal()"
+                                                    >
+                                                        <component :is="sub.icon" v-if="sub.icon" class="h-4 w-4 shrink-0" />
+                                                        {{ sub.title }}
+                                                        <span
+                                                            v-if="sub.badge"
+                                                            class="ml-auto rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary"
+                                                        >
+                                                            {{ sub.badge }}
+                                                        </span>
+                                                    </Link>
+                                                </div>
+                                            </CollapsibleContent>
+                                        </Collapsible>
                                         <Link
                                             v-else-if="child.href"
                                             :href="child.href"
-                                            class="flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-accent"
+                                            class="flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-modern text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                                            :class="isCurrentUrl(child.href) && 'gradient-primary text-white shadow-primary'"
+                                            @click="closeCollapsedGroupModal()"
                                         >
-                                            <component :is="child.icon" v-if="child.icon" class="h-3.5 w-3.5 shrink-0" />
+                                            <component :is="child.icon" v-if="child.icon" class="h-4 w-4 shrink-0" />
                                             {{ child.title }}
                                             <span
                                                 v-if="child.badge"
@@ -380,15 +435,18 @@ const groupTriggerClasses = (item: NavItem) =>
                                             </span>
                                         </Link>
                                     </template>
-                                </nav>
-                            </TooltipContent>
-                        </Tooltip>
-                    </template>
-                </template>
-            </nav>
+                                </div>
+                            </nav>
+                        </template>
+                    </DialogContent>
+                </Dialog>
+            </Teleport>
 
             <!-- Footer -->
-            <div class="border-t border-gray-200 p-4 dark:border-gray-800">
+            <div
+                class="border-t border-gray-200 dark:border-gray-800"
+                :class="effectiveCollapsed ? 'px-2 py-3' : 'p-4'"
+            >
                 <div v-if="!effectiveCollapsed && user" class="mb-4 flex items-center gap-3">
                     <Avatar :name="user.name" :src="user.avatar" size="sm" />
                     <div class="min-w-0 flex-1">
@@ -401,18 +459,34 @@ const groupTriggerClasses = (item: NavItem) =>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
+                    <template v-if="effectiveCollapsed">
+                        <TooltipRoot>
+                            <TooltipTrigger as-child>
+                                <button
+                                    type="button"
+                                    @click="toggleTheme"
+                                    class="flex w-full justify-center rounded-lg p-2 text-gray-700 transition-modern hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                    aria-label="Theme wechseln"
+                                >
+                                    <Sun v-if="appearance === 'dark'" class="h-4 w-4" />
+                                    <Moon v-else class="h-4 w-4" />
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" class="font-medium">
+                                Theme wechseln
+                            </TooltipContent>
+                        </TooltipRoot>
+                    </template>
                     <button
+                        v-else
                         type="button"
                         @click="toggleTheme"
-                        :class="cn(
-                            'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-modern hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
-                            effectiveCollapsed && 'px-2',
-                        )"
+                        class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-modern hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                         aria-label="Theme wechseln"
                     >
                         <Sun v-if="appearance === 'dark'" class="h-4 w-4" />
                         <Moon v-else class="h-4 w-4" />
-                        <span v-if="!effectiveCollapsed">Theme</span>
+                        <span>Theme</span>
                     </button>
                 </div>
             </div>
@@ -420,3 +494,19 @@ const groupTriggerClasses = (item: NavItem) =>
         </TooltipProvider>
     </aside>
 </template>
+
+<style scoped>
+/* Eingeklappt: nur Icons, kein Text */
+.sidebar--icons-only :deep(nav a > span:not([class*="absolute"])) {
+    display: none !important;
+}
+.sidebar--icons-only :deep(nav a) {
+    justify-content: center;
+}
+.sidebar--icons-only :deep(button > span) {
+    display: none !important;
+}
+.sidebar--icons-only :deep(button) {
+    justify-content: center;
+}
+</style>

@@ -20,6 +20,7 @@ type Brand = {
     domains: string[] | null;
     is_default: boolean;
     logo_url: string | null;
+    logo_collapsed_url: string | null;
     theme_colors: Record<string, string> | null;
     features: Record<string, boolean | number> | null;
     salutation: string | null;
@@ -54,6 +55,7 @@ const form = useForm({
     domains: (props.brand.domains ?? []).join('\n'),
     is_default: props.brand.is_default ?? false,
     logo_url: props.brand.logo_url ?? '',
+    logo_collapsed_url: props.brand.logo_collapsed_url ?? '',
     theme_colors: {
         ...defaultThemeColors,
         ...(props.brand.theme_colors ?? {}),
@@ -84,6 +86,7 @@ const submit = () => {
         domains: form.domains.split('\n').map((d) => d.trim()).filter(Boolean),
         is_default: data.is_default,
         logo_url: data.logo_url,
+        logo_collapsed_url: data.logo_collapsed_url,
         theme_colors: data.theme_colors,
         features: {
             sites_editor: data.feature_sites_editor,
@@ -143,6 +146,16 @@ const submit = () => {
                     <div class="space-y-2">
                         <Label for="logo_url">Logo-URL</Label>
                         <Input id="logo_url" v-model="form.logo_url" placeholder="https://…" />
+                        <InputError :message="form.errors.logo_url" />
+                    </div>
+                    <div class="space-y-2">
+                        <Label for="logo_collapsed_url">Logo (eingeklappte Sidebar)</Label>
+                        <Input
+                            id="logo_collapsed_url"
+                            v-model="form.logo_collapsed_url"
+                            placeholder="URL für kleines Logo (z. B. Icon), sonst wird das normale Logo verkleinert"
+                        />
+                        <InputError :message="form.errors.logo_collapsed_url" />
                     </div>
                 </CardContent>
             </Card>

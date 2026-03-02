@@ -16,6 +16,7 @@ class Brand extends Model
         'domains',
         'is_default',
         'logo_url',
+        'logo_collapsed_url',
         'theme_colors',
         'features',
         'salutation',

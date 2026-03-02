@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import { useMediaQuery } from '@vueuse/core';
 import { logout } from '@/routes';
 import { index as billingIndex } from '@/routes/billing';
 import { cn } from '@/lib/utils';
@@ -8,7 +9,7 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { Avatar } from '@/components/ui/avatar';
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown';
 import { Bell, Search, Settings, LogOut, Menu, Wallet } from 'lucide-vue-next';
-
+import type { Ref } from 'vue';
 import type { BreadcrumbItem } from '@/types';
 
 interface Props {
@@ -24,7 +25,18 @@ const props = withDefaults(defineProps<Props>(), {
     breadcrumbs: () => [],
 });
 
+const isMobile = useMediaQuery('(max-width: 1023px)');
 const openMobileSidebar = inject<() => void>('openMobileSidebar', () => {});
+const isSidebarCollapsed = inject<Ref<boolean> | null>('isSidebarCollapsed', null);
+const toggleSidebarCollapsed = inject<() => void>('toggleSidebarCollapsed', () => {});
+
+function onSidebarToggle() {
+    if (isMobile.value) {
+        openMobileSidebar();
+    } else {
+        toggleSidebarCollapsed();
+    }
+}
 
 const page = usePage();
 const showBalance = computed(
@@ -49,9 +61,9 @@ const headerClasses = computed(() =>
         <div class="flex flex-1 items-center gap-4">
             <button
                 type="button"
-                class="lg:hidden -ml-2 rounded-lg p-2 transition-modern hover:bg-gray-100 dark:hover:bg-gray-800"
-                aria-label="Menü öffnen"
-                @click="openMobileSidebar"
+                class="-ml-2 rounded-lg p-2 transition-modern hover:bg-gray-100 dark:hover:bg-gray-800 lg:ml-0"
+                :aria-label="isSidebarCollapsed?.value ? 'Sidebar aufklappen' : (isMobile ? 'Menü öffnen' : 'Sidebar einklappen')"
+                @click.stop="onSidebarToggle"
             >
                 <Menu class="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>

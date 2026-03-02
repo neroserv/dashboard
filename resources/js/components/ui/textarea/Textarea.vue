@@ -54,7 +54,7 @@ const textareaClasses = computed(() =>
         :disabled="disabled"
         :required="required"
         :rows="rows"
-        :aria-invalid="aria-invalid"
+        :aria-invalid="props['aria-invalid']"
         :class="textareaClasses"
     />
 </template>

@@ -179,8 +179,8 @@ const sidebarItems = computed<NavItem[]>(() => {
                     icon: Settings,
                     children: [
                         { title: 'Einstellungen', href: '/admin/settings', icon: Settings },
+                        { title: 'Jobs-Monitor', href: '/admin/jobs-monitor', icon: Settings },
                         { title: 'Cron / Worker-Statistik', href: '/admin/cron-statistics', icon: Settings },
-                        { title: 'Fehlgeschlagene Jobs', href: '/admin/failed-jobs', icon: Settings },
                         { title: 'Kunden', href: adminCustomersIndex().url, icon: Users },
                         { title: 'Legacy-Migration', href: '/admin/legacy-migration', icon: Archive },
                     ],
