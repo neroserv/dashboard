@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\CronDailyStats;
 use App\Models\Setting;
 use App\Models\SiteSubscription;
 use App\Notifications\SiteDeletedAfterGraceNotification;
@@ -19,34 +20,46 @@ class ProcessExpiredSubscriptions implements ShouldQueue
         $gracePeriodDays = (int) (Setting::get('billing_grace_period_days') ?? config('billing.grace_period_days', 7));
         $now = Carbon::now();
 
-        SiteSubscription::query()
+        $toSuspend = SiteSubscription::query()
             ->with('site.user')
             ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'active'))
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $now)
-            ->each(function (SiteSubscription $sub): void {
-                $site = $sub->site;
-                $site->update(['status' => 'suspended']);
-                $site->user?->notify(new SiteSuspendedNotification($site));
-            });
+            ->get();
 
-        SiteSubscription::query()
+        foreach ($toSuspend as $sub) {
+            $site = $sub->site;
+            $site->update(['status' => 'suspended']);
+            $site->user?->notify(new SiteSuspendedNotification($site));
+        }
+
+        if ($toSuspend->isNotEmpty()) {
+            CronDailyStats::incrementMetric('services_suspended', $toSuspend->count());
+        }
+
+        $toTerminate = SiteSubscription::query()
             ->with('site.user')
             ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'suspended'))
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $now->copy()->subDays($gracePeriodDays))
-            ->each(function (SiteSubscription $sub): void {
-                $site = $sub->site;
-                $siteName = $site->name;
-                $user = $site->user;
-                $sub->delete();
-                $site->update(['published_version_id' => null, 'draft_version_id' => null]);
-                $site->domains()->delete();
-                $site->versions()->delete();
-                $site->invitations()->delete();
-                $site->collaborators()->detach();
-                $site->delete();
-                $user?->notify(new SiteDeletedAfterGraceNotification($siteName));
-            });
+            ->get();
+
+        foreach ($toTerminate as $sub) {
+            $site = $sub->site;
+            $siteName = $site->name;
+            $user = $site->user;
+            $sub->delete();
+            $site->update(['published_version_id' => null, 'draft_version_id' => null]);
+            $site->domains()->delete();
+            $site->versions()->delete();
+            $site->invitations()->delete();
+            $site->collaborators()->detach();
+            $site->delete();
+            $user?->notify(new SiteDeletedAfterGraceNotification($siteName));
+        }
+
+        if ($toTerminate->isNotEmpty()) {
+            CronDailyStats::incrementMetric('services_terminated', $toTerminate->count());
+        }
     }
 }

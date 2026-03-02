@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\CronDailyStats;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\ResellerDomain;
@@ -20,6 +21,7 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
         $targetFrom = Carbon::now()->addDays(29)->startOfDay();
         $targetTo = Carbon::now()->addDays(31)->endOfDay();
 
+        $createdCount = 0;
         ResellerDomain::query()
             ->where('auto_renew', true)
             ->whereNotNull('user_id')
@@ -27,7 +29,7 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
             ->whereBetween('expires_at', [$targetFrom, $targetTo])
             ->with('user')
             ->get()
-            ->each(function (ResellerDomain $domain) use ($pricing, $pdfService): void {
+            ->each(function (ResellerDomain $domain) use ($pricing, $pdfService, &$createdCount): void {
                 $expiresAt = $domain->expires_at->format('Y-m-d');
                 $existing = Invoice::query()
                     ->where('type', 'domain_renewal')
@@ -38,6 +40,7 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
                 if ($existing) {
                     return;
                 }
+                $createdCount++;
 
                 $tld = $domain->tld ?? substr(strrchr($domain->domain, '.'), 1);
                 $salePrice = $pricing->getSalePrice($tld, 'renew');
@@ -76,5 +79,9 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
                     $invoice->update(['pdf_path' => $pdfPath]);
                 }
             });
+
+        if ($createdCount > 0) {
+            CronDailyStats::incrementMetric('invoices_created', $createdCount);
+        }
     }
 }

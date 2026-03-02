@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\CronDailyStats;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\SiteSubscription;
@@ -31,6 +32,7 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
         $from = Carbon::now()->addDays($this->daysAheadMin)->startOfDay();
         $to = Carbon::now()->addDays($this->daysAheadMax)->endOfDay();
 
+        $createdCount = 0;
         SiteSubscription::query()
             ->with(['site.user', 'site'])
             ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'active'))
@@ -41,16 +43,22 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
                     ->orWhereNull('cancel_at_period_end');
             })
             ->get()
-            ->each(function (SiteSubscription $sub) use ($pdfService, $eInvoiceService): void {
-                $this->createRenewalInvoiceIfMissing($sub, $pdfService, $eInvoiceService);
+            ->each(function (SiteSubscription $sub) use ($pdfService, $eInvoiceService, &$createdCount): void {
+                if ($this->createRenewalInvoiceIfMissing($sub, $pdfService, $eInvoiceService)) {
+                    $createdCount++;
+                }
             });
+
+        if ($createdCount > 0) {
+            CronDailyStats::incrementMetric('invoices_created', $createdCount);
+        }
     }
 
     protected function createRenewalInvoiceIfMissing(
         SiteSubscription $sub,
         InvoicePdfService $pdfService,
         InvoiceEInvoiceService $eInvoiceService
-    ): void {
+    ): bool {
         $periodEndsAt = $sub->current_period_ends_at;
         $nextPeriodStart = $periodEndsAt->copy();
 
@@ -62,17 +70,17 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
             ->exists();
 
         if ($existing) {
-            return;
+            return false;
         }
 
         $amount = $this->getRenewalAmount($sub);
         if ($amount === null || $amount <= 0) {
-            return;
+            return false;
         }
 
         $user = $sub->site->user;
         if (! $user) {
-            return;
+            return false;
         }
 
         $year = (int) date('Y');
@@ -123,6 +131,8 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
         }
 
         $user->notify(new SubscriptionRenewalInvoiceCreatedNotification($invoice->fresh(['siteSubscription.site'])));
+
+        return true;
     }
 
     protected function getRenewalAmount(SiteSubscription $sub): ?float

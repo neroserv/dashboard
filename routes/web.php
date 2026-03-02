@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\BrandController;
+use App\Http\Controllers\Admin\CronStatisticsController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DiscountCodeController;
 use App\Http\Controllers\Admin\DunningLetterController;
 use App\Http\Controllers\Admin\EmailController;
+use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\GameServerAccountController;
 use App\Http\Controllers\Admin\HostingPlanController;
 use App\Http\Controllers\Admin\HostingServerController;
@@ -205,6 +207,12 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('search', [SearchController::class, 'index'])->name('search');
     Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
+    Route::get('cron-statistics', [CronStatisticsController::class, 'index'])->name('cron-statistics.index');
+    Route::get('failed-jobs', [FailedJobsController::class, 'index'])->name('failed-jobs.index');
+    Route::post('failed-jobs/retry-all', [FailedJobsController::class, 'retryAll'])->name('failed-jobs.retry-all');
+    Route::post('failed-jobs/flush', [FailedJobsController::class, 'flush'])->name('failed-jobs.flush');
+    Route::post('failed-jobs/{id}/retry', [FailedJobsController::class, 'retry'])->name('failed-jobs.retry');
+    Route::delete('failed-jobs/{id}', [FailedJobsController::class, 'destroy'])->name('failed-jobs.destroy');
     Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::get('invoices/export', [InvoiceController::class, 'export'])->name('invoices.export');
     Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');

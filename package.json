@@ -2,12 +2,12 @@
     "$schema": "https://www.schemastore.org/package.json",
     "private": true,
     "type": "module",
-"scripts": {
-    "build": "vite build",
-    "build:ssr": "vite build && vite build --ssr",
-    "dev": "vite",
-    "emails:build": "cd resources/emails && npm run build",
-    "emails:install": "cd resources/emails && npm install",
+    "scripts": {
+        "build": "vite build",
+        "build:ssr": "vite build && vite build --ssr",
+        "dev": "vite",
+        "emails:build": "cd resources/emails && npm run build",
+        "emails:install": "cd resources/emails && npm install",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix"
@@ -38,6 +38,7 @@
         "@tiptap/starter-kit": "^3.19.0",
         "@tiptap/vue-3": "^3.19.0",
         "@vueuse/core": "^12.8.2",
+        "chart.js": "^4.5.1",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "laravel-vite-plugin": "^2.0.0",
