@@ -17,6 +17,7 @@ class Brand extends Model
         'is_default',
         'logo_url',
         'logo_collapsed_url',
+        'seo',
         'theme_colors',
         'features',
         'salutation',
@@ -33,6 +34,7 @@ class Brand extends Model
         return [
             'domains' => 'array',
             'is_default' => 'boolean',
+            'seo' => 'array',
             'theme_colors' => 'array',
             'features' => 'array',
             'invoice_company' => 'array',

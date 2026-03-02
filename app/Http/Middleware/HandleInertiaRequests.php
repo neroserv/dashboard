@@ -84,6 +84,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $currentBrand->name,
                 'logoUrl' => $currentBrand->logo_url,
                 'logoCollapsedUrl' => $currentBrand->logo_collapsed_url,
+                'seo' => $currentBrand->seo,
                 'themeColors' => $currentBrand->theme_colors,
             ];
             $brandFeatures = $currentBrand->getFeaturesArray();
@@ -112,6 +113,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'flash' => $flash,
+            'currentUrl' => $request->url(),
             'name' => $currentBrand?->name ?? Setting::get('app_name') ?: config('app.name'),
             'brand' => $brandPayload,
             'brandFeatures' => $brandFeatures,

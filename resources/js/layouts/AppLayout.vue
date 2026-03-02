@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import PinUnlockOverlay from '@/components/PinUnlockOverlay.vue';
 import { MainLayout } from '@/components/layout';
 import { useInactivityLock } from '@/composables/useInactivityLock';
@@ -47,7 +47,11 @@ const adminOpenTicketsCount = computed(
 );
 const impersonating = computed(() => (page.props.auth as { impersonating?: boolean })?.impersonating ?? false);
 const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean>) ?? {});
-const brand = computed(() => page.props.brand as { themeColors?: Record<string, string> } | null);
+const brand = computed(
+    () => page.props.brand as { themeColors?: Record<string, string>; seo?: Record<string, string> } | null,
+);
+const currentUrl = computed(() => (page.props.currentUrl as string) || '');
+const brandSeo = computed(() => brand.value?.seo ?? null);
 const { isLocked, unlock } = useInactivityLock();
 
 const brandThemeStyle = computed(() => {
@@ -194,6 +198,25 @@ const sidebarItems = computed<NavItem[]>(() => {
 
 <template>
     <div :style="brandThemeStyle">
+        <Head v-if="brandSeo">
+            <link
+                v-if="brandSeo.favicon_url"
+                rel="icon"
+                :href="brandSeo.favicon_url"
+                :type="brandSeo.favicon_url?.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : undefined"
+            />
+            <meta v-if="brandSeo.meta_description" name="description" :content="brandSeo.meta_description" />
+            <meta v-if="brandSeo.meta_robots" name="robots" :content="brandSeo.meta_robots" />
+            <meta v-if="brandSeo.theme_color" name="theme-color" :content="brandSeo.theme_color" />
+            <link v-if="currentUrl" rel="canonical" :href="currentUrl" />
+            <meta v-if="currentUrl" property="og:url" :content="currentUrl" />
+            <meta v-if="brandSeo.og_type" property="og:type" :content="brandSeo.og_type" />
+            <meta v-if="brandSeo.og_site_name" property="og:site_name" :content="brandSeo.og_site_name" />
+            <meta v-if="brandSeo.og_title" property="og:title" :content="brandSeo.og_title" />
+            <meta v-if="brandSeo.og_description" property="og:description" :content="brandSeo.og_description" />
+            <meta v-if="brandSeo.og_image" property="og:image" :content="brandSeo.og_image" />
+            <meta v-if="brandSeo.og_locale" property="og:locale" :content="brandSeo.og_locale" />
+        </Head>
         <div
             v-if="impersonating"
             class="flex flex-wrap items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"

@@ -21,11 +21,25 @@ type Brand = {
     is_default: boolean;
     logo_url: string | null;
     logo_collapsed_url: string | null;
+    seo: Record<string, string> | null;
     theme_colors: Record<string, string> | null;
     features: Record<string, boolean | number> | null;
     salutation: string | null;
     mail_header: string | null;
     mail_footer: string | null;
+};
+
+const defaultSeo: Record<string, string> = {
+    favicon_url: '',
+    meta_description: '',
+    meta_robots: 'index, follow',
+    theme_color: '',
+    og_type: 'website',
+    og_site_name: '',
+    og_title: '',
+    og_description: '',
+    og_image: '',
+    og_locale: 'de_DE',
 };
 
 type Props = {
@@ -56,6 +70,10 @@ const form = useForm({
     is_default: props.brand.is_default ?? false,
     logo_url: props.brand.logo_url ?? '',
     logo_collapsed_url: props.brand.logo_collapsed_url ?? '',
+    seo: {
+        ...defaultSeo,
+        ...(props.brand.seo ?? {}),
+    } as Record<string, string>,
     theme_colors: {
         ...defaultThemeColors,
         ...(props.brand.theme_colors ?? {}),
@@ -87,6 +105,7 @@ const submit = () => {
         is_default: data.is_default,
         logo_url: data.logo_url,
         logo_collapsed_url: data.logo_collapsed_url,
+        seo: data.seo,
         theme_colors: data.theme_colors,
         features: {
             sites_editor: data.feature_sites_editor,
@@ -117,136 +136,222 @@ const submit = () => {
                 </Text>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Allgemein</CardTitle>
-                    <CardDescription>Name und Domains (eine pro Zeile)</CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-4">
-                    <div class="space-y-2">
-                        <Label for="name">Name</Label>
-                        <Input id="name" v-model="form.name" :aria-invalid="!!form.errors.name" />
-                        <InputError :message="form.errors.name" />
-                    </div>
-                    <div class="space-y-2">
-                        <Label for="domains">Domains</Label>
-                        <Textarea
-                            id="domains"
-                            v-model="form.domains"
-                            rows="3"
-                            placeholder="b2b.praxishosting.de&#10;localhost"
-                            :aria-invalid="!!form.errors.domains"
-                        />
-                        <InputError :message="form.errors.domains" />
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="is_default" v-model="form.is_default" />
-                        <Label for="is_default">Als Standard-Marke (z. B. für localhost)</Label>
-                    </div>
-                    <div class="space-y-2">
-                        <Label for="logo_url">Logo-URL</Label>
-                        <Input id="logo_url" v-model="form.logo_url" placeholder="https://…" />
-                        <InputError :message="form.errors.logo_url" />
-                    </div>
-                    <div class="space-y-2">
-                        <Label for="logo_collapsed_url">Logo (eingeklappte Sidebar)</Label>
-                        <Input
-                            id="logo_collapsed_url"
-                            v-model="form.logo_collapsed_url"
-                            placeholder="URL für kleines Logo (z. B. Icon), sonst wird das normale Logo verkleinert"
-                        />
-                        <InputError :message="form.errors.logo_collapsed_url" />
-                    </div>
-                </CardContent>
-            </Card>
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Allgemein</CardTitle>
+                        <CardDescription>Name und Domains (eine pro Zeile)</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="space-y-2">
+                            <Label for="name">Name</Label>
+                            <Input id="name" v-model="form.name" :aria-invalid="!!form.errors.name" />
+                            <InputError :message="form.errors.name" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="domains">Domains</Label>
+                            <Textarea
+                                id="domains"
+                                v-model="form.domains"
+                                rows="3"
+                                placeholder="b2b.praxishosting.de&#10;localhost"
+                                :aria-invalid="!!form.errors.domains"
+                            />
+                            <InputError :message="form.errors.domains" />
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="is_default" v-model="form.is_default" />
+                            <Label for="is_default">Als Standard-Marke (z. B. für localhost)</Label>
+                        </div>
+                    </CardContent>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Theme-Farben</CardTitle>
-                    <CardDescription>Farben fürs Kunden-Panel (CSS-Variablen wie --primary)</CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-4">
-                    <div
-                        v-for="item in THEME_COLOR_KEYS"
-                        :key="item.key"
-                        class="flex flex-wrap items-center gap-3 gap-y-2"
-                    >
-                        <Label :for="`theme-${item.key}`" class="w-36 shrink-0">{{ item.label }}</Label>
-                        <input
-                            :id="`theme-${item.key}`"
-                            v-model="form.theme_colors[item.key]"
-                            type="color"
-                            class="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white p-1 dark:border-gray-600 dark:bg-gray-800"
-                            :aria-invalid="!!form.errors['theme_colors.' + item.key]"
-                        />
-                        <Input
-                            v-model="form.theme_colors[item.key]"
-                            class="w-28 font-mono text-sm"
-                            placeholder="#000000"
-                        />
-                    </div>
-                </CardContent>
-            </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Logos</CardTitle>
+                        <CardDescription>Logo-URLs für Header und eingeklappte Sidebar</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="space-y-2">
+                            <Label for="logo_url">Logo-URL</Label>
+                            <Input id="logo_url" v-model="form.logo_url" placeholder="https://…" />
+                            <InputError :message="form.errors.logo_url" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="logo_collapsed_url">Logo (eingeklappte Sidebar)</Label>
+                            <Input
+                                id="logo_collapsed_url"
+                                v-model="form.logo_collapsed_url"
+                                placeholder="URL für kleines Logo (z. B. Icon), sonst wird das normale Logo verkleinert"
+                            />
+                            <InputError :message="form.errors.logo_collapsed_url" />
+                        </div>
+                    </CardContent>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Features</CardTitle>
-                    <CardDescription>Welche Produkte in diesem Portal sichtbar sind – aktivieren oder deaktivieren</CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-3">
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_sites" v-model="form.feature_sites_editor" />
-                        <Label for="feat_sites">Webseiten-Editor (Meine Sites)</Label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_webspace" v-model="form.feature_webspace" />
-                        <Label for="feat_webspace">Webspace</Label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_domains" v-model="form.feature_domains_shop" />
-                        <Label for="feat_domains">Domains-Shop</Label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_ai" v-model="form.feature_ai_tokens" />
-                        <Label for="feat_ai">AI-Tokens</Label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_gaming" v-model="form.feature_gaming" />
-                        <Label for="feat_gaming">Gaming (Game-Server / Pterodactyl)</Label>
-                    </div>
-                </CardContent>
-            </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Theme-Farben</CardTitle>
+                        <CardDescription>Farben fürs Kunden-Panel (CSS-Variablen wie --primary)</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div
+                            v-for="item in THEME_COLOR_KEYS"
+                            :key="item.key"
+                            class="flex flex-wrap items-center gap-3 gap-y-2"
+                        >
+                            <Label :for="`theme-${item.key}`" class="w-36 shrink-0">{{ item.label }}</Label>
+                            <input
+                                :id="`theme-${item.key}`"
+                                v-model="form.theme_colors[item.key]"
+                                type="color"
+                                class="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white p-1 dark:border-gray-600 dark:bg-gray-800"
+                                :aria-invalid="!!form.errors['theme_colors.' + item.key]"
+                            />
+                            <Input
+                                v-model="form.theme_colors[item.key]"
+                                class="w-28 font-mono text-sm"
+                                placeholder="#000000"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Prepaid / Guthaben</CardTitle>
-                    <CardDescription>
-                        Guthaben anzeigen, Selbstaufladung und Zahlung mit Guthaben im Checkout. Vertragslaufzeit bei Guthaben-Zahlung (Webspace/Game-Server).
-                    </CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-3">
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_prepaid_balance" v-model="form.feature_prepaid_balance" />
-                        <Label for="feat_prepaid_balance">Prepaid: Guthaben anzeigen & mit Guthaben bezahlen</Label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Checkbox id="feat_balance_topup" v-model="form.feature_balance_topup" />
-                        <Label for="feat_balance_topup">Selbstaufladung (Guthaben per Stripe aufladen)</Label>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <Label for="balance_period_months" class="shrink-0">Vertragslaufzeit bei Guthaben-Zahlung (Monate)</Label>
-                        <Input
-                            id="balance_period_months"
-                            v-model.number="form.feature_balance_period_months"
-                            type="number"
-                            min="1"
-                            max="24"
-                            class="w-20"
-                        />
-                        <span class="text-muted-foreground text-sm">(1–24 Monate, z. B. 1 für monatlich)</span>
-                    </div>
-                </CardContent>
-            </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Features</CardTitle>
+                        <CardDescription>Welche Produkte in diesem Portal sichtbar sind – aktivieren oder deaktivieren</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_sites" v-model="form.feature_sites_editor" />
+                            <Label for="feat_sites">Webseiten-Editor (Meine Sites)</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_webspace" v-model="form.feature_webspace" />
+                            <Label for="feat_webspace">Webspace</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_domains" v-model="form.feature_domains_shop" />
+                            <Label for="feat_domains">Domains-Shop</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_ai" v-model="form.feature_ai_tokens" />
+                            <Label for="feat_ai">AI-Tokens</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_gaming" v-model="form.feature_gaming" />
+                            <Label for="feat_gaming">Gaming (Game-Server / Pterodactyl)</Label>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Prepaid / Guthaben</CardTitle>
+                        <CardDescription>
+                            Guthaben anzeigen, Selbstaufladung und Zahlung mit Guthaben im Checkout. Vertragslaufzeit bei Guthaben-Zahlung (Webspace/Game-Server).
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_prepaid_balance" v-model="form.feature_prepaid_balance" />
+                            <Label for="feat_prepaid_balance">Prepaid: Guthaben anzeigen & mit Guthaben bezahlen</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_balance_topup" v-model="form.feature_balance_topup" />
+                            <Label for="feat_balance_topup">Selbstaufladung (Guthaben per Stripe aufladen)</Label>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <Label for="balance_period_months" class="shrink-0">Vertragslaufzeit bei Guthaben-Zahlung (Monate)</Label>
+                            <Input
+                                id="balance_period_months"
+                                v-model.number="form.feature_balance_period_months"
+                                type="number"
+                                min="1"
+                                max="24"
+                                class="w-20"
+                            />
+                            <span class="text-muted-foreground text-sm">(1–24 Monate, z. B. 1 für monatlich)</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>SEO & Vorschau</CardTitle>
+                        <CardDescription>
+                            Meta-Tags und Open Graph für Suchmaschinen und Social-Sharing. Canonical und og:url werden dynamisch aus der aktuellen URL gesetzt.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="space-y-2">
+                            <Label for="seo_favicon_url">Favicon-URL</Label>
+                            <Input id="seo_favicon_url" v-model="form.seo.favicon_url" placeholder="https://…/favicon.ico" />
+                            <InputError :message="form.errors['seo.favicon_url']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_meta_description">Meta-Beschreibung</Label>
+                            <Textarea
+                                id="seo_meta_description"
+                                v-model="form.seo.meta_description"
+                                rows="2"
+                                placeholder="Kurzbeschreibung für Suchmaschinen"
+                            />
+                            <InputError :message="form.errors['seo.meta_description']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_meta_robots">Robots</Label>
+                            <Select id="seo_meta_robots" v-model="form.seo.meta_robots">
+                                <option value="index, follow">index, follow</option>
+                                <option value="noindex, nofollow">noindex, nofollow</option>
+                            </Select>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_theme_color">Theme-Color (Browser-UI)</Label>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input
+                                    id="seo_theme_color"
+                                    v-model="form.seo.theme_color"
+                                    type="color"
+                                    class="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white p-1 dark:border-gray-600 dark:bg-gray-800"
+                                />
+                                <Input
+                                    v-model="form.seo.theme_color"
+                                    class="w-28 font-mono text-sm"
+                                    placeholder="#1E1E1E"
+                                />
+                            </div>
+                            <InputError :message="form.errors['seo.theme_color']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_og_site_name">Og:Site-Name</Label>
+                            <Input id="seo_og_site_name" v-model="form.seo.og_site_name" placeholder="z. B. neroserv CDN" />
+                            <InputError :message="form.errors['seo.og_site_name']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_og_title">Og:Title</Label>
+                            <Input id="seo_og_title" v-model="form.seo.og_title" placeholder="Titel für Social-Sharing" />
+                            <InputError :message="form.errors['seo.og_title']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_og_description">Og:Description</Label>
+                            <Textarea id="seo_og_description" v-model="form.seo.og_description" rows="2" placeholder="Beschreibung für Social-Sharing" />
+                            <InputError :message="form.errors['seo.og_description']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_og_image">Og:Image-URL</Label>
+                            <Input id="seo_og_image" v-model="form.seo.og_image" placeholder="https://…/og.png" />
+                            <InputError :message="form.errors['seo.og_image']" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="seo_og_locale">Og:Locale</Label>
+                            <Input id="seo_og_locale" v-model="form.seo.og_locale" placeholder="de_DE" />
+                            <InputError :message="form.errors['seo.og_locale']" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
 
             <Card>
                 <CardHeader>

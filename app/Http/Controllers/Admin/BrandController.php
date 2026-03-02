@@ -50,6 +50,17 @@ class BrandController extends Controller
             'salutation' => ['nullable', 'string', 'in:formal,informal'],
             'mail_header' => ['nullable', 'string', 'max:2000'],
             'mail_footer' => ['nullable', 'string', 'max:2000'],
+            'seo' => ['nullable', 'array'],
+            'seo.favicon_url' => ['nullable', 'string', 'max:500'],
+            'seo.meta_description' => ['nullable', 'string', 'max:1000'],
+            'seo.meta_robots' => ['nullable', 'string', 'max:100'],
+            'seo.theme_color' => ['nullable', 'string', 'max:50'],
+            'seo.og_type' => ['nullable', 'string', 'max:50'],
+            'seo.og_site_name' => ['nullable', 'string', 'max:255'],
+            'seo.og_title' => ['nullable', 'string', 'max:255'],
+            'seo.og_description' => ['nullable', 'string', 'max:1000'],
+            'seo.og_image' => ['nullable', 'string', 'max:500'],
+            'seo.og_locale' => ['nullable', 'string', 'max:20'],
         ]);
 
         if (isset($validated['domains'])) {
