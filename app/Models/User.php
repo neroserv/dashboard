@@ -150,6 +150,65 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    /**
+     * Groups this user belongs to (many-to-many).
+     *
+     * @return BelongsToMany<Group>
+     */
+    public function groups(): BelongsToMany
+    {
+        return $this->belongsToMany(Group::class, 'user_group')->withTimestamps();
+    }
+
+    /**
+     * Whether the user has the given permission (via groups or wildcard *).
+     * Super-admin (is_admin) has all permissions. Permission '*' grants everything.
+     */
+    public function hasPermission(string $key): bool
+    {
+        if ($this->is_admin) {
+            return true;
+        }
+
+        $permissionKeys = $this->groups()
+            ->with('permissions')
+            ->get()
+            ->flatMap(fn (Group $group) => $group->permissions->pluck('key'))
+            ->unique()
+            ->values();
+
+        if ($permissionKeys->contains('*')) {
+            return true;
+        }
+
+        return $permissionKeys->contains($key);
+    }
+
+    /**
+     * Labels of all groups assigned to this user (for display in admin header).
+     *
+     * @return array<int, string>
+     */
+    public function groupLabels(): array
+    {
+        return $this->groups()->pluck('label')->values()->all();
+    }
+
+    /**
+     * Groups with label and color for admin header pills.
+     *
+     * @return array<int, array{label: string, color: string|null}>
+     */
+    public function groupLabelsWithColors(): array
+    {
+        return $this->groups()
+            ->orderBy('name')
+            ->get(['label', 'color'])
+            ->map(fn (Group $g) => ['label' => $g->label, 'color' => $g->color])
+            ->values()
+            ->all();
+    }
+
     public function isAdmin(): bool
     {
         return (bool) $this->is_admin;

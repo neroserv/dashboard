@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -174,7 +174,7 @@ function salutationLabel(salutation: string | null): string {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="System-Einstellungen" />
 
         <div class="w-full space-y-6">
@@ -771,5 +771,5 @@ function salutationLabel(salutation: string | null): string {
                 </Tabs>
             </form>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

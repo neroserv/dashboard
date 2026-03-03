@@ -29,6 +29,8 @@ class BrandController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'domains' => ['nullable', 'array'],
             'domains.*' => ['string', 'max:255'],
+            'admin_domains' => ['nullable', 'array'],
+            'admin_domains.*' => ['string', 'max:255'],
             'is_default' => ['boolean'],
             'logo_url' => ['nullable', 'string', 'max:500'],
             'logo_collapsed_url' => ['nullable', 'string', 'max:500'],
@@ -61,6 +63,12 @@ class BrandController extends Controller
 
         if (isset($validated['domains'])) {
             $validated['domains'] = array_values(array_filter(array_map('trim', $validated['domains'])));
+        }
+        if (isset($validated['admin_domains'])) {
+            $validated['admin_domains'] = array_values(array_filter(array_map(
+                fn (string $d) => Brand::normalizeDomainToHost($d),
+                array_map('trim', $validated['admin_domains']),
+            )));
         }
         $validated['is_default'] = filter_var($validated['is_default'] ?? false, FILTER_VALIDATE_BOOLEAN);
         if ($validated['is_default']) {

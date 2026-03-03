@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -115,7 +115,7 @@ function sendTestEmail() {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`E-Mail-Vorlage: ${emailTemplate.name}`" />
 
         <div class="space-y-6">
@@ -204,5 +204,5 @@ function sendTestEmail() {
                 </Card>
             </div>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

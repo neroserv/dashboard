@@ -9,7 +9,7 @@ class UpdateCustomerRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() ?? false;
+        return $this->user()?->hasPermission('admin.customers') ?? false;
     }
 
     /**
@@ -30,6 +30,8 @@ class UpdateCustomerRequest extends FormRequest
             'country' => ['nullable', 'string', 'max:2', Rule::in(array_keys(config('countries', [])))],
             'is_admin' => ['boolean'],
             'rank' => ['nullable', 'string', 'max:50'],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer', 'exists:groups,id'],
         ];
     }
 }

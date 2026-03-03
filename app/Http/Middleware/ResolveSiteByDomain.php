@@ -62,6 +62,10 @@ class ResolveSiteByDomain
             if (Brand::resolveByHost($host) !== null) {
                 return $next($request);
             }
+            // Brand admin domains (e.g. admin.neroserv.test) → main app, not a site
+            if (Brand::resolveByAdminHost($host) !== null) {
+                return $next($request);
+            }
 
             abort(404);
         }

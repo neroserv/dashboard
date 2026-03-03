@@ -29,11 +29,25 @@ class LoginResponse implements LoginResponseContract
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
-                $brandName = $currentBrand->name;
 
                 return redirect()->route('login')
                     ->with('error', __('Dieses Konto ist für eine andere Marke (Portal) vorgesehen. Bitte nutzen Sie die passende Domain.'));
             }
+        }
+
+        $isAdminDomain = $request->attributes->get('is_admin_domain', false);
+        if ($isAdminDomain && $user) {
+            if ($user->isAdmin() || $user->hasPermission('admin.access')) {
+                return $request->wantsJson()
+                    ? response()->json(['two_factor' => false])
+                    : redirect()->route('admin.dashboard');
+            }
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')
+                ->with('error', __('Nur Benutzer mit Admin-Berechtigung können sich hier anmelden.'));
         }
 
         return $request->wantsJson()

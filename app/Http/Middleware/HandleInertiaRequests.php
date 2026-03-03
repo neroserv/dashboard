@@ -48,7 +48,8 @@ class HandleInertiaRequests extends Middleware
         $openTicketsCount = 0;
         $adminOpenTicketsCount = 0;
         if ($user) {
-            if (! $user->isAdmin()) {
+            $hasAdminAccess = $user->isAdmin() || $user->hasPermission('admin.access');
+            if (! $hasAdminAccess) {
                 $supportEnabled = filter_var(Setting::get('support_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
                 if ($supportEnabled) {
                     $openTicketsCount = Ticket::where('user_id', $user->id)
@@ -98,6 +99,25 @@ class HandleInertiaRequests extends Middleware
 
         $impersonating = $user && app()->bound('impersonate') && app('impersonate')->isImpersonating();
 
+        $groupLabels = [];
+        $groupLabelsWithColors = [];
+        $userPermissions = [];
+        if ($user) {
+            $groupLabels = $user->groupLabels();
+            $groupLabelsWithColors = $user->groupLabelsWithColors();
+            if ($user->isAdmin()) {
+                $userPermissions = ['*'];
+            } else {
+                $userPermissions = $user->groups()
+                    ->with('permissions')
+                    ->get()
+                    ->flatMap(fn ($group) => $group->permissions->pluck('key'))
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+        }
+
         $authPayload = [
             'user' => $user,
             'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,
@@ -105,12 +125,16 @@ class HandleInertiaRequests extends Middleware
             'adminOpenTicketsCount' => $adminOpenTicketsCount,
             'activeUserModules' => $activeUserModules,
             'impersonating' => $impersonating,
+            'group_labels' => $groupLabels,
+            'group_labels_with_colors' => $groupLabelsWithColors,
+            'userPermissions' => $userPermissions,
         ];
         if ($customerBalance !== null) {
             $authPayload['customerBalance'] = $customerBalance;
         }
 
         $discordInviteUrl = config('services.discord.invite_url');
+        $isAdminDomain = $request->attributes->get('is_admin_domain', false);
 
         return [
             ...parent::share($request),
@@ -120,6 +144,7 @@ class HandleInertiaRequests extends Middleware
             'brand' => $brandPayload,
             'brandFeatures' => $brandFeatures,
             'auth' => $authPayload,
+            'isAdminDomain' => $isAdminDomain,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'discordInviteUrl' => $discordInviteUrl ? (string) $discordInviteUrl : null,
         ];

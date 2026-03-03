@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Form, Head, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,14 +19,23 @@ defineProps<{
     canResetPassword: boolean;
     canRegister: boolean;
 }>();
+
+const page = usePage();
+const isAdminDomain = computed(() => (page.props.isAdminDomain as boolean) ?? false);
+const loginTitle = computed(() => (isAdminDomain.value ? 'Admin-Anmeldung' : 'Anmelden'));
+const loginDescription = computed(() =>
+    isAdminDomain.value
+        ? 'Nur Benutzer mit Admin-Berechtigung können sich hier anmelden. Gleiche Zugangsdaten wie im Kundenbereich.'
+        : 'Geben Sie Ihre E-Mail-Adresse und Ihr Passwort ein, um sich anzumelden',
+);
 </script>
 
 <template>
     <AuthBase
-        title="Anmelden"
-        description="Geben Sie Ihre E-Mail-Adresse und Ihr Passwort ein, um sich anzumelden"
+        :title="loginTitle"
+        :description="loginDescription"
     >
-        <Head title="Anmelden" />
+        <Head :title="loginTitle" />
 
         <Alert v-if="status" variant="success" class="mb-6">
             <AlertDescription>{{ status }}</AlertDescription>
@@ -106,7 +116,7 @@ defineProps<{
             </div>
 
             <div
-                v-if="canRegister"
+                v-if="canRegister && !isAdminDomain"
                 class="text-center text-sm"
             >
                 <Text variant="small" muted>

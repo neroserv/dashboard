@@ -14,6 +14,7 @@ use App\Models\BalanceTransaction;
 use App\Models\Brand;
 use App\Models\CustomerBalance;
 use App\Models\CustomerNote;
+use App\Models\Group;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -25,14 +26,17 @@ class CustomerController extends Controller
 {
     public function edit(User $customer): Response
     {
+        $customer->load('groups:id,key,name,label');
         $userRanks = config('app.user_ranks', []);
 
         return Inertia::render('admin/customers/Edit', [
             'customer' => array_merge($customer->only(['id', 'name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'is_admin', 'rank']), [
                 'brand_id' => $customer->brand_id,
                 'brand' => $customer->brand ? ['id' => $customer->brand->id, 'key' => $customer->brand->key, 'name' => $customer->brand->name] : null,
+                'group_ids' => $customer->groups->pluck('id')->values()->all(),
             ]),
             'brands' => Brand::query()->orderBy('key')->get(['id', 'key', 'name']),
+            'groups' => Group::query()->orderBy('name')->get(['id', 'key', 'name', 'label']),
             'countries' => config('countries', []),
             'ranks' => collect($userRanks)->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])->values()->all(),
         ]);
@@ -47,7 +51,11 @@ class CustomerController extends Controller
             $request->merge(['rank' => null]);
         }
         $old = $customer->only(['name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'brand_id', 'is_admin', 'rank']);
-        $customer->update($request->validated());
+        $validated = $request->validated();
+        $groupIds = $validated['group_ids'] ?? [];
+        unset($validated['group_ids']);
+        $customer->update($validated);
+        $customer->groups()->sync($groupIds);
 
         AdminActivityLog::log(
             $request->user()->id,

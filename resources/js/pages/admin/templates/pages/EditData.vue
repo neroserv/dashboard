@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router, Head, Link, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -328,7 +328,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Daten bearbeiten: ${props.page.name}`" />
 
         <div class="space-y-6">
@@ -500,5 +500,5 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </div>
             </form>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

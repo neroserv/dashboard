@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAdminDomainForAdminRoutes;
 use App\Http\Middleware\EnsureBillingProfile;
 use App\Http\Middleware\EnsureBrandFeatureSites;
 use App\Http\Middleware\EnsureUserBrandMatchesDomain;
@@ -41,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
+            'admin.domain' => EnsureAdminDomainForAdminRoutes::class,
             'billing.profile' => EnsureBillingProfile::class,
             'brand.domain' => EnsureUserBrandMatchesDomain::class,
             'brand.feature.sites' => EnsureBrandFeatureSites::class,

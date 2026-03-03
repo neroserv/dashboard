@@ -2,7 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted, watch } from 'vue';
 import { GridLayout, GridItem } from 'vue-grid-layout-v3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import {
@@ -169,7 +169,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="Admin Dashboard" />
 
         <div class="space-y-4">
@@ -242,5 +242,5 @@ const breadcrumbs: BreadcrumbItem[] = [
             @close="closeGallery"
             @add-widget="addWidget"
         />
-    </AppLayout>
+    </AdminLayout>
 </template>

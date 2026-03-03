@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/vue3';
 import Sidebar from './Sidebar.vue';
 import Header from './Header.vue';
 import type { BreadcrumbItem, NavItem } from '@/types';
+import type { Component } from 'vue';
 
 const SIDEBAR_COLLAPSED_KEY = 'app-sidebar-collapsed';
 
@@ -30,9 +31,12 @@ function saveSidebarCollapsed(value: boolean): void {
 interface Props {
     sidebarItems: NavItem[];
     breadcrumbs?: BreadcrumbItem[];
+    headerComponent?: Component;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    headerComponent: () => Header,
+});
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user as any);
@@ -89,7 +93,7 @@ provide('closeMobileSidebar', closeMobileSidebar);
                 isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64',
             ]"
         >
-            <Header :breadcrumbs="breadcrumbs" :user="user" />
+            <component :is="props.headerComponent" :breadcrumbs="breadcrumbs" :user="user" />
             <main class="flex-1 p-4 sm:p-6">
                 <slot />
             </main>

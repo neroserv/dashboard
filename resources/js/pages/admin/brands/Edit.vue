@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ type Brand = {
     key: string;
     name: string;
     domains: string[] | null;
+    admin_domains: string[] | null;
     is_default: boolean;
     logo_url: string | null;
     logo_collapsed_url: string | null;
@@ -67,6 +68,7 @@ const defaultThemeColors: ThemeColors = {
 const form = useForm({
     name: props.brand.name,
     domains: (props.brand.domains ?? []).join('\n'),
+    admin_domains: (props.brand.admin_domains ?? []).join('\n'),
     is_default: props.brand.is_default ?? false,
     logo_url: props.brand.logo_url ?? '',
     logo_collapsed_url: props.brand.logo_collapsed_url ?? '',
@@ -102,6 +104,7 @@ const submit = () => {
     form.transform((data) => ({
         name: data.name,
         domains: form.domains.split('\n').map((d) => d.trim()).filter(Boolean),
+        admin_domains: form.admin_domains.split('\n').map((d) => d.trim()).filter(Boolean),
         is_default: data.is_default,
         logo_url: data.logo_url,
         logo_collapsed_url: data.logo_collapsed_url,
@@ -125,7 +128,7 @@ const submit = () => {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Marke: ${brand.name}`" />
 
         <form @submit.prevent="submit" class="space-y-6">
@@ -158,6 +161,18 @@ const submit = () => {
                                 :aria-invalid="!!form.errors.domains"
                             />
                             <InputError :message="form.errors.domains" />
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="admin_domains">Admin-Domains</Label>
+                            <Textarea
+                                id="admin_domains"
+                                v-model="form.admin_domains"
+                                rows="2"
+                                placeholder="admin.praxishosting.de"
+                                :aria-invalid="!!form.errors.admin_domains"
+                            />
+                            <InputError :message="form.errors.admin_domains" />
+                            <p class="text-muted-foreground text-sm">Eine pro Zeile (nur Hostname, z. B. admin.neroserv.test). Beim Aufruf dieser URL gelangt man nach Login ins Admin-Panel. Die Domain muss auf dieses Projekt zeigen (z. B. in Laravel Herd unter dem Projekt als „Additional Domain“ eintragen).</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <Checkbox id="is_default" v-model="form.is_default" />
@@ -383,5 +398,5 @@ const submit = () => {
                 </CardFooter>
             </Card>
         </form>
-    </AppLayout>
+    </AdminLayout>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { notify } from '@/composables/useNotify';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
@@ -149,7 +149,7 @@ function dismissHint() {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="Domains" />
 
         <div class="space-y-6">
@@ -340,5 +340,5 @@ function dismissHint() {
                 />
             </div>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

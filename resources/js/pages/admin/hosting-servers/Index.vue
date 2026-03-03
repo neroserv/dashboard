@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
 import hostingServers from '@/routes/admin/hosting-servers/index';
@@ -34,7 +34,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="Hosting-Server" />
 
         <div class="space-y-6">
@@ -57,5 +57,5 @@ const breadcrumbs: BreadcrumbItem[] = [
                 :links="props.hostingServers.links"
             />
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

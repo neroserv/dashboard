@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
@@ -41,7 +41,7 @@ const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('de
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Game-Server: ${gameServerAccount.name}`" />
 
         <div class="space-y-6">
@@ -126,5 +126,5 @@ const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('de
                 </Link>
             </div>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

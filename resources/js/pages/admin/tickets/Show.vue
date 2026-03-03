@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -167,7 +167,7 @@ function deleteTodo(todo: Todo) {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Ticket #${ticket.id}: ${ticket.subject}`" />
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -539,5 +539,5 @@ function deleteTodo(todo: Todo) {
                 </Card>
             </aside>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

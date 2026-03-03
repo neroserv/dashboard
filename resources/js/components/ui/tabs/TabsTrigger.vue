@@ -29,6 +29,7 @@ const triggerClasses = computed(() =>
 
 <template>
     <button
+        type="button"
         :class="triggerClasses"
         role="tab"
         :aria-selected="isActive"

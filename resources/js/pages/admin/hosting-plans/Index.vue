@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -50,7 +50,7 @@ const specsShort = (plan: HostingPlan) =>
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="Webspace-Pakete" />
 
         <div class="space-y-6">
@@ -132,5 +132,5 @@ const specsShort = (plan: HostingPlan) =>
                 <Pagination :links="props.hostingPlans.links" @navigate="handlePagination" />
             </div>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

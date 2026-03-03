@@ -11,11 +11,13 @@ use App\Http\Controllers\Admin\EmailController;
 use App\Http\Controllers\Admin\FailedJobsController;
 use App\Http\Controllers\Admin\FinishedBatchesController;
 use App\Http\Controllers\Admin\GameServerAccountController;
+use App\Http\Controllers\Admin\GroupController;
 use App\Http\Controllers\Admin\HostingPlanController;
 use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\JobsMonitorController;
 use App\Http\Controllers\Admin\LegacyMigrationController;
+use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ResellerDomainController;
 use App\Http\Controllers\Admin\SearchController;
@@ -51,6 +53,7 @@ use App\Http\Controllers\WebspaceAccountController;
 use App\Http\Controllers\WebspaceController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Middleware\DisableCacheForSiteRender;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -60,13 +63,25 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
     ->name('auth.social.callback');
 
 Route::get('/', function () {
+    $isAdminDomain = request()->attributes->get('is_admin_domain', false);
+    $user = Auth::user();
 
-    if (Auth::check()) {
+    if ($isAdminDomain) {
+        if ($user && ($user->isAdmin() || $user->hasPermission('admin.access'))) {
+            return redirect()->route('admin.dashboard');
+        }
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        return redirect()->route('dashboard');
+    }
+
+    if ($user) {
         return redirect()->route('dashboard');
     }
 
     return redirect()->route('login');
-
 })->name('home');
 
 Route::get('dashboard', [CustomerDashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
@@ -210,7 +225,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('impersonate/leave', [\Lab404\Impersonate\Controllers\ImpersonateController::class, 'leave'])->name('impersonate.leave');
 });
 
-Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::get('admin/login', function () {
+    return redirect()->route('login');
+})->name('admin.login');
+
+Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('impersonate/take/{id}/{guardName?}', [\Lab404\Impersonate\Controllers\ImpersonateController::class, 'take'])->name('impersonate');
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -315,6 +334,8 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::post('tickets/{ticket}/merge', [TicketController::class, 'merge'])->name('tickets.merge');
     Route::resource('ticket-categories', TicketCategoryController::class)->except(['show']);
     Route::resource('ticket-priorities', TicketPriorityController::class)->except(['show']);
+    Route::resource('groups', GroupController::class)->except(['show']);
+    Route::resource('permissions', PermissionController::class)->except(['show']);
 });
 
 require __DIR__.'/settings.php';

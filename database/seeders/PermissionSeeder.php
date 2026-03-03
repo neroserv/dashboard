@@ -1,0 +1,137 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Permission;
+use Illuminate\Database\Seeder;
+
+class PermissionSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $permissions = [
+            ['key' => '*', 'name' => 'Vollzugriff', 'label' => 'Alle Berechtigungen', 'category' => 'Zugang'],
+            ['key' => 'admin.access', 'name' => 'Admin-Zugang', 'label' => 'Admin-Panel betreten', 'category' => 'Zugang'],
+            ['key' => 'admin.dashboard', 'name' => 'Dashboard', 'label' => 'Admin-Dashboard', 'category' => 'Übersicht'],
+            ['key' => 'admin.dashboard.view', 'name' => 'Dashboard ansehen', 'label' => 'Dashboard nur ansehen', 'category' => 'Übersicht'],
+            ['key' => 'admin.activity-log', 'name' => 'Aktivitätslog', 'label' => 'Aktivitätslog (voll)', 'category' => 'Übersicht'],
+            ['key' => 'admin.activity-log.view', 'name' => 'Aktivitätslog ansehen', 'label' => 'Aktivitätslog nur ansehen', 'category' => 'Übersicht'],
+            ['key' => 'admin.invoices', 'name' => 'Rechnungen (voll)', 'label' => 'Rechnungen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.invoices.view', 'name' => 'Rechnungen ansehen', 'label' => 'Rechnungen nur ansehen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.invoices.create', 'name' => 'Rechnungen anlegen', 'label' => 'Rechnungen anlegen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.invoices.update', 'name' => 'Rechnungen bearbeiten', 'label' => 'Rechnungen bearbeiten', 'category' => 'Vertrieb'],
+            ['key' => 'admin.invoices.delete', 'name' => 'Rechnungen löschen', 'label' => 'Rechnungen löschen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.dunning-letters', 'name' => 'Mahnungen (voll)', 'label' => 'Mahnungen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.dunning-letters.view', 'name' => 'Mahnungen ansehen', 'label' => 'Mahnungen nur ansehen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.dunning-letters.create', 'name' => 'Mahnungen anlegen', 'label' => 'Mahnungen anlegen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.subscriptions', 'name' => 'Abos (voll)', 'label' => 'Abonnements', 'category' => 'Vertrieb'],
+            ['key' => 'admin.subscriptions.view', 'name' => 'Abos ansehen', 'label' => 'Abos nur ansehen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.subscriptions.update', 'name' => 'Abos bearbeiten', 'label' => 'Abos bearbeiten', 'category' => 'Vertrieb'],
+            ['key' => 'admin.products', 'name' => 'Produkte (voll)', 'label' => 'Produkte', 'category' => 'Vertrieb'],
+            ['key' => 'admin.products.view', 'name' => 'Produkte ansehen', 'label' => 'Produkte nur ansehen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.products.create', 'name' => 'Produkte anlegen', 'label' => 'Produkte anlegen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.products.update', 'name' => 'Produkte bearbeiten', 'label' => 'Produkte bearbeiten', 'category' => 'Vertrieb'],
+            ['key' => 'admin.products.delete', 'name' => 'Produkte löschen', 'label' => 'Produkte löschen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.domains', 'name' => 'Domains (voll)', 'label' => 'Domains', 'category' => 'Vertrieb'],
+            ['key' => 'admin.domains.view', 'name' => 'Domains ansehen', 'label' => 'Domains nur ansehen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.domains.create', 'name' => 'Domains anlegen', 'label' => 'Domains anlegen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.domains.update', 'name' => 'Domains bearbeiten', 'label' => 'Domains bearbeiten', 'category' => 'Vertrieb'],
+            ['key' => 'admin.domains.delete', 'name' => 'Domains löschen', 'label' => 'Domains löschen', 'category' => 'Vertrieb'],
+            ['key' => 'admin.hosting-servers', 'name' => 'Hosting-Server (voll)', 'label' => 'Hosting-Server', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-servers.view', 'name' => 'Hosting-Server ansehen', 'label' => 'Hosting-Server nur ansehen', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-servers.create', 'name' => 'Hosting-Server anlegen', 'label' => 'Hosting-Server anlegen', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-servers.update', 'name' => 'Hosting-Server bearbeiten', 'label' => 'Hosting-Server bearbeiten', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-servers.delete', 'name' => 'Hosting-Server löschen', 'label' => 'Hosting-Server löschen', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-plans', 'name' => 'Hosting-Pläne (voll)', 'label' => 'Hosting-Pläne', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-plans.view', 'name' => 'Hosting-Pläne ansehen', 'label' => 'Hosting-Pläne nur ansehen', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-plans.create', 'name' => 'Hosting-Pläne anlegen', 'label' => 'Hosting-Pläne anlegen', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-plans.update', 'name' => 'Hosting-Pläne bearbeiten', 'label' => 'Hosting-Pläne bearbeiten', 'category' => 'Hosting'],
+            ['key' => 'admin.hosting-plans.delete', 'name' => 'Hosting-Pläne löschen', 'label' => 'Hosting-Pläne löschen', 'category' => 'Hosting'],
+            ['key' => 'admin.webspace-accounts', 'name' => 'Webspace-Accounts (voll)', 'label' => 'Webspace-Accounts', 'category' => 'Hosting'],
+            ['key' => 'admin.webspace-accounts.view', 'name' => 'Webspace-Accounts ansehen', 'label' => 'Webspace-Accounts nur ansehen', 'category' => 'Hosting'],
+            ['key' => 'admin.webspace-accounts.create', 'name' => 'Webspace-Accounts anlegen', 'label' => 'Webspace-Accounts anlegen', 'category' => 'Hosting'],
+            ['key' => 'admin.webspace-accounts.update', 'name' => 'Webspace-Accounts bearbeiten', 'label' => 'Webspace-Accounts bearbeiten', 'category' => 'Hosting'],
+            ['key' => 'admin.webspace-accounts.delete', 'name' => 'Webspace-Accounts löschen', 'label' => 'Webspace-Accounts löschen', 'category' => 'Hosting'],
+            ['key' => 'admin.gaming-accounts', 'name' => 'Game-Server-Accounts (voll)', 'label' => 'Game-Server-Accounts', 'category' => 'Hosting'],
+            ['key' => 'admin.gaming-accounts.view', 'name' => 'Game-Server-Accounts ansehen', 'label' => 'Game-Server-Accounts nur ansehen', 'category' => 'Hosting'],
+            ['key' => 'admin.gaming-accounts.create', 'name' => 'Game-Server-Accounts anlegen', 'label' => 'Game-Server-Accounts anlegen', 'category' => 'Hosting'],
+            ['key' => 'admin.gaming-accounts.update', 'name' => 'Game-Server-Accounts bearbeiten', 'label' => 'Game-Server-Accounts bearbeiten', 'category' => 'Hosting'],
+            ['key' => 'admin.gaming-accounts.delete', 'name' => 'Game-Server-Accounts löschen', 'label' => 'Game-Server-Accounts löschen', 'category' => 'Hosting'],
+            ['key' => 'admin.sites', 'name' => 'Sites (voll)', 'label' => 'Sites', 'category' => 'Inhalte'],
+            ['key' => 'admin.sites.view', 'name' => 'Sites ansehen', 'label' => 'Sites nur ansehen', 'category' => 'Inhalte'],
+            ['key' => 'admin.sites.create', 'name' => 'Sites anlegen', 'label' => 'Sites anlegen', 'category' => 'Inhalte'],
+            ['key' => 'admin.sites.update', 'name' => 'Sites bearbeiten', 'label' => 'Sites bearbeiten', 'category' => 'Inhalte'],
+            ['key' => 'admin.sites.delete', 'name' => 'Sites löschen', 'label' => 'Sites löschen', 'category' => 'Inhalte'],
+            ['key' => 'admin.templates', 'name' => 'Templates (voll)', 'label' => 'Templates', 'category' => 'Inhalte'],
+            ['key' => 'admin.templates.view', 'name' => 'Templates ansehen', 'label' => 'Templates nur ansehen', 'category' => 'Inhalte'],
+            ['key' => 'admin.templates.create', 'name' => 'Templates anlegen', 'label' => 'Templates anlegen', 'category' => 'Inhalte'],
+            ['key' => 'admin.templates.update', 'name' => 'Templates bearbeiten', 'label' => 'Templates bearbeiten', 'category' => 'Inhalte'],
+            ['key' => 'admin.templates.delete', 'name' => 'Templates löschen', 'label' => 'Templates löschen', 'category' => 'Inhalte'],
+            ['key' => 'admin.discount-codes', 'name' => 'Rabattcodes (voll)', 'label' => 'Rabattcodes', 'category' => 'Marketing'],
+            ['key' => 'admin.discount-codes.view', 'name' => 'Rabattcodes ansehen', 'label' => 'Rabattcodes nur ansehen', 'category' => 'Marketing'],
+            ['key' => 'admin.discount-codes.create', 'name' => 'Rabattcodes anlegen', 'label' => 'Rabattcodes anlegen', 'category' => 'Marketing'],
+            ['key' => 'admin.discount-codes.update', 'name' => 'Rabattcodes bearbeiten', 'label' => 'Rabattcodes bearbeiten', 'category' => 'Marketing'],
+            ['key' => 'admin.discount-codes.delete', 'name' => 'Rabattcodes löschen', 'label' => 'Rabattcodes löschen', 'category' => 'Marketing'],
+            ['key' => 'admin.vouchers', 'name' => 'Gutscheine (voll)', 'label' => 'Gutscheine', 'category' => 'Marketing'],
+            ['key' => 'admin.vouchers.view', 'name' => 'Gutscheine ansehen', 'label' => 'Gutscheine nur ansehen', 'category' => 'Marketing'],
+            ['key' => 'admin.vouchers.create', 'name' => 'Gutscheine anlegen', 'label' => 'Gutscheine anlegen', 'category' => 'Marketing'],
+            ['key' => 'admin.vouchers.update', 'name' => 'Gutscheine bearbeiten', 'label' => 'Gutscheine bearbeiten', 'category' => 'Marketing'],
+            ['key' => 'admin.vouchers.delete', 'name' => 'Gutscheine löschen', 'label' => 'Gutscheine löschen', 'category' => 'Marketing'],
+            ['key' => 'admin.emails', 'name' => 'E-Mails (voll)', 'label' => 'E-Mail-Vorlagen', 'category' => 'Marketing'],
+            ['key' => 'admin.emails.view', 'name' => 'E-Mails ansehen', 'label' => 'E-Mail-Vorlagen nur ansehen', 'category' => 'Marketing'],
+            ['key' => 'admin.emails.create', 'name' => 'E-Mails anlegen', 'label' => 'E-Mail-Vorlagen anlegen', 'category' => 'Marketing'],
+            ['key' => 'admin.emails.update', 'name' => 'E-Mails bearbeiten', 'label' => 'E-Mail-Vorlagen bearbeiten', 'category' => 'Marketing'],
+            ['key' => 'admin.emails.delete', 'name' => 'E-Mails löschen', 'label' => 'E-Mail-Vorlagen löschen', 'category' => 'Marketing'],
+            ['key' => 'admin.tickets', 'name' => 'Tickets (voll)', 'label' => 'Support-Tickets', 'category' => 'Support'],
+            ['key' => 'admin.tickets.view', 'name' => 'Tickets ansehen', 'label' => 'Tickets nur ansehen', 'category' => 'Support'],
+            ['key' => 'admin.tickets.create', 'name' => 'Tickets anlegen', 'label' => 'Tickets anlegen', 'category' => 'Support'],
+            ['key' => 'admin.tickets.update', 'name' => 'Tickets bearbeiten', 'label' => 'Tickets bearbeiten', 'category' => 'Support'],
+            ['key' => 'admin.tickets.delete', 'name' => 'Tickets löschen', 'label' => 'Tickets löschen', 'category' => 'Support'],
+            ['key' => 'admin.settings', 'name' => 'Einstellungen (voll)', 'label' => 'Systemeinstellungen', 'category' => 'System'],
+            ['key' => 'admin.settings.view', 'name' => 'Einstellungen ansehen', 'label' => 'Einstellungen nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.settings.update', 'name' => 'Einstellungen bearbeiten', 'label' => 'Einstellungen bearbeiten', 'category' => 'System'],
+            ['key' => 'admin.jobs-monitor', 'name' => 'Jobs-Monitor (voll)', 'label' => 'Jobs-Monitor', 'category' => 'System'],
+            ['key' => 'admin.jobs-monitor.view', 'name' => 'Jobs-Monitor ansehen', 'label' => 'Jobs-Monitor nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.cron-statistics', 'name' => 'Cron-Statistik (voll)', 'label' => 'Cron/Worker-Statistik', 'category' => 'System'],
+            ['key' => 'admin.cron-statistics.view', 'name' => 'Cron-Statistik ansehen', 'label' => 'Cron-Statistik nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.customers', 'name' => 'Kunden (voll)', 'label' => 'Kundenverwaltung', 'category' => 'System'],
+            ['key' => 'admin.customers.view', 'name' => 'Kunden ansehen', 'label' => 'Kunden nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.customers.create', 'name' => 'Kunden anlegen', 'label' => 'Kunden anlegen', 'category' => 'System'],
+            ['key' => 'admin.customers.update', 'name' => 'Kunden bearbeiten', 'label' => 'Kunden bearbeiten', 'category' => 'System'],
+            ['key' => 'admin.customers.delete', 'name' => 'Kunden löschen', 'label' => 'Kunden löschen', 'category' => 'System'],
+            ['key' => 'admin.brands', 'name' => 'Marken (voll)', 'label' => 'Marken', 'category' => 'System'],
+            ['key' => 'admin.brands.view', 'name' => 'Marken ansehen', 'label' => 'Marken nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.brands.create', 'name' => 'Marken anlegen', 'label' => 'Marken anlegen', 'category' => 'System'],
+            ['key' => 'admin.brands.update', 'name' => 'Marken bearbeiten', 'label' => 'Marken bearbeiten', 'category' => 'System'],
+            ['key' => 'admin.brands.delete', 'name' => 'Marken löschen', 'label' => 'Marken löschen', 'category' => 'System'],
+            ['key' => 'admin.groups', 'name' => 'Gruppen (voll)', 'label' => 'Gruppen', 'category' => 'System'],
+            ['key' => 'admin.groups.view', 'name' => 'Gruppen ansehen', 'label' => 'Gruppen nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.groups.create', 'name' => 'Gruppen anlegen', 'label' => 'Gruppen anlegen', 'category' => 'System'],
+            ['key' => 'admin.groups.update', 'name' => 'Gruppen bearbeiten', 'label' => 'Gruppen bearbeiten', 'category' => 'System'],
+            ['key' => 'admin.groups.delete', 'name' => 'Gruppen löschen', 'label' => 'Gruppen löschen', 'category' => 'System'],
+            ['key' => 'admin.permissions', 'name' => 'Berechtigungen (voll)', 'label' => 'Berechtigungen', 'category' => 'System'],
+            ['key' => 'admin.permissions.view', 'name' => 'Berechtigungen ansehen', 'label' => 'Berechtigungen nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.permissions.create', 'name' => 'Berechtigungen anlegen', 'label' => 'Berechtigungen anlegen', 'category' => 'System'],
+            ['key' => 'admin.permissions.update', 'name' => 'Berechtigungen bearbeiten', 'label' => 'Berechtigungen bearbeiten', 'category' => 'System'],
+            ['key' => 'admin.permissions.delete', 'name' => 'Berechtigungen löschen', 'label' => 'Berechtigungen löschen', 'category' => 'System'],
+            ['key' => 'admin.legacy-migration', 'name' => 'Legacy-Migration', 'label' => 'Legacy-Migration', 'category' => 'System'],
+            ['key' => 'admin.legacy-migration.view', 'name' => 'Legacy-Migration ansehen', 'label' => 'Legacy-Migration nur ansehen', 'category' => 'System'],
+        ];
+
+        foreach ($permissions as $attrs) {
+            $key = $attrs['key'];
+            $payload = [
+                'name' => $attrs['name'],
+                'label' => $attrs['label'] ?? $attrs['name'],
+                'category' => $attrs['category'] ?? null,
+            ];
+            Permission::updateOrCreate(
+                ['key' => $key],
+                $payload,
+            );
+        }
+    }
+}

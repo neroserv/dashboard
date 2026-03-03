@@ -14,6 +14,7 @@ class Brand extends Model
         'key',
         'name',
         'domains',
+        'admin_domains',
         'is_default',
         'logo_url',
         'logo_collapsed_url',
@@ -33,6 +34,7 @@ class Brand extends Model
     {
         return [
             'domains' => 'array',
+            'admin_domains' => 'array',
             'is_default' => 'boolean',
             'seo' => 'array',
             'theme_colors' => 'array',
@@ -49,6 +51,46 @@ class Brand extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Normalize a domain entry (URL or hostname) to hostname only for comparison.
+     */
+    public static function normalizeDomainToHost(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if (preg_match('#^https?://#i', $value)) {
+            $parsed = parse_url($value);
+
+            return $parsed['host'] ?? $value;
+        }
+
+        return $value;
+    }
+
+    public static function resolveByAdminHost(string $host): ?self
+    {
+        $host = strtolower(trim($host));
+
+        $brand = static::query()
+            ->whereNotNull('admin_domains')
+            ->whereJsonContains('admin_domains', $host)
+            ->first();
+
+        if ($brand !== null) {
+            return $brand;
+        }
+
+        foreach (static::query()->whereNotNull('admin_domains')->get() as $b) {
+            $adminDomains = $b->admin_domains ?? [];
+            foreach ($adminDomains as $entry) {
+                if (static::normalizeDomainToHost((string) $entry) === $host) {
+                    return $b;
+                }
+            }
+        }
+
+        return null;
     }
 
     public static function resolveByHost(string $host): ?self

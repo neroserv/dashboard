@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -48,7 +48,7 @@ const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('de
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head title="Webspace-Accounts" />
 
         <div class="space-y-6">
@@ -114,5 +114,5 @@ const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('de
                 <Pagination :links="props.webspaceAccounts.links" @navigate="handlePagination" />
             </div>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

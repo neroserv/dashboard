@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import AppLayout from '@/layouts/AppLayout.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Heading, Text } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import InputError from '@/components/InputError.vue';
 import { index as customersIndex } from '@/routes/admin/customers';
 import { dashboard } from '@/routes';
@@ -17,6 +18,8 @@ import type { BreadcrumbItem } from '@/types';
 type Brand = { id: number; key: string; name: string };
 
 type RankOption = { value: string; label: string };
+
+type Group = { id: number; key: string; name: string; label: string };
 
 type Customer = {
     id: number;
@@ -31,11 +34,13 @@ type Customer = {
     brand?: Brand | null;
     is_admin?: boolean;
     rank?: string | null;
+    group_ids?: number[];
 };
 
 type Props = {
     customer: Customer;
     brands: Brand[];
+    groups: Group[];
     countries: Record<string, string>;
     ranks: RankOption[];
 };
@@ -59,7 +64,16 @@ const form = useForm({
     country: props.customer.country ?? '',
     is_admin: props.customer.is_admin ?? false,
     rank: props.customer.rank ?? '',
+    group_ids: props.customer.group_ids ?? [],
 });
+
+function setGroup(id: number, checked: boolean) {
+    if (checked) {
+        form.group_ids = [...form.group_ids, id];
+    } else {
+        form.group_ids = form.group_ids.filter((x) => x !== id);
+    }
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -74,7 +88,7 @@ function submit() {
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Kunde bearbeiten: ${customer.name}`" />
 
         <div class="space-y-6">
@@ -93,23 +107,25 @@ function submit() {
                 <CardContent>
                     <form class="space-y-4" @submit.prevent="submit">
                         <div class="space-y-2">
-                            <Label for="rank">Rang</Label>
-                            <Select
-                                id="rank"
-                                v-model="form.rank"
-                                name="rank"
-                                :aria-invalid="!!form.errors.rank"
-                            >
-                                <option value="">– Kein Rang –</option>
-                                <option
-                                    v-for="r in ranks"
-                                    :key="r.value"
-                                    :value="r.value"
+                            <Label>Gruppen</Label>
+                            <p class="text-muted-foreground text-sm">Gruppen-Labels erscheinen im Admin-Header. Benutzer kann mehreren Gruppen angehören.</p>
+                            <div class="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                                <div
+                                    v-for="g in groups"
+                                    :key="g.id"
+                                    class="flex items-center gap-2"
                                 >
-                                    {{ r.label }}
-                                </option>
-                            </Select>
-                            <InputError :message="form.errors.rank" />
+                                    <Checkbox
+                                        :id="`group-${g.id}`"
+                                        :model-value="form.group_ids.includes(g.id)"
+                                        @update:model-value="(v: boolean) => setGroup(g.id, v)"
+                                    />
+                                    <label :for="`group-${g.id}`" class="cursor-pointer text-sm">
+                                        {{ g.label }} ({{ g.key }})
+                                    </label>
+                                </div>
+                            </div>
+                            <InputError :message="form.errors.group_ids" />
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <Switch
@@ -231,5 +247,5 @@ function submit() {
                 </CardContent>
             </Card>
         </div>
-    </AppLayout>
+    </AdminLayout>
 </template>

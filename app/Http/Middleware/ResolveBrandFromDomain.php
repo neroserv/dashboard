@@ -17,8 +17,9 @@ class ResolveBrandFromDomain
     public function handle(Request $request, Closure $next): Response
     {
         $host = $request->getHost();
-        $brand = Brand::resolveByHost($host) ?? Brand::getDefault();
+        $brand = Brand::resolveByAdminHost($host) ?? Brand::resolveByHost($host) ?? Brand::getDefault();
         $request->attributes->set('current_brand', $brand);
+        $request->attributes->set('is_admin_domain', Brand::resolveByAdminHost($host) !== null);
 
         return $next($request);
     }
