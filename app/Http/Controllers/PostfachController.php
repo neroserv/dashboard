@@ -27,11 +27,11 @@ class PostfachController extends Controller
         $emails = UserEmailLog::where('user_id', $user->id)
             ->orderByDesc('sent_at')
             ->limit(100)
-            ->get(['id', 'subject', 'snippet', 'sent_at'])
+            ->get(['id', 'subject', 'snippet', 'body_html', 'sent_at'])
             ->map(fn (UserEmailLog $log) => [
                 'id' => $log->id,
                 'subject' => $log->subject,
-                'snippet' => $log->snippet,
+                'snippet' => UserEmailLog::snippetFromHtml($log->body_html) ?: $log->snippet ?: '…',
                 'sent_at' => $log->sent_at?->format('d.m.Y'),
             ]);
 

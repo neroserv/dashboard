@@ -1,5 +1,5 @@
+import type { Component } from 'vue';
 import type { InertiaLinkProps } from '@inertiajs/vue3';
-import type { LucideIcon } from 'lucide-vue-next';
 
 export type BreadcrumbItem = {
     title: string;
@@ -9,7 +9,8 @@ export type BreadcrumbItem = {
 export type NavItem = {
     title: string;
     href?: NonNullable<InertiaLinkProps['href']>;
-    icon?: LucideIcon;
+    /** Lucide icon or custom icon component (e.g. DashboardIcon). */
+    icon?: Component;
     isActive?: boolean;
     /** Badge (e.g. open ticket count) shown next to the label. */
     badge?: number | string;

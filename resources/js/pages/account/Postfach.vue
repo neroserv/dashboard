@@ -117,12 +117,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     {{ props.selectedEmail.sent_at }}
                                 </p>
                             </div>
-                            <div class="min-h-[400px] bg-white dark:bg-gray-900">
+                            <div class="min-h-[75vh] bg-white dark:bg-gray-900">
                                 <iframe
                                     v-if="props.selectedEmail.body_html"
                                     :srcdoc="props.selectedEmail.body_html"
                                     title="E-Mail-Inhalt"
-                                    class="h-full min-h-[400px] w-full border-0"
+                                    class="h-full min-h-[75vh] w-full border-0"
                                     sandbox="allow-same-origin"
                                 />
                             </div>

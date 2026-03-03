@@ -35,4 +35,32 @@ class UserEmailLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Derive a short preview text from HTML body (strips style/script, takes first sentence or chars).
+     */
+    public static function snippetFromHtml(?string $html, int $maxLength = 120): string
+    {
+        if ($html === null || $html === '') {
+            return '';
+        }
+        $html = preg_replace('/<style[^>]*>.*?<\/style>/is', ' ', $html);
+        $html = preg_replace('/<script[^>]*>.*?<\/script>/is', ' ', $html);
+        $text = strip_tags($html);
+        $text = preg_replace('/\s+/', ' ', $text);
+        $text = preg_replace('/\bTransactional\b/i', '', $text);
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+        $firstSentence = preg_match('/^[^.!?]*[.!?]/u', $text, $m) ? trim($m[0]) : null;
+        if ($firstSentence !== null && mb_strlen($firstSentence) <= $maxLength) {
+            return $firstSentence;
+        }
+        if (mb_strlen($text) <= $maxLength) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, $maxLength).'...';
+    }
 }

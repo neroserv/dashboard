@@ -23,7 +23,7 @@ class LogUserEmailToPostfach
             return;
         }
 
-        $snippet = $this->makeSnippet($htmlBody);
+        $snippet = UserEmailLog::snippetFromHtml($htmlBody);
 
         foreach ($toAddresses as $address) {
             $emailString = method_exists($address, 'getAddress') ? $address->getAddress() : (string) $address;
@@ -54,18 +54,5 @@ class LogUserEmailToPostfach
         }
 
         return is_string($body) ? $body : null;
-    }
-
-    private function makeSnippet(string $html, int $maxLength = 100): string
-    {
-        $text = strip_tags($html);
-        $text = preg_replace('/\s+/', ' ', $text);
-        $text = trim($text);
-
-        if (mb_strlen($text) <= $maxLength) {
-            return $text;
-        }
-
-        return mb_substr($text, 0, $maxLength).'...';
     }
 }

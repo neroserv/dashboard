@@ -34,6 +34,7 @@ use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BillingPortalController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\GamingAccountController;
 use App\Http\Controllers\GamingController;
@@ -68,9 +69,7 @@ Route::get('/', function () {
 
 })->name('home');
 
-Route::get('dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', [CustomerDashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('components', function () {
     return Inertia::render('components/Demo');

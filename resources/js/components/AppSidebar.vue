@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+import DashboardIcon from '@/components/icons/DashboardIcon.vue';
 import {
     BookOpen,
     Folder,
@@ -36,7 +37,7 @@ const isAdmin = computed(() => (page.props.auth?.user as { is_admin?: boolean })
 
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
-        { title: 'Dashboard', href: dashboard().url, icon: LayoutGrid },
+        { title: 'Dashboard', href: dashboard().url, icon: DashboardIcon },
         { title: 'Meine Sites', href: sitesIndex().url, icon: Globe },
         { title: 'Webspace', href: '/webspace', icon: Server },
         { title: 'Meine Webspace-Accounts', href: '/webspace-accounts', icon: Package },

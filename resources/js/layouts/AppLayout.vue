@@ -9,6 +9,7 @@ import { index as billingIndex } from '@/routes/billing';
 import { index as sitesIndex } from '@/routes/sites';
 import { index as adminTemplatesIndex } from '@/routes/admin/templates';
 import { index as adminCustomersIndex } from '@/routes/admin/customers';
+import DashboardIcon from '@/components/icons/DashboardIcon.vue';
 import {
     LayoutGrid,
     Globe,
@@ -88,7 +89,7 @@ const sidebarItems = computed<NavItem[]>(() => {
     helpSupportChildren.push(supportTicketsItem);
 
     const items: NavItem[] = [
-        { title: 'Dashboard', href: dashboard().url, icon: LayoutGrid },
+        { title: 'Dashboard', href: dashboard().url, icon: DashboardIcon },
         ...(brandFeatures.value.sites_editor !== false
             ? [
                   {

@@ -215,7 +215,7 @@ const groupTriggerClasses = (item: NavItem) =>
             <nav class="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-4" @click="onNavClick">
                 <template v-for="(item, idx) in items" :key="item.title + String(idx)">
                     <div
-                        v-if="idx > 0 && item.children?.length && !effectiveCollapsed"
+                        v-if="item.title === 'Admin' && !effectiveCollapsed"
                         class="my-3 border-t border-gray-200 dark:border-gray-700"
                         role="separator"
                         aria-hidden="true"
