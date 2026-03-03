@@ -4,7 +4,7 @@ import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 import '../css/app.css';
 import { initializeTheme } from './composables/useAppearance';
-import ToastContainer from './components/ToastContainer.vue';
+import AppRoot from './components/AppRoot.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -18,10 +18,10 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         createApp({
             render: () =>
-                h('div', { class: 'min-h-full' }, [
-                    h(ToastContainer),
-                    h(App, props),
-                ]),
+                h(AppRoot, {
+                    appComponent: App,
+                    appProps: props,
+                }),
         })
             .use(plugin)
             .mount(el);

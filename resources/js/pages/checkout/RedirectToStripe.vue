@@ -2,7 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import { onMounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Spinner } from '@/components/ui/spinner';
+import LoadingAnimation from '@/components/LoadingAnimation.vue';
 import { Text } from '@/components/ui/typography';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
@@ -30,7 +30,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         <Head title="Weiterleitung zur Zahlung" />
 
         <div class="flex min-h-[40vh] flex-col items-center justify-center gap-4">
-            <Spinner size="lg" />
+            <LoadingAnimation :size="200" />
             <Text>Weiterleitung zur Zahlung…</Text>
         </div>
     </AppLayout>
