@@ -88,13 +88,30 @@ sudo systemctl enable caddy
 # Caddy-Logs anzeigen
 caddy logs
 
-# Testen des Verify-Endpoints
-curl "http://localhost:8000/api/verify-domain?domain=test.de"
+# Testen des Verify-Endpoints (von dem Server, auf dem Caddy läuft)
+# WICHTIG: Die URL muss erreichbar sein. Siehe unten „Failed to connect to 127.0.0.1:8000“.
+
+curl "http://127.0.0.1:8000/api/verify-domain?domain=test.de"
 # Sollte 403 zurückgeben wenn Domain nicht verifiziert
 
-curl "http://localhost:8000/api/verify-domain?domain=verifizierte-domain.de"
+curl "http://127.0.0.1:8000/api/verify-domain?domain=verifizierte-domain.de"
 # Sollte 200 zurückgeben wenn Domain verifiziert ist
 ```
+
+### „Failed to connect to 127.0.0.1 port 8000“
+
+Wenn `curl http://127.0.0.1:8000/...` mit „Connection refused“ fehlschlägt, läuft **nichts** auf Port 8000.
+
+- **Wenn Caddy die App selbst ausliefert** (z. B. mit `php_fastcgi` zu PHP-FPM): In der Caddyfile bei `on_demand_tls` → `ask` **nicht** Port 8000 verwenden, sondern Caddy selbst auf Port 80 anfragen:
+  ```caddyfile
+  ask http://127.0.0.1/api/verify-domain
+  ```
+  Danach Caddy neu laden und testen:
+  ```bash
+  curl "http://127.0.0.1/api/verify-domain?domain=admin.neroserv.de"
+  ```
+
+- **Wenn ein separates Backend auf 8000 laufen soll**: Nginx (oder ein anderer Webserver) so einrichten, dass er auf `127.0.0.1:8000` lauscht und Laravel per PHP-FPM bedient. Caddy bleibt bei `ask http://127.0.0.1:8000/api/verify-domain` und `reverse_proxy 127.0.0.1:8000`.
 
 ## Wichtige Hinweise
 

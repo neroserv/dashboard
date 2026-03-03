@@ -86,3 +86,29 @@ test('returns 200 for brand domain with normalized case', function () {
 
     $response->assertStatus(200);
 });
+
+test('returns 200 when domain is an admin domain of a brand', function () {
+    Brand::create([
+        'key' => 'neroserv',
+        'name' => 'Neroserv',
+        'admin_domains' => ['admin.neroserv.de', 'admin.neroserv.test'],
+        'is_default' => false,
+    ]);
+
+    $response = $this->get('/api/verify-domain?domain=admin.neroserv.de');
+
+    $response->assertStatus(200);
+});
+
+test('returns 403 when domain is not in admin_domains', function () {
+    Brand::create([
+        'key' => 'neroserv',
+        'name' => 'Neroserv',
+        'admin_domains' => ['admin.neroserv.test'],
+        'is_default' => false,
+    ]);
+
+    $response = $this->get('/api/verify-domain?domain=admin.neroserv.de');
+
+    $response->assertStatus(403);
+});

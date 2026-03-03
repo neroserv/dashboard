@@ -13,7 +13,12 @@
     on_demand_tls {
         # Laravel-Endpoint zum Verifizieren der Domain
         # Caddy fragt bei jeder neuen Domain hier nach, ob ein Zertifikat ausgestellt werden soll
-        ask http://127.0.0.1:8000/api/verify-domain
+        #
+        # Wenn Caddy die Laravel-App selbst ausliefert (z. B. per php_fastcgi): Caddy selbst anfragen (Port 80):
+        # ask http://127.0.0.1/api/verify-domain
+        #
+        # Wenn Laravel auf einem anderen Port läuft (z. B. 8080), diesen Port verwenden:
+        ask http://127.0.0.1:8080/api/verify-domain
         
         # Rate Limiting: Max 5 neue Zertifikats-Anfragen pro 2 Minuten
         # Verhindert Missbrauch und schützt vor Let's Encrypt Rate Limits
@@ -34,9 +39,8 @@ praxishosting.abrendt.de {
     # CORS für Assets: Custom Domains laden CSS/JS von hier
     header /build/* Access-Control-Allow-Origin *
 
-    # Reverse Proxy zu Laravel-App
-    # Passe den Port an, falls Laravel auf einem anderen Port läuft
-    reverse_proxy 127.0.0.1:8000
+    # Reverse Proxy zu Laravel-App (Port anpassen, z. B. 8080)
+    reverse_proxy 127.0.0.1:8080
 
     # Optional: Access Logs
     log {
@@ -55,8 +59,8 @@ praxishosting.abrendt.de {
         on_demand
     }
     
-    # Reverse Proxy zu Laravel-App
-    reverse_proxy 127.0.0.1:8000 {
+    # Reverse Proxy zu Laravel-App (gleicher Port wie bei ask und Haupt-Domain)
+    reverse_proxy 127.0.0.1:8080 {
         # Header für Laravel, damit es die originale Domain kennt
         header_up Host {host}
         header_up X-Real-IP {remote}

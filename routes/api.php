@@ -41,9 +41,11 @@ Route::get('verify-domain', function (Request $request) {
         ->whereJsonContains('domains', $domain)
         ->exists();
 
-    $allowed = $verifiedSiteDomain || $allowedByBrand;
+    $allowedByAdminDomain = Brand::resolveByAdminHost($domain) !== null;
+
+    $allowed = $verifiedSiteDomain || $allowedByBrand || $allowedByAdminDomain;
 
     return $allowed
-        ? response('', 200)
-        : response('', 403);
+        ? response('OK', 200)
+        : response('Forbidden', 403);
 })->name('api.verify-domain');
