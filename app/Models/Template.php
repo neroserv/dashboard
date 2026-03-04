@@ -21,7 +21,6 @@ class Template extends Model
         'preview_image',
         'is_active',
         'price',
-        'stripe_price_id',
     ];
 
     /**

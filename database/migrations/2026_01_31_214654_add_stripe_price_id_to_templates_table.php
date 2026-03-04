@@ -1,28 +1,17 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     /**
      * Run the migrations.
+     * No-op: Mollie uses price from templates.price at subscription creation.
      */
-    public function up(): void
-    {
-        Schema::table('templates', function (Blueprint $table) {
-            $table->string('stripe_price_id')->nullable()->after('price');
-        });
-    }
+    public function up(): void {}
 
     /**
      * Reverse the migrations.
      */
-    public function down(): void
-    {
-        Schema::table('templates', function (Blueprint $table) {
-            $table->dropColumn('stripe_price_id');
-        });
-    }
+    public function down(): void {}
 };

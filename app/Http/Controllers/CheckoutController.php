@@ -11,16 +11,13 @@ use App\Models\Site;
 use App\Models\SiteSubscription;
 use App\Models\Template;
 use App\Models\WebspaceAccount;
-use App\Notifications\InvoiceCreatedNotification;
 use App\Notifications\OrderCompletedNotification;
 use App\Notifications\WebspaceOrderCompletedNotification;
 use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
-use App\Services\SyncHostingPlanStripePriceService;
-use App\Services\SyncTemplateStripePriceService;
-use Carbon\Carbon;
+use App\Support\MollieWebhookUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -29,11 +26,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
-use Laravel\Cashier\Checkout;
-use RuntimeException;
-use Stripe\Checkout\Session as StripeSession;
-use Stripe\Exception\InvalidRequestException;
-use Stripe\StripeClient;
+use Mollie\Api\MollieApiClient;
 
 class CheckoutController extends Controller
 {
@@ -57,6 +50,10 @@ class CheckoutController extends Controller
             return redirect()->route('sites.create')->with('error', 'Bitte starten Sie die Bestellung erneut.');
         }
 
+        if (! $this->isMollieConfigured()) {
+            return redirect()->route('sites.create')->with('error', 'Mollie ist nicht konfiguriert. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen).');
+        }
+
         $user = $request->user();
         $template = Template::find($payload['template_id']);
         if (! $template) {
@@ -65,57 +62,62 @@ class CheckoutController extends Controller
             return redirect()->route('sites.create')->with('error', 'Template nicht gefunden.');
         }
 
-        $priceId = $this->getPriceIdForTemplate($template);
-        if (! $priceId) {
+        $amount = $template->price !== null ? (float) $template->price : null;
+        if ($amount === null || $amount <= 0) {
             $request->session()->forget('checkout_meine_seiten');
-
-            $productId = config('billing.stripe_meine_seiten_product_id');
-            $hasPrice = $template->price !== null;
-            if (! $productId) {
-                $message = 'STRIPE_MEINE_SEITEN_PRODUCT_ID fehlt in der .env (Stripe-Produkt-ID prod_…). Nach dem Eintragen ggf. "php artisan config:clear" ausführen.';
-            } elseif (! $hasPrice) {
-                $message = 'Dieses Template hat keinen monatlichen Preis. Im Admin unter Templates den Preis (monatlich) eintragen und speichern – dann wird der Stripe-Preis automatisch erzeugt.';
-            } else {
-                $message = 'Dieses Template ist derzeit nicht buchbar. Bitte prüfen: Template mit Preis speichern, STRIPE_MEINE_SEITEN_PRODUCT_ID in .env (prod_…) und ggf. "php artisan config:clear".';
-            }
 
             return redirect()
                 ->route('sites.create', ['template' => $template->id])
-                ->with('error', $message);
+                ->with('error', 'Dieses Template hat keinen monatlichen Preis. Im Admin unter Templates den Preis eintragen.');
         }
 
         $siteName = $payload['name'];
+        $currency = strtoupper(config('cashier.currency', 'eur'));
 
         try {
-            $checkout = Checkout::customer($user)
-                ->allowPromotionCodes()
-                ->create($priceId, [
-                    'mode' => StripeSession::MODE_SUBSCRIPTION,
-                    'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                    'cancel_url' => route('sites.create').'?template='.$template->id,
-                    'subscription_data' => [
-                        'metadata' => [
-                            'template_id' => (string) $template->id,
-                            'site_name' => $siteName,
-                            'user_id' => (string) $user->id,
-                        ],
-                    ],
-                ]);
-
-            $redirectResponse = $checkout->redirect();
-
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Meine Seiten: '.$siteName,
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => [
+                    'type' => 'meine_seiten',
+                    'template_id' => (string) $template->id,
+                    'site_name' => $siteName,
+                    'user_id' => (string) $user->id,
+                ],
+            ];
+            if ($user->mollie_customer_id) {
+                $params['customerId'] = $user->mollie_customer_id;
+            }
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
             $request->session()->forget('checkout_meine_seiten');
 
-            return Inertia::location($redirectResponse->getTargetUrl());
-        } catch (InvalidRequestException $e) {
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('sites.create')->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
+            }
+
+            return Inertia::location($checkoutUrl);
+        } catch (\Throwable $e) {
             $request->session()->forget('checkout_meine_seiten');
-            $message = str_contains($e->getMessage(), 'No such price')
-                ? 'Der gespeicherte Stripe-Preis ist ungültig. Template erneut speichern (Preis im Panel beibehalten) – dann wird ein neuer Preis erzeugt. In .env muss STRIPE_MEINE_SEITEN_PRODUCT_ID gesetzt sein (Stripe-Produkt prod_…).'
-                : $e->getMessage();
+            Log::error('Checkout Meine Seiten: Mollie-Fehler', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            report($e);
 
             return redirect()
                 ->route('sites.create', ['template' => $template->id])
-                ->with('error', $message);
+                ->with('error', $this->getCheckoutErrorMessage($e));
         }
     }
 
@@ -144,7 +146,7 @@ class CheckoutController extends Controller
      */
     public function redirectToStripe(Request $request): RedirectResponse|Response|InertiaResponse
     {
-        $url = $request->session()->pull('stripe_checkout_redirect_url');
+        $url = $request->session()->pull('stripe_checkout_redirect_url') ?? $request->session()->pull('mollie_checkout_redirect_url');
         if (! $url || ! str_starts_with($url, 'https://')) {
             return redirect()->route('webspace.index')->with('error', 'Weiterleitung zur Zahlung fehlgeschlagen. Bitte versuchen Sie es erneut.');
         }
@@ -162,267 +164,75 @@ class CheckoutController extends Controller
      */
     public function success(Request $request): RedirectResponse
     {
+        $paymentId = $request->query('payment_id') ?? $request->session()->pull('pending_mollie_payment_id');
         $sessionId = $request->query('session_id');
-        Log::debug('Checkout success: start', ['session_id' => $sessionId]);
-
-        if (! $sessionId) {
-            Log::debug('Checkout success: early return', ['reason' => 'no_session_id']);
-
-            return redirect()->route('sites.index')->with('error', 'Checkout-Session nicht gefunden.');
-        }
+        Log::debug('Checkout success: start', ['payment_id' => $paymentId, 'session_id' => $sessionId]);
 
         $user = $request->user();
         if (! $user) {
-            Log::debug('Checkout success: early return', ['reason' => 'user_not_authenticated']);
-
             return redirect()->route('login')->with('error', 'Bitte melden Sie sich an.');
         }
 
-        try {
-            $stripe = new StripeClient(config('cashier.secret'));
-            $session = $stripe->checkout->sessions->retrieve($sessionId, ['expand' => ['subscription']]);
-            $sessionCustomerEmail = $session->customer_email ?? (isset($session->customer_details->email) ? $session->customer_details->email : null);
-            Log::debug('Checkout success: session retrieved', [
-                'customer_email' => $sessionCustomerEmail,
-                'subscription' => $session->subscription ? (is_object($session->subscription) ? ($session->subscription->id ?? null) : $session->subscription) : null,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Checkout success: Stripe session retrieve failed', [
-                'session_id' => $sessionId,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+        if ($paymentId) {
+            try {
+                $payment = app(MollieApiClient::class)->payments->get($paymentId);
+            } catch (\Throwable $e) {
+                Log::error('Checkout success: Mollie payment retrieve failed', ['payment_id' => $paymentId, 'message' => $e->getMessage()]);
 
-            return redirect()->route('sites.index')->with('error', 'Stripe-Session konnte nicht geladen werden. '.($e->getMessage() ?: 'Bitte prüfen Sie storage/logs/laravel.log.'));
-        }
-
-        $customerEmail = is_string($sessionCustomerEmail) ? strtolower(trim($sessionCustomerEmail)) : '';
-        $userEmail = strtolower(trim($user->email));
-        if ($customerEmail !== '' && $customerEmail !== $userEmail) {
-            Log::debug('Checkout success: early return', ['reason' => 'email_mismatch', 'customer_email' => $customerEmail, 'user_email' => $userEmail]);
-
-            return redirect()->route('sites.index')->with('error', 'Ungültige Checkout-Session (E-Mail stimmt nicht überein).');
-        }
-
-        if ($session->mode === 'payment') {
-            $metadata = $session->metadata ? $session->metadata->toArray() : [];
-            $type = $metadata['type'] ?? '';
-            if ($type === 'game_server_renewal') {
-                return $this->handleGamingRenewalSuccess($request, $user, $session, $metadata);
+                return redirect()->route('sites.index')->with('error', 'Zahlung konnte nicht geladen werden.');
             }
+            if ($payment->status !== 'paid') {
+                return redirect()->route('sites.index')->with('info', 'Die Zahlung ist noch nicht bestätigt. Bei Fragen kontaktieren Sie uns.');
+            }
+            $metadata = $payment->metadata ? (array) $payment->metadata : [];
+            $metadata['mollie_payment_id'] = $payment->id;
+            $type = $metadata['type'] ?? '';
             if ($type === 'invoice_payment') {
                 return $this->handleInvoicePaymentSuccess($request, $user, $metadata);
             }
-        }
-
-        $subscriptionId = $session->subscription;
-        if (is_object($subscriptionId) && isset($subscriptionId->id)) {
-            $subscriptionId = $subscriptionId->id;
-        }
-
-        $maxAttempts = 4;
-        $attempt = 0;
-        while (! $subscriptionId && $attempt < $maxAttempts) {
-            $attempt++;
-            sleep(2);
-            $session = $stripe->checkout->sessions->retrieve($sessionId, ['expand' => ['subscription']]);
-            $subscriptionId = $session->subscription;
-            if (is_object($subscriptionId) && isset($subscriptionId->id)) {
-                $subscriptionId = $subscriptionId->id;
+            if ($type === 'game_server_renewal') {
+                return $this->handleGamingRenewalSuccessFromMollie($request, $user, $metadata);
             }
-            Log::debug('Checkout success: retry subscription', ['attempt' => $attempt, 'has_subscription' => (bool) $subscriptionId]);
+            if ($type === 'meine_seiten') {
+                return $this->handleMeineSeitenSuccessFromMollie($request, $user, $metadata);
+            }
+            if ($type === 'webspace') {
+                return $this->handleWebspaceCheckoutSuccessFromMollie($request, $user, $metadata);
+            }
+            if ($type === 'game_server') {
+                return $this->handleGamingCheckoutSuccessFromMollie($request, $user, $metadata);
+            }
+
+            return redirect()->route('sites.index')->with('success', 'Zahlung erhalten. Vielen Dank.');
         }
 
-        $subscriptionIdString = is_object($subscriptionId) && isset($subscriptionId->id)
-            ? $subscriptionId->id
-            : (is_string($subscriptionId) ? $subscriptionId : null);
-
-        if (! $subscriptionIdString) {
-            Log::debug('Checkout success: early return', ['reason' => 'subscription_null_after_retries']);
-
-            return redirect()->route('sites.index')->with('info', 'Ihre Webseite wird eingerichtet. Bitte prüfen Sie in wenigen Minuten „Meine Sites“. Falls nichts erscheint, kontaktieren Sie uns.');
+        if ($sessionId) {
+            return redirect()->route('sites.index')->with('info', 'Diese Checkout-Rückkehr (Stripe) wird nicht mehr unterstützt. Bitte nutzen Sie den Mollie-Checkout.');
         }
 
-        try {
-            $subscription = $stripe->subscriptions->retrieve($subscriptionIdString, ['expand' => ['items.data.price']]);
-        } catch (\Throwable $e) {
-            Log::error('Checkout success: Stripe subscription retrieve failed', [
-                'subscription_id' => $subscriptionIdString,
-                'message' => $e->getMessage(),
-            ]);
-
-            return redirect()->route('sites.index')->with('error', 'Abo konnte nicht geladen werden. '.$e->getMessage());
-        }
-
-        $metadata = $subscription->metadata->toArray();
-        $checkoutType = $metadata['type'] ?? 'meine_seiten';
-
-        if ($checkoutType === 'webspace') {
-            return $this->handleWebspaceCheckoutSuccess($request, $user, $subscription, $metadata);
-        }
-
-        if ($checkoutType === 'game_server') {
-            return $this->handleGamingCheckoutSuccess($request, $user, $subscription, $metadata);
-        }
-
-        $templateId = (int) ($metadata['template_id'] ?? 0);
-        $siteName = $metadata['site_name'] ?? 'Meine Webseite';
-        $userId = (int) ($metadata['user_id'] ?? 0);
-        Log::debug('Checkout success: metadata', ['template_id' => $templateId, 'site_name' => $siteName, 'user_id' => $userId, 'app_user_id' => $user->id]);
-
-        if ($userId !== $user->id || $templateId < 1) {
-            Log::debug('Checkout success: early return', ['reason' => 'invalid_metadata', 'user_id_match' => $userId === $user->id, 'template_id' => $templateId]);
-
-            return redirect()->route('sites.index')->with('error', 'Ungültige Abo-Daten.');
-        }
-
-        $existing = SiteSubscription::where('stripe_subscription_id', $subscription->id)->first();
-        if ($existing) {
-            Log::debug('Checkout success: existing subscription', ['site_id' => $existing->site_id]);
-
-            return redirect()->route('sites.show', ['site' => $existing->site->uuid]);
-        }
-
-        $template = Template::find($templateId);
-        if (! $template) {
-            Log::debug('Checkout success: early return', ['reason' => 'template_not_found', 'template_id' => $templateId]);
-
-            return redirect()->route('sites.index')->with('error', 'Template nicht gefunden.');
-        }
-
-        try {
-            $slug = Str::slug($siteName).'-'.Str::random(6);
-            $baseDomain = \App\Models\Setting::getBaseDomain();
-            $subdomain = $slug.'.'.$baseDomain;
-
-            $site = $user->sites()->create([
-                'template_id' => $template->id,
-                'name' => $siteName,
-                'slug' => $slug,
-                'domain_type' => 'subdomain',
-                'status' => 'active',
-                'is_legacy' => false,
-            ]);
-
-            $site->domains()->create([
-                'domain' => $subdomain,
-                'type' => 'subdomain',
-                'is_primary' => true,
-                'is_verified' => true,
-            ]);
-
-            $currentPeriodEnd = isset($subscription->current_period_end)
-                ? Carbon::createFromTimestamp($subscription->current_period_end)
-                : null;
-
-            $siteSubscription = $site->siteSubscription()->create([
-                'stripe_subscription_id' => $subscription->id,
-                'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
-                'stripe_status' => $subscription->status ?? 'active',
-                'current_period_ends_at' => $currentPeriodEnd,
-                'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
-                'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
-                'renewal_type' => 'auto',
-            ]);
-
-            Log::debug('Checkout success: site and subscription created', ['site_id' => $site->id, 'site_subscription_id' => $siteSubscription->id]);
-
-            $this->createInvoiceFromSubscription($user, $siteSubscription, $subscription);
-
-            $user->notify(new OrderCompletedNotification($site));
-
-            return redirect()
-                ->route('sites.show', ['site' => $site->uuid])
-                ->with('success', 'Ihre Webseite wurde erfolgreich eingerichtet.');
-        } catch (\Throwable $e) {
-            Log::error('Checkout success: exception during site creation', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return redirect()->route('sites.index')->with('error', 'Fehler beim Anlegen der Webseite: '.$e->getMessage().'. Bitte prüfen Sie storage/logs/laravel.log.');
-        }
+        return redirect()->route('sites.index')->with('error', 'Keine Zahlungsinformationen gefunden.');
     }
 
     /**
-     * Create local Invoice from Stripe subscription (for dev without webhooks; in prod invoice.paid webhook does this).
+     * Create local Invoice from subscription (legacy; Mollie flow uses one-off payments, invoices created separately if needed).
      */
-    protected function createInvoiceFromSubscription(\App\Models\User $user, SiteSubscription $siteSubscription, \Stripe\Subscription $subscription): void
+    protected function createInvoiceFromSubscription(\App\Models\User $user, SiteSubscription $siteSubscription, mixed $subscription): void
     {
-        $latestInvoiceId = $subscription->latest_invoice ?? null;
-        if (is_object($latestInvoiceId) && isset($latestInvoiceId->id)) {
-            $latestInvoiceId = $latestInvoiceId->id;
-        }
-        if (! is_string($latestInvoiceId)) {
-            Log::debug('Checkout success: no latest_invoice on subscription', ['subscription_id' => $subscription->id]);
-
-            return;
-        }
-
-        if (Invoice::where('stripe_invoice_id', $latestInvoiceId)->exists()) {
-            return;
-        }
-
-        try {
-            $stripe = new StripeClient(config('cashier.secret'));
-            $stripeInvoice = $stripe->invoices->retrieve($latestInvoiceId);
-        } catch (\Throwable $e) {
-            Log::warning('Checkout success: could not retrieve Stripe invoice', ['invoice_id' => $latestInvoiceId, 'message' => $e->getMessage()]);
-
-            return;
-        }
-
-        $amountPaid = (float) (($stripeInvoice->amount_paid ?? 0) / 100);
-        $periodStart = isset($stripeInvoice->period_start) ? Carbon::createFromTimestamp($stripeInvoice->period_start) : null;
-        $periodEnd = isset($stripeInvoice->period_end) ? Carbon::createFromTimestamp($stripeInvoice->period_end) : null;
-
-        $year = date('Y');
-        $nextSeq = (int) Invoice::whereYear('invoice_date', $year)->max('id') + 1;
-        $number = 'INV-'.$year.'-'.str_pad((string) $nextSeq, 5, '0', STR_PAD_LEFT);
-
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'site_subscription_id' => $siteSubscription->id,
-            'stripe_invoice_id' => $latestInvoiceId,
-            'number' => $number,
-            'type' => 'subscription',
-            'amount' => $amountPaid,
-            'tax' => 0,
-            'status' => 'paid',
-            'billing_period_start' => $periodStart,
-            'billing_period_end' => $periodEnd,
-            'invoice_date' => now(),
-            'metadata' => ['stripe_invoice' => $latestInvoiceId],
-        ]);
-
-        try {
-            $pdfPath = app(InvoicePdfService::class)->generate($invoice);
-            if ($pdfPath) {
-                $invoice->update(['pdf_path' => $pdfPath]);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-        }
-
-        try {
-            $xmlPath = app(InvoiceEInvoiceService::class)->generate($invoice);
-            if ($xmlPath) {
-                $invoice->update(['invoice_xml_path' => $xmlPath]);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-        }
-
-        $invoice->user->notify(new InvoiceCreatedNotification($invoice));
-        Log::debug('Checkout success: invoice created', ['invoice_id' => $invoice->id]);
+        // No-op: Mollie one-off payments do not use this; invoice creation handled elsewhere if required.
     }
 
     /**
-     * Build Stripe Checkout for webspace and return redirect/location response.
+     * Build Mollie Checkout for webspace and return redirect/location response.
      * Public so WebspaceController can call it directly after storing session (avoids Inertia losing the redirect).
      */
     public function buildWebspaceCheckoutRedirect(Request $request, array $payload): RedirectResponse|Response
     {
+        if (! $this->isMollieConfigured()) {
+            $request->session()->forget('checkout_webspace');
+
+            return redirect()->route('webspace.index')->with('error', 'Mollie ist nicht konfiguriert. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen).');
+        }
+
         $user = $request->user();
         $plan = HostingPlan::find($payload['hosting_plan_id'] ?? 0);
         if (! $plan || ! $plan->is_active) {
@@ -431,62 +241,76 @@ class CheckoutController extends Controller
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
         }
 
-        $priceId = $plan->stripe_price_id;
-        if (! $priceId) {
-            try {
-                $priceId = app(SyncHostingPlanStripePriceService::class)->ensurePriceId($plan);
-            } catch (RuntimeException $e) {
-                $request->session()->forget('checkout_webspace');
-
-                return redirect()->route('webspace.checkout', ['plan' => $plan->id])
-                    ->with('error', $e->getMessage());
-            }
-        }
-        if (! $priceId) {
+        $amount = $plan->price !== null ? (float) $plan->price : null;
+        if ($amount === null || $amount <= 0) {
             $request->session()->forget('checkout_webspace');
 
             return redirect()->route('webspace.checkout', ['plan' => $plan->id])
-                ->with('error', 'Kein Stripe-Preis für dieses Paket. Bitte in .env STRIPE_WEBSPACE_PRODUCT_ID (prod_…) setzen und im Admin unter Webspace-Pakete einen monatlichen Preis angeben – der Stripe-Preis wird dann automatisch erzeugt.');
+                ->with('error', 'Kein Preis für dieses Paket. Bitte im Admin unter Webspace-Pakete einen monatlichen Preis angeben.');
         }
 
         $domain = $payload['domain'] ?? '';
+        $currency = strtoupper(config('cashier.currency', 'eur'));
 
         try {
-            $checkout = Checkout::customer($user)
-                ->allowPromotionCodes()
-                ->create($priceId, [
-                    'mode' => StripeSession::MODE_SUBSCRIPTION,
-                    'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                    'cancel_url' => route('webspace.checkout', ['plan' => $plan->id]),
-                    'subscription_data' => [
-                        'metadata' => [
-                            'type' => 'webspace',
-                            'hosting_plan_id' => (string) $plan->id,
-                            'domain' => $domain,
-                            'user_id' => (string) $user->id,
-                        ],
-                    ],
-                ]);
-
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Webspace: '.$domain,
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => [
+                    'type' => 'webspace',
+                    'hosting_plan_id' => (string) $plan->id,
+                    'domain' => $domain,
+                    'user_id' => (string) $user->id,
+                ],
+            ];
+            if ($user->mollie_customer_id) {
+                $params['customerId'] = $user->mollie_customer_id;
+            }
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
             $request->session()->forget('checkout_webspace');
 
-            $stripeUrl = $checkout->redirect()->getTargetUrl();
-            $request->session()->put('stripe_checkout_redirect_url', $stripeUrl);
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('webspace.checkout', ['plan' => $plan->id])
+                    ->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
+            }
+            $request->session()->put('mollie_checkout_redirect_url', $checkoutUrl);
 
-            return redirect()->route('checkout.redirect-to-stripe');
-        } catch (InvalidRequestException $e) {
+            return redirect()->route('checkout.redirect-to-mollie');
+        } catch (\Throwable $e) {
             $request->session()->forget('checkout_webspace');
+            Log::error('Checkout Webspace: Mollie-Fehler', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            report($e);
 
             return redirect()->route('webspace.checkout', ['plan' => $plan->id])
-                ->with('error', $e->getMessage());
+                ->with('error', $this->getCheckoutErrorMessage($e));
         }
     }
 
     /**
-     * Build Stripe Checkout for game server and return redirect.
+     * Build Mollie Checkout for game server and return redirect.
      */
     public function buildGamingCheckoutRedirect(Request $request, array $payload): RedirectResponse|Response
     {
+        if (! $this->isMollieConfigured()) {
+            $request->session()->forget('checkout_gaming');
+
+            return redirect()->route('gaming.index')->with('error', 'Mollie ist nicht konfiguriert. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen).');
+        }
+
         $user = $request->user();
         $plan = HostingPlan::find($payload['hosting_plan_id'] ?? 0);
         if (! $plan || ! $plan->is_active || $plan->panel_type !== 'pterodactyl') {
@@ -495,27 +319,18 @@ class CheckoutController extends Controller
             return redirect()->route('gaming.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
         }
 
-        $priceId = $plan->stripe_price_id;
-        if (! $priceId) {
-            try {
-                $priceId = app(SyncHostingPlanStripePriceService::class)->ensurePriceId($plan);
-            } catch (RuntimeException $e) {
-                $request->session()->forget('checkout_gaming');
-
-                return redirect()->route('gaming.checkout', ['plan' => $plan->id])
-                    ->with('error', $e->getMessage());
-            }
-        }
-        if (! $priceId) {
+        $amount = $plan->price !== null ? (float) $plan->price : 0;
+        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
+        $amount += $optionSurcharge;
+        if ($amount <= 0) {
             $request->session()->forget('checkout_gaming');
 
             return redirect()->route('gaming.checkout', ['plan' => $plan->id])
-                ->with('error', 'Kein Stripe-Preis für dieses Paket. Bitte im Admin unter Hosting-Pläne einen Preis angeben.');
+                ->with('error', 'Kein Preis für dieses Paket. Bitte im Admin unter Hosting-Pläne einen Preis angeben.');
         }
 
         $serverName = $payload['server_name'] ?? $plan->name.' #'.($user->gameServerAccounts()->count() + 1);
         $optionChoices = $payload['option_choices'] ?? [];
-        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
         $metadata = [
             'type' => 'game_server',
             'hosting_plan_id' => (string) $plan->id,
@@ -526,78 +341,55 @@ class CheckoutController extends Controller
             $metadata['option_choices'] = json_encode($optionChoices);
         }
 
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+
         try {
-            if ($optionSurcharge > 0) {
-                $stripe = new StripeClient(config('cashier.secret'));
-                $currency = config('cashier.currency', 'eur');
-                $surchargeCents = (int) round($optionSurcharge * 100);
-                $lineItems = [
-                    [
-                        'price' => $priceId,
-                        'quantity' => 1,
-                    ],
-                    [
-                        'price_data' => [
-                            'currency' => $currency,
-                            'product_data' => [
-                                'name' => 'Game-Server Optionen ('.$plan->name.')',
-                            ],
-                            'unit_amount' => $surchargeCents,
-                            'recurring' => ['interval' => 'month'],
-                        ],
-                        'quantity' => 1,
-                    ],
-                ];
-                $params = [
-                    'mode' => 'subscription',
-                    'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                    'cancel_url' => route('gaming.checkout', ['plan' => $plan->id]),
-                    'line_items' => $lineItems,
-                    'subscription_data' => [
-                        'metadata' => $metadata,
-                    ],
-                    'allow_promotion_codes' => true,
-                ];
-                if ($user->stripe_id) {
-                    $params['customer'] = $user->stripe_id;
-                } else {
-                    $params['customer_email'] = $user->email;
-                }
-                $session = $stripe->checkout->sessions->create($params);
-                $stripeUrl = $session->url;
-                if (! $stripeUrl || ! str_starts_with($stripeUrl, 'https://')) {
-                    throw new InvalidRequestException('Stripe Checkout Session URL could not be created.');
-                }
-            } else {
-                $checkout = Checkout::customer($user)
-                    ->allowPromotionCodes()
-                    ->create($priceId, [
-                        'mode' => StripeSession::MODE_SUBSCRIPTION,
-                        'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                        'cancel_url' => route('gaming.checkout', ['plan' => $plan->id]),
-                        'subscription_data' => [
-                            'metadata' => $metadata,
-                        ],
-                    ]);
-                $stripeUrl = $checkout->redirect()->getTargetUrl();
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Game-Server: '.$serverName,
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => $metadata,
+            ];
+            if ($user->mollie_customer_id) {
+                $params['customerId'] = $user->mollie_customer_id;
             }
-
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
             $request->session()->forget('checkout_gaming');
-            $request->session()->put('stripe_checkout_redirect_url', $stripeUrl);
 
-            return redirect()->route('checkout.redirect-to-stripe');
-        } catch (InvalidRequestException $e) {
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('gaming.checkout', ['plan' => $plan->id])
+                    ->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
+            }
+            $request->session()->put('mollie_checkout_redirect_url', $checkoutUrl);
+
+            return redirect()->route('checkout.redirect-to-mollie');
+        } catch (\Throwable $e) {
             $request->session()->forget('checkout_gaming');
+            Log::error('Checkout Gaming: Mollie-Fehler', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            report($e);
 
             return redirect()->route('gaming.checkout', ['plan' => $plan->id])
-                ->with('error', $e->getMessage());
+                ->with('error', $this->getCheckoutErrorMessage($e));
         }
     }
 
     /**
-     * Handle successful Stripe one-time payment for game server renewal.
+     * Handle successful Mollie one-time payment for game server renewal.
      */
-    protected function handleGamingRenewalSuccess(Request $request, \App\Models\User $user, \Stripe\Checkout\Session $session, array $metadata): RedirectResponse
+    protected function handleGamingRenewalSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
     {
         $accountId = (int) ($metadata['game_server_account_id'] ?? 0);
         $userId = (int) ($metadata['user_id'] ?? 0);
@@ -627,6 +419,87 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Handle successful Stripe one-time payment for game server renewal (legacy).
+     */
+    protected function handleGamingRenewalSuccess(Request $request, \App\Models\User $user, $session, array $metadata): RedirectResponse
+    {
+        return $this->handleGamingRenewalSuccessFromMollie($request, $user, $metadata);
+    }
+
+    /**
+     * Handle successful Mollie payment for "Meine Seiten": create Site, Domain, SiteSubscription.
+     */
+    protected function handleMeineSeitenSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
+    {
+        $templateId = (int) ($metadata['template_id'] ?? 0);
+        $siteName = $metadata['site_name'] ?? 'Meine Webseite';
+        $userId = (int) ($metadata['user_id'] ?? 0);
+        $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
+
+        if ($userId !== $user->id || $templateId < 1) {
+            Log::debug('Checkout success meine_seiten: invalid metadata');
+
+            return redirect()->route('sites.index')->with('error', 'Ungültige Abo-Daten.');
+        }
+
+        $existing = SiteSubscription::where('mollie_subscription_id', $molliePaymentId)->first();
+        if ($existing) {
+            return redirect()->route('sites.show', ['site' => $existing->site->uuid]);
+        }
+
+        $template = Template::find($templateId);
+        if (! $template) {
+            return redirect()->route('sites.index')->with('error', 'Template nicht gefunden.');
+        }
+
+        try {
+            $slug = Str::slug($siteName).'-'.Str::random(6);
+            $baseDomain = \App\Models\Setting::getBaseDomain();
+            $subdomain = $slug.'.'.$baseDomain;
+
+            $site = $user->sites()->create([
+                'template_id' => $template->id,
+                'name' => $siteName,
+                'slug' => $slug,
+                'domain_type' => 'subdomain',
+                'status' => 'active',
+                'is_legacy' => false,
+            ]);
+
+            $site->domains()->create([
+                'domain' => $subdomain,
+                'type' => 'subdomain',
+                'is_primary' => true,
+                'is_verified' => true,
+            ]);
+
+            $periodEnd = now()->addMonth();
+            $site->siteSubscription()->create([
+                'mollie_subscription_id' => $molliePaymentId,
+                'mollie_status' => 'active',
+                'current_period_ends_at' => $periodEnd,
+                'cancel_at_period_end' => false,
+                'ends_at' => null,
+                'renewal_type' => 'auto',
+            ]);
+
+            Log::debug('Checkout success: site and subscription created (Mollie)', ['site_id' => $site->id]);
+            $user->notify(new OrderCompletedNotification($site));
+
+            return redirect()
+                ->route('sites.show', ['site' => $site->uuid])
+                ->with('success', 'Ihre Webseite wurde erfolgreich eingerichtet.');
+        } catch (\Throwable $e) {
+            Log::error('Checkout success: exception during site creation (Mollie)', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->route('sites.index')->with('error', 'Fehler beim Anlegen der Webseite: '.$e->getMessage());
+        }
+    }
+
+    /**
      * Handle successful Stripe one-time payment for an existing invoice.
      */
     protected function handleInvoicePaymentSuccess(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
@@ -647,7 +520,7 @@ class CheckoutController extends Controller
 
         $invoice->update([
             'status' => 'paid',
-            'metadata' => array_merge($invoice->metadata ?? [], ['payment_method' => 'stripe']),
+            'metadata' => array_merge($invoice->metadata ?? [], ['payment_method' => 'mollie']),
         ]);
 
         $invoice->refresh();
@@ -674,13 +547,15 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Create GameServerAccount and Pterodactyl server after successful Stripe checkout.
+     * Create GameServerAccount and Pterodactyl server after successful Mollie payment.
      */
-    protected function handleGamingCheckoutSuccess(Request $request, \App\Models\User $user, \Stripe\Subscription $subscription, array $metadata): RedirectResponse
+    protected function handleGamingCheckoutSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
     {
         $planId = (int) ($metadata['hosting_plan_id'] ?? 0);
         $userId = (int) ($metadata['user_id'] ?? 0);
         $serverName = $metadata['server_name'] ?? $user->name.' Game Server';
+        $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
+        $periodEnd = now()->addMonth();
 
         if ($userId !== $user->id || $planId < 1) {
             Log::debug('Checkout success gaming: invalid metadata');
@@ -688,7 +563,7 @@ class CheckoutController extends Controller
             return redirect()->route('gaming-accounts.index')->with('error', 'Ungültige Abo-Daten.');
         }
 
-        $existing = GameServerAccount::where('stripe_subscription_id', $subscription->id)->first();
+        $existing = GameServerAccount::where('mollie_subscription_id', $molliePaymentId)->first();
         if ($existing) {
             return redirect()->route('gaming-accounts.show', $existing->id)->with('success', 'Ihr Game-Server ist aktiv.');
         }
@@ -719,11 +594,10 @@ class CheckoutController extends Controller
                 'hosting_server_id' => null,
                 'name' => $serverName,
                 'status' => 'pending',
-                'stripe_subscription_id' => $subscription->id,
-                'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
-                'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
-                'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
-                'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+                'mollie_subscription_id' => $molliePaymentId,
+                'current_period_ends_at' => $periodEnd,
+                'cancel_at_period_end' => false,
+                'ends_at' => null,
                 'renewal_type' => 'auto',
             ]);
 
@@ -781,11 +655,10 @@ class CheckoutController extends Controller
             'product_id' => $plan->product?->id,
             'name' => $serverName,
             'status' => 'pending',
-            'stripe_subscription_id' => $subscription->id,
-            'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
-            'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
-            'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
-            'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+            'mollie_subscription_id' => $molliePaymentId,
+            'current_period_ends_at' => $periodEnd,
+            'cancel_at_period_end' => false,
+            'ends_at' => null,
             'renewal_type' => 'auto',
             'option_values' => ! empty($optionChoices) ? $optionChoices : null,
         ]);
@@ -805,7 +678,7 @@ class CheckoutController extends Controller
                 ])),
                 'status' => 'active',
             ]);
-            Log::debug('Checkout success gaming: Pterodactyl server created', ['account_id' => $account->id]);
+            Log::debug('Checkout success gaming: Pterodactyl server created (Mollie)', ['account_id' => $account->id]);
 
             return redirect()->route('gaming-accounts.show', $account->id)
                 ->with('success', 'Ihr Game-Server wurde erfolgreich eingerichtet. Sie können sich im Panel anmelden.');
@@ -907,8 +780,7 @@ class CheckoutController extends Controller
                 'product_id' => $plan->product?->id,
                 'name' => $serverName,
                 'status' => 'pending',
-                'stripe_subscription_id' => null,
-                'stripe_price_id' => null,
+                'mollie_subscription_id' => null,
                 'current_period_ends_at' => $periodEndsAt,
                 'cancel_at_period_end' => false,
                 'ends_at' => null,
@@ -962,8 +834,7 @@ class CheckoutController extends Controller
             'product_id' => $plan->product?->id,
             'name' => $serverName,
             'status' => 'pending',
-            'stripe_subscription_id' => null,
-            'stripe_price_id' => null,
+            'mollie_subscription_id' => null,
             'current_period_ends_at' => $periodEndsAt,
             'cancel_at_period_end' => false,
             'ends_at' => null,
@@ -1032,8 +903,7 @@ class CheckoutController extends Controller
                 'domain' => $domain,
                 'plesk_username' => 'webspace_'.Str::random(8),
                 'status' => 'pending',
-                'stripe_subscription_id' => null,
-                'stripe_price_id' => null,
+                'mollie_subscription_id' => null,
                 'current_period_ends_at' => $periodEndsAt,
                 'cancel_at_period_end' => false,
                 'ends_at' => null,
@@ -1057,8 +927,7 @@ class CheckoutController extends Controller
             'plesk_username' => $pleskUsername,
             'plesk_password_encrypted' => Crypt::encryptString($password),
             'status' => 'pending',
-            'stripe_subscription_id' => null,
-            'stripe_price_id' => null,
+            'mollie_subscription_id' => null,
             'current_period_ends_at' => $periodEndsAt,
             'cancel_at_period_end' => false,
             'ends_at' => null,
@@ -1094,13 +963,14 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Create WebspaceAccount and Plesk account after successful Stripe checkout.
+     * Create WebspaceAccount and Plesk account after successful Mollie payment.
      */
-    protected function handleWebspaceCheckoutSuccess(Request $request, \App\Models\User $user, \Stripe\Subscription $subscription, array $metadata): RedirectResponse
+    protected function handleWebspaceCheckoutSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
     {
         $planId = (int) ($metadata['hosting_plan_id'] ?? 0);
         $domain = $metadata['domain'] ?? '';
         $userId = (int) ($metadata['user_id'] ?? 0);
+        $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
 
         if ($userId !== $user->id || $planId < 1 || $domain === '') {
             Log::debug('Checkout success webspace: invalid metadata');
@@ -1108,7 +978,7 @@ class CheckoutController extends Controller
             return redirect()->route('webspace-accounts.index')->with('error', 'Ungültige Abo-Daten.');
         }
 
-        $existing = WebspaceAccount::where('stripe_subscription_id', $subscription->id)->first();
+        $existing = WebspaceAccount::where('mollie_subscription_id', $molliePaymentId)->first();
         if ($existing) {
             return redirect()->route('webspace-accounts.show', $existing->id)->with('success', 'Ihr Webspace ist aktiv.');
         }
@@ -1118,6 +988,7 @@ class CheckoutController extends Controller
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
         }
 
+        $periodEnd = now()->addMonth();
         $server = HostingServer::where('is_active', true)->first();
         if (! $server) {
             Log::error('Checkout success webspace: no active HostingServer');
@@ -1126,11 +997,10 @@ class CheckoutController extends Controller
                 'domain' => $domain,
                 'plesk_username' => 'webspace_'.Str::random(8),
                 'status' => 'pending',
-                'stripe_subscription_id' => $subscription->id,
-                'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
-                'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
-                'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
-                'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+                'mollie_subscription_id' => $molliePaymentId,
+                'current_period_ends_at' => $periodEnd,
+                'cancel_at_period_end' => false,
+                'ends_at' => null,
                 'renewal_type' => 'auto',
             ]);
             $plan->product?->id && $account->update(['product_id' => $plan->product->id]);
@@ -1149,11 +1019,10 @@ class CheckoutController extends Controller
             'plesk_username' => $pleskUsername,
             'plesk_password_encrypted' => Crypt::encryptString($password),
             'status' => 'pending',
-            'stripe_subscription_id' => $subscription->id,
-            'stripe_price_id' => $subscription->items->data[0]->price->id ?? null,
-            'current_period_ends_at' => isset($subscription->current_period_end) ? Carbon::createFromTimestamp($subscription->current_period_end) : null,
-            'cancel_at_period_end' => (bool) $subscription->cancel_at_period_end,
-            'ends_at' => $subscription->ended_at ? Carbon::createFromTimestamp($subscription->ended_at) : null,
+            'mollie_subscription_id' => $molliePaymentId,
+            'current_period_ends_at' => $periodEnd,
+            'cancel_at_period_end' => false,
+            'ends_at' => null,
             'renewal_type' => 'auto',
         ]);
         if ($plan->product?->id) {
@@ -1213,30 +1082,35 @@ class CheckoutController extends Controller
         return max(1, min(24, (int) ($features['balance_period_months'] ?? config('billing.balance_period_months', 1))));
     }
 
-    protected function getPriceIdForTemplate(Template $template): ?string
+    /**
+     * Prüft, ob Mollie mit gültigem API-Key konfiguriert ist (mind. 30 Zeichen, test_ oder live_).
+     */
+    protected function isMollieConfigured(): bool
     {
-        $syncService = app(SyncTemplateStripePriceService::class);
-
-        if ($template->stripe_price_id) {
-            try {
-                $stripe = new StripeClient(config('cashier.secret'));
-                $stripe->prices->retrieve($template->stripe_price_id);
-
-                return $template->stripe_price_id;
-            } catch (InvalidRequestException $e) {
-                if (str_contains($e->getMessage(), 'No such price')) {
-                    $template->update(['stripe_price_id' => null]);
-                } else {
-                    throw $e;
-                }
-            }
+        $key = config('mollie.key');
+        if (! is_string($key) || $key === '') {
+            return false;
         }
 
-        $priceId = $syncService->ensurePriceId($template);
-        if ($priceId) {
-            return $priceId;
+        return strlen($key) >= 30 && (str_starts_with($key, 'test_') || str_starts_with($key, 'live_'));
+    }
+
+    /**
+     * Benutzerlesbare Fehlermeldung für Mollie-Checkout-Fehler (inkl. Hinweise auf API-Key, Log).
+     */
+    protected function getCheckoutErrorMessage(\Throwable $e): string
+    {
+        $msg = $e->getMessage();
+        if (str_contains($msg, 'API key') || str_contains($msg, 'Invalid API key')) {
+            return 'Mollie API-Key fehlt oder ist ungültig. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen). Danach „php artisan config:clear“ ausführen.';
+        }
+        if (str_contains($msg, 'webhook') && str_contains($msg, 'unreachable')) {
+            return 'Mollie konnte die Webhook-URL nicht erreichen. Lokal: APP_URL nutzt .test/localhost – die Anwendung lässt den Webhook lokal nun weg. Bitte Seite neu laden und erneut versuchen.';
+        }
+        if (config('app.debug')) {
+            return 'Checkout konnte nicht gestartet werden: '.$msg;
         }
 
-        return config('billing.default_meine_seiten_price_id');
+        return 'Checkout konnte nicht gestartet werden. Details stehen in storage/logs/laravel.log.';
     }
 }

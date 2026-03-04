@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\MollieWebhookController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CronStatisticsController;
@@ -57,6 +58,11 @@ use App\Http\Middleware\DisableCacheForSiteRender;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Laravel\Cashier\Cashier;
+
+// Mollie webhook – muss vor der Cashier-Route stehen, damit Guthaben/Rechnungen verarbeitet werden
+Route::post('webhooks/mollie', [MollieWebhookController::class, 'handleWebhook'])
+    ->name('webhooks.mollie.default');
 
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
     ->name('auth.social.redirect');
@@ -130,7 +136,7 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
 
     Route::post('checkout', [CheckoutController::class, 'store'])->middleware('billing.profile')->name('checkout.store');
     Route::get('checkout/redirect', [CheckoutController::class, 'redirect'])->middleware('billing.profile')->name('checkout.redirect');
-    Route::get('checkout/redirect-to-stripe', [CheckoutController::class, 'redirectToStripe'])->middleware('billing.profile')->name('checkout.redirect-to-stripe');
+    Route::get('checkout/redirect-to-mollie', [CheckoutController::class, 'redirectToStripe'])->middleware('billing.profile')->name('checkout.redirect-to-mollie');
     Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
 
     Route::get('webspace', [WebspaceController::class, 'index'])->name('webspace.index');

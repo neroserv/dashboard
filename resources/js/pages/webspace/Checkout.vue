@@ -11,6 +11,7 @@ import { Heading, Text } from '@/components/ui/typography';
 import { dashboard } from '@/routes';
 import { notify } from '@/composables/useNotify';
 import type { BreadcrumbItem } from '@/types';
+import PaymentMethodLogo from '@/components/PaymentMethodLogo.vue';
 
 type HostingPlan = {
     id: number;
@@ -41,6 +42,15 @@ const canSubmitWithBalance = computed(() =>
 );
 
 const page = usePage();
+const molliePaymentMethods = computed(
+    () =>
+        (page.props.molliePaymentMethods as { type: string; label: string }[]) ?? [
+            { type: 'card', label: 'Karte' },
+            { type: 'paypal', label: 'PayPal' },
+            { type: 'sepa_debit', label: 'SEPA-Lastschrift' },
+        ],
+);
+
 watch(
     () => (page.props.flash as { error?: string; success?: string })?.error,
     (message) => {
@@ -122,10 +132,22 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </div>
                         <div v-if="props.canPayWithBalance && props.selectedPlan" class="space-y-2 rounded-md border p-4">
                             <Label class="text-base">Zahlungsart</Label>
-                            <div class="flex flex-col gap-2">
-                                <label class="flex items-center gap-2">
-                                    <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" />
-                                    <span>Mit Karte (Stripe) zahlen</span>
+                            <div class="flex flex-col gap-3">
+                                <label class="flex cursor-pointer flex-col gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" />
+                                        <span class="text-sm font-medium">Karte, PayPal, SEPA, …</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2 pl-6">
+                                        <div
+                                            v-for="method in molliePaymentMethods"
+                                            :key="method.type"
+                                            class="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                                        >
+                                            <PaymentMethodLogo :type="method.type" :size="20" />
+                                            <span class="text-sm">{{ method.label }}</span>
+                                        </div>
+                                    </div>
                                 </label>
                                 <label class="flex items-center gap-2">
                                     <input

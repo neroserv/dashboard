@@ -8,22 +8,25 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * Mollie Cashier schema: name, plan, owner_type, owner_id, etc.
      */
     public function up(): void
     {
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id');
-            $table->string('type');
-            $table->string('stripe_id')->unique();
-            $table->string('stripe_status');
-            $table->string('stripe_price')->nullable();
-            $table->integer('quantity')->nullable();
-            $table->timestamp('trial_ends_at')->nullable();
-            $table->timestamp('ends_at')->nullable();
+            $table->string('name');
+            $table->string('plan');
+            $table->string('owner_type');
+            $table->unsignedBigInteger('owner_id');
+            $table->string('next_plan')->nullable();
+            $table->unsignedInteger('quantity')->default(1);
+            $table->decimal('tax_percentage', 6, 4)->default(0);
+            $table->datetime('ends_at')->nullable();
+            $table->datetime('trial_ends_at')->nullable();
+            $table->datetime('cycle_started_at');
+            $table->datetime('cycle_ends_at')->nullable();
+            $table->unsignedBigInteger('scheduled_order_item_id')->nullable();
             $table->timestamps();
-
-            $table->index(['user_id', 'stripe_status']);
         });
     }
 

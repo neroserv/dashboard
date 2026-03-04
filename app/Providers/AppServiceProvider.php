@@ -2,15 +2,8 @@
 
 namespace App\Providers;
 
-use App\Listeners\AddAiTokensFromStripeWebhook;
-use App\Listeners\AddBalanceFromStripeWebhook;
-use App\Listeners\CreateLocalInvoiceFromStripeWebhook;
-use App\Listeners\LogStripeWebhookReceived;
 use App\Listeners\LogUserEmailToPostfach;
 use App\Listeners\SendLoginNotification;
-use App\Listeners\SendPaymentFailedNotification;
-use App\Listeners\SyncSiteSubscriptionFromStripeWebhook;
-use App\Listeners\SyncWebspaceSubscriptionFromStripeWebhook;
 use App\Models\Setting;
 use App\Models\Site;
 use App\Modules\Handlers\ContactModuleHandler;
@@ -28,9 +21,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
-use Laravel\Cashier\Events\WebhookReceived;
 use SocialiteProviders\Manager\SocialiteWasCalled;
-use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,10 +30,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(StripeClient::class, function () {
-            return new StripeClient(config('cashier.secret'));
-        });
-
         $this->app->singleton(
             \Laravel\Fortify\Contracts\LoginResponse::class,
             \App\Http\Responses\LoginResponse::class
@@ -79,14 +66,6 @@ class AppServiceProvider extends ServiceProvider
 
         ModuleRegistry::register('contact', ContactModuleHandler::class);
         ModuleRegistry::register('newsletter', NewsletterModuleHandler::class);
-
-        Event::listen(WebhookReceived::class, LogStripeWebhookReceived::class);
-        Event::listen(WebhookReceived::class, AddAiTokensFromStripeWebhook::class);
-        Event::listen(WebhookReceived::class, AddBalanceFromStripeWebhook::class);
-        Event::listen(WebhookReceived::class, SyncSiteSubscriptionFromStripeWebhook::class);
-        Event::listen(WebhookReceived::class, SyncWebspaceSubscriptionFromStripeWebhook::class);
-        Event::listen(WebhookReceived::class, CreateLocalInvoiceFromStripeWebhook::class);
-        Event::listen(WebhookReceived::class, SendPaymentFailedNotification::class);
 
         Event::listen(Login::class, SendLoginNotification::class);
 

@@ -15,12 +15,15 @@ use Inertia\Response;
 class WebspaceController extends Controller
 {
     /**
-     * List active webspace plans for customers.
+     * List active webspace (Plesk) plans for customers. Excludes gaming (pterodactyl) plans.
      */
     public function index(): Response
     {
         $plans = HostingPlan::query()
             ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
+            })
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -31,18 +34,25 @@ class WebspaceController extends Controller
     }
 
     /**
-     * Checkout form: domain + plan (plan pre-selected via query).
+     * Checkout form: domain + plan (plan pre-selected via query). Only webspace (Plesk) plans.
      */
     public function checkout(Request $request): Response|RedirectResponse
     {
         $planId = $request->query('plan');
-        $plan = $planId ? HostingPlan::find($planId) : null;
+        $plan = $planId ? HostingPlan::query()
+            ->where(function ($q) {
+                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
+            })
+            ->find($planId) : null;
         if ($planId && ! $plan) {
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
         }
 
         $plans = HostingPlan::query()
             ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
+            })
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();

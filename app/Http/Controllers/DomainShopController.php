@@ -218,8 +218,8 @@ class DomainShopController extends Controller
                     ],
                 ],
             ];
-            if ($user->stripe_id) {
-                $params['customer'] = $user->stripe_id;
+            if ($user->mollie_customer_id) {
+                $params['customer'] = $user->mollie_customer_id;
             } else {
                 $params['customer_email'] = $user->email;
             }

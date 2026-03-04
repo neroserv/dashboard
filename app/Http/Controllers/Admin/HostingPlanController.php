@@ -9,7 +9,6 @@ use App\Models\Brand;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Services\ControlPanels\PterodactylClient;
-use App\Services\SyncHostingPlanStripePriceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -220,12 +219,6 @@ class HostingPlanController extends Controller
             'sort_order' => $plan->sort_order,
         ]);
 
-        try {
-            app(SyncHostingPlanStripePriceService::class)->sync($plan);
-        } catch (\Throwable) {
-            // Stripe nicht konfiguriert oder Fehler – Plan ist trotzdem gespeichert
-        }
-
         return to_route('admin.hosting-plans.index');
     }
 
@@ -299,12 +292,6 @@ class HostingPlanController extends Controller
             'is_active' => $hostingPlan->is_active,
             'sort_order' => $hostingPlan->sort_order,
         ]);
-
-        try {
-            app(SyncHostingPlanStripePriceService::class)->sync($hostingPlan);
-        } catch (\Throwable) {
-            // Stripe nicht konfiguriert oder Fehler – Plan ist trotzdem gespeichert
-        }
 
         return to_route('admin.hosting-plans.show', $hostingPlan);
     }

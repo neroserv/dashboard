@@ -27,7 +27,7 @@ class UpdateTemplateRequest extends FormRequest
         $pageData = [];
 
         // Collect all data that should go into page_data
-        $allData = $this->except(['name', 'slug', 'price', 'stripe_price_id', 'is_active', 'preview_image', '_token', '_method']);
+        $allData = $this->except(['name', 'slug', 'price', 'is_active', 'preview_image', '_token', '_method']);
 
         foreach ($allData as $key => $value) {
             // Skip page_data if it's already an array (handled above)
@@ -84,7 +84,6 @@ class UpdateTemplateRequest extends FormRequest
             'preview_image' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
             'price' => ['numeric', 'min:0'],
-            'stripe_price_id' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

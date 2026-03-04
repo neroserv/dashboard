@@ -35,8 +35,8 @@ class DashboardController extends Controller
 
         $expiringSubscriptions = SiteSubscription::query()
             ->with('site:uuid,name')
-            ->whereNotNull('stripe_subscription_id')
-            ->where('stripe_status', 'active')
+            ->whereNotNull('mollie_subscription_id')
+            ->where('mollie_status', 'active')
             ->whereBetween('current_period_ends_at', [now(), $endOfNextSevenDays])
             ->orderBy('current_period_ends_at')
             ->limit(20)
@@ -91,8 +91,8 @@ class DashboardController extends Controller
         $unpaidSum = (float) Invoice::where('status', '!=', 'paid')->sum('amount');
         $overdueCount = Invoice::where('status', '!=', 'paid')->whereNotNull('due_date')->where('due_date', '<', today())->count();
         $subscriptionsEndingThisWeek = SiteSubscription::query()
-            ->whereNotNull('stripe_subscription_id')
-            ->where('stripe_status', 'active')
+            ->whereNotNull('mollie_subscription_id')
+            ->where('mollie_status', 'active')
             ->whereBetween('current_period_ends_at', [$startOfWeek, $endOfWeek])
             ->count();
         $cancellationsAtPeriodEnd = SiteSubscription::where('cancel_at_period_end', true)->count();
@@ -129,7 +129,7 @@ class DashboardController extends Controller
             'defaultLayout' => $defaultLayout,
             'widgetRegistry' => $widgetRegistry,
             'stats' => [
-                'activeSubscriptions' => SiteSubscription::whereNotNull('stripe_subscription_id')->count(),
+                'activeSubscriptions' => SiteSubscription::whereNotNull('mollie_subscription_id')->count(),
                 'sitesTotal' => Site::count(),
                 'sitesLegacy' => Site::where('is_legacy', true)->count(),
                 'sitesSuspended' => Site::where('status', 'suspended')->count(),

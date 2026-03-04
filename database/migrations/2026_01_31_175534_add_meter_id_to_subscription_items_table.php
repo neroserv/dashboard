@@ -8,12 +8,17 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * No-op: subscription_items table removed (Mollie Cashier uses orders/order_items).
      */
     public function up(): void
     {
-        Schema::table('subscription_items', function (Blueprint $table) {
-            $table->string('meter_id')->nullable()->after('stripe_price');
-        });
+        if (Schema::hasTable('subscription_items')) {
+            Schema::table('subscription_items', function (Blueprint $table) {
+                if (! Schema::hasColumn('subscription_items', 'meter_id')) {
+                    $table->string('meter_id')->nullable();
+                }
+            });
+        }
     }
 
     /**
@@ -21,8 +26,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('subscription_items', function (Blueprint $table) {
-            $table->dropColumn('meter_id');
-        });
+        if (Schema::hasTable('subscription_items') && Schema::hasColumn('subscription_items', 'meter_id')) {
+            Schema::table('subscription_items', function (Blueprint $table) {
+                $table->dropColumn('meter_id');
+            });
+        }
     }
 };

@@ -4,30 +4,26 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Stripe\Exception\ApiErrorException;
 
 class BillingPortalController extends Controller
 {
     /**
-     * Redirect the user to Stripe Customer Billing Portal (payment method, invoices, subscription).
+     * Mollie has no 1:1 billing portal; redirect to billing index.
+     * Payment method is managed via Mollie checkout when starting a new subscription or first payment.
      */
     public function redirect(Request $request): RedirectResponse
     {
         $user = $request->user();
         $returnUrl = route('billing.index');
 
-        if (! $user->hasStripeId()) {
+        if (! $user->hasMollieCustomerId()) {
             return redirect()
                 ->to($returnUrl)
                 ->with('info', 'Sie haben noch keine Zahlungsmethode hinterlegt. Diese wird beim ersten Abo-Abschluss angelegt.');
         }
 
-        try {
-            return $user->redirectToBillingPortal($returnUrl);
-        } catch (ApiErrorException $e) {
-            return redirect()
-                ->to($returnUrl)
-                ->with('error', 'Stripe Billing Portal ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.');
-        }
+        return redirect()
+            ->to($returnUrl)
+            ->with('info', 'Zahlungsmethode und Abos verwalten Sie hier. Bei der nächsten Zahlung können Sie die Methode bei Mollie anpassen.');
     }
 }

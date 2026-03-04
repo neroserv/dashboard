@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\CustomerBalance;
 use App\Models\Setting;
 use App\Models\Ticket;
+use App\Services\MolliePaymentMethodsService;
 use App\Services\SiteRenderService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -136,6 +137,14 @@ class HandleInertiaRequests extends Middleware
         $discordInviteUrl = config('services.discord.invite_url');
         $isAdminDomain = $request->attributes->get('is_admin_domain', false);
 
+        $molliePaymentMethods = config('mollie.key')
+            ? app(MolliePaymentMethodsService::class)->getEnabledPaymentMethods()
+            : [
+                ['type' => 'ideal', 'label' => 'iDEAL'],
+                ['type' => 'creditcard', 'label' => 'Karte'],
+                ['type' => 'paypal', 'label' => 'PayPal'],
+            ];
+
         return [
             ...parent::share($request),
             'flash' => $flash,
@@ -147,6 +156,7 @@ class HandleInertiaRequests extends Middleware
             'isAdminDomain' => $isAdminDomain,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'discordInviteUrl' => $discordInviteUrl ? (string) $discordInviteUrl : null,
+            'molliePaymentMethods' => $molliePaymentMethods,
         ];
     }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import {
     Dialog,
     DialogContent,
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-vue-next';
+import PaymentMethodLogo from '@/components/PaymentMethodLogo.vue';
 
 export interface PeriodOption {
     months: number;
@@ -40,6 +41,16 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
     (e: 'update:open', value: boolean): void;
 }>();
+
+const page = usePage();
+const molliePaymentMethods = computed(
+    () =>
+        (page.props.molliePaymentMethods as { type: string; label: string }[]) ?? [
+            { type: 'card', label: 'Karte' },
+            { type: 'paypal', label: 'PayPal' },
+            { type: 'sepa_debit', label: 'SEPA-Lastschrift' },
+        ],
+);
 
 const paymentMethod = ref<'stripe' | 'balance'>('stripe');
 const submitting = ref(false);
@@ -135,23 +146,28 @@ watch(
 
                 <div class="space-y-3">
                     <label
-                        class="flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                        class="flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-muted/50"
                         :class="paymentMethod === 'stripe' && 'border-primary bg-primary/5 ring-1 ring-primary'"
                     >
-                        <input
-                            v-model="paymentMethod"
-                            type="radio"
-                            name="payment_method_modal"
-                            value="stripe"
-                            class="h-4 w-4"
-                        />
                         <div class="flex items-center gap-2">
-                            <img
-                                src="https://logo.svgcdn.com/l/stripe.svg"
-                                alt="Stripe"
-                                class="h-5 w-5 object-contain opacity-90"
+                            <input
+                                v-model="paymentMethod"
+                                type="radio"
+                                name="payment_method_modal"
+                                value="stripe"
+                                class="h-4 w-4"
                             />
-                            <span class="text-sm font-medium">Mit Stripe zahlen (Karte, SEPA, Apple Pay, …)</span>
+                            <span class="text-sm font-medium">Karte, PayPal, SEPA, …</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 pl-6">
+                            <div
+                                v-for="method in molliePaymentMethods"
+                                :key="method.type"
+                                class="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                            >
+                                <PaymentMethodLogo :type="method.type" :size="20" />
+                                <span class="text-sm">{{ method.label }}</span>
+                            </div>
                         </div>
                     </label>
 

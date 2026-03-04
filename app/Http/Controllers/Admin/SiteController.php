@@ -13,8 +13,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\Cashier\Cashier;
-use Stripe\Exception\ApiErrorException;
+use Mollie\Api\Exceptions\ApiException as MollieApiException;
+use Mollie\Api\MollieApiClient;
 
 class SiteController extends Controller
 {
@@ -134,23 +134,28 @@ class SiteController extends Controller
         $site->load('siteSubscription');
         $subscription = $site->siteSubscription;
 
-        if (! $subscription || ! $subscription->stripe_subscription_id) {
+        if (! $subscription || ! $subscription->mollie_subscription_id) {
             return redirect()
                 ->route('admin.sites.show', $site)
                 ->with('error', 'Kein Abo mit dieser Site verknüpft.');
         }
 
+        $user = $site->user;
+        if (! $user || ! $user->mollie_customer_id) {
+            return redirect()
+                ->route('admin.sites.show', $site)
+                ->with('error', 'Kein Mollie-Kunde verknüpft.');
+        }
+
         try {
-            Cashier::stripe()->subscriptions->update($subscription->stripe_subscription_id, [
-                'cancel_at_period_end' => true,
-            ]);
-        } catch (ApiErrorException $e) {
+            app(MollieApiClient::class)->subscriptions->cancelForId($user->mollie_customer_id, $subscription->mollie_subscription_id);
+        } catch (MollieApiException $e) {
             return redirect()
                 ->route('admin.sites.show', $site)
                 ->with('error', 'Die Kündigung konnte nicht durchgeführt werden. Bitte versuchen Sie es später erneut.');
         }
 
-        $subscription->update(['cancel_at_period_end' => true]);
+        $subscription->update(['cancel_at_period_end' => true, 'mollie_status' => 'canceled']);
 
         AdminActivityLog::log(
             request()->user()->id,
@@ -171,17 +176,24 @@ class SiteController extends Controller
         $site->load('siteSubscription');
         $subscription = $site->siteSubscription;
 
-        if (! $subscription || ! $subscription->stripe_subscription_id) {
+        if (! $subscription || ! $subscription->mollie_subscription_id) {
             return redirect()
                 ->route('admin.sites.show', $site)
                 ->with('error', 'Kein Abo mit dieser Site verknüpft.');
         }
 
         try {
-            Cashier::stripe()->subscriptions->update($subscription->stripe_subscription_id, [
-                'cancel_at_period_end' => false,
-            ]);
-        } catch (ApiErrorException $e) {
+            $mollie = app(MollieApiClient::class);
+            $user = $site->user;
+            if ($user && $user->mollie_customer_id) {
+                $mollieSub = $mollie->subscriptions->getForId($user->mollie_customer_id, $subscription->mollie_subscription_id);
+                if ($mollieSub->status === 'canceled') {
+                    return redirect()
+                        ->route('admin.sites.show', $site)
+                        ->with('error', 'Das Abo wurde bereits gekündigt und kann nicht reaktiviert werden.');
+                }
+            }
+        } catch (MollieApiException $e) {
             return redirect()
                 ->route('admin.sites.show', $site)
                 ->with('error', 'Die Reaktivierung konnte nicht durchgeführt werden. Bitte versuchen Sie es später erneut.');
@@ -204,41 +216,42 @@ class SiteController extends Controller
     }
 
     /**
-     * Manually sync local SiteSubscription with Stripe (one-time read from Stripe, update local).
+     * Manually sync local SiteSubscription with Mollie (one-time read from Mollie, update local).
      */
     public function syncSubscription(Site $site): RedirectResponse
     {
         $site->load('siteSubscription');
         $subscription = $site->siteSubscription;
 
-        if (! $subscription || ! $subscription->stripe_subscription_id) {
+        if (! $subscription || ! $subscription->mollie_subscription_id) {
             return redirect()
                 ->route('admin.sites.show', $site)
                 ->with('error', 'Kein Abo mit dieser Site verknüpft.');
         }
 
-        try {
-            $stripeSubscription = Cashier::stripe()->subscriptions->retrieve($subscription->stripe_subscription_id);
-        } catch (ApiErrorException $e) {
+        $user = $site->user;
+        if (! $user || ! $user->mollie_customer_id) {
             return redirect()
                 ->route('admin.sites.show', $site)
-                ->with('error', 'Stripe-Abo konnte nicht abgerufen werden. Bitte später erneut versuchen.');
+                ->with('error', 'Kein Mollie-Kunde verknüpft.');
         }
 
-        $firstItem = $stripeSubscription->items->data[0] ?? null;
-        $currentPeriodEnd = isset($stripeSubscription->current_period_end)
-            ? Carbon::createFromTimestamp($stripeSubscription->current_period_end)
-            : null;
-        $endsAt = isset($stripeSubscription->ended_at) && $stripeSubscription->ended_at
-            ? Carbon::createFromTimestamp($stripeSubscription->ended_at)
-            : null;
+        try {
+            $mollieSub = app(MollieApiClient::class)->subscriptions->getForId($user->mollie_customer_id, $subscription->mollie_subscription_id);
+        } catch (MollieApiException $e) {
+            return redirect()
+                ->route('admin.sites.show', $site)
+                ->with('error', 'Mollie-Abo konnte nicht abgerufen werden. Bitte später erneut versuchen.');
+        }
 
-        $old = $subscription->only(['stripe_status', 'current_period_ends_at', 'cancel_at_period_end']);
+        $currentPeriodEnd = $mollieSub->nextPaymentDate ? Carbon::parse($mollieSub->nextPaymentDate) : null;
+        $endsAt = $mollieSub->canceledAt ? Carbon::parse($mollieSub->canceledAt) : null;
+
+        $old = $subscription->only(['mollie_status', 'current_period_ends_at', 'cancel_at_period_end']);
         $subscription->update([
-            'stripe_status' => $stripeSubscription->status ?? $subscription->stripe_status,
-            'stripe_price_id' => $firstItem->price->id ?? $subscription->stripe_price_id,
+            'mollie_status' => $mollieSub->status ?? $subscription->mollie_status,
             'current_period_ends_at' => $currentPeriodEnd ?? $subscription->current_period_ends_at,
-            'cancel_at_period_end' => (bool) ($stripeSubscription->cancel_at_period_end ?? false),
+            'cancel_at_period_end' => ($mollieSub->status ?? '') === 'canceled',
             'ends_at' => $endsAt ?? $subscription->ends_at,
         ]);
 
@@ -246,6 +259,6 @@ class SiteController extends Controller
 
         return redirect()
             ->route('admin.sites.show', $site)
-            ->with('success', 'Abo mit Stripe abgeglichen.');
+            ->with('success', 'Abo mit Mollie abgeglichen.');
     }
 }

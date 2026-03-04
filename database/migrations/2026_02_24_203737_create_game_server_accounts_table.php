@@ -23,8 +23,7 @@ return new class extends Migration
             $table->string('identifier')->nullable();
             $table->text('credentials_encrypted')->nullable();
             $table->string('status')->default('active');
-            $table->string('stripe_subscription_id')->nullable();
-            $table->string('stripe_price_id')->nullable();
+            $table->string('mollie_subscription_id')->nullable();
             $table->timestamp('current_period_ends_at')->nullable();
             $table->boolean('cancel_at_period_end')->default(false);
             $table->timestamp('ends_at')->nullable();

@@ -22,7 +22,6 @@ return new class extends Migration
             $table->unsignedInteger('mailboxes')->default(0);
             $table->unsignedInteger('databases')->default(0);
             $table->decimal('price', 10, 2)->default(0);
-            $table->string('stripe_price_id')->nullable();
             $table->boolean('is_active')->default(true);
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();

@@ -20,6 +20,7 @@ class BalanceCheckoutRequest extends FormRequest
 
         return [
             'amount' => ['required', 'numeric', 'min:'.$min],
+            'method' => ['nullable', 'string', 'max:64'],
         ];
     }
 

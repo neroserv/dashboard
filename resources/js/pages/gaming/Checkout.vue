@@ -13,6 +13,7 @@ import { dashboard } from '@/routes';
 import { notify } from '@/composables/useNotify';
 import type { BreadcrumbItem } from '@/types';
 import { Gamepad2, CreditCard, Wallet, Server } from 'lucide-vue-next';
+import PaymentMethodLogo from '@/components/PaymentMethodLogo.vue';
 
 type PlanOptionChoice = { value: string; label: string; price_delta?: number };
 
@@ -57,6 +58,16 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+
+const page = usePage();
+const molliePaymentMethods = computed(
+    () =>
+        (page.props.molliePaymentMethods as { type: string; label: string }[]) ?? [
+            { type: 'card', label: 'Karte' },
+            { type: 'paypal', label: 'PayPal' },
+            { type: 'sepa_debit', label: 'SEPA-Lastschrift' },
+        ],
+);
 
 const paymentMethod = ref<'stripe' | 'balance'>('stripe');
 const selectedPlanId = ref<string>(String(props.selectedPlan?.id ?? ''));
@@ -119,7 +130,6 @@ const canSubmitWithBalance = computed(() =>
     Boolean(props.canPayWithBalance && (props.customerBalance ?? 0) >= totalAmount.value),
 );
 
-const page = usePage();
 watch(
     () => (page.props.flash as { error?: string; success?: string })?.error,
     (message) => {
@@ -439,11 +449,20 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     </div>
                                     <div v-if="props.canPayWithBalance" class="mt-auto space-y-2 border-t pt-4">
                                         <p class="text-sm font-medium">Zahlungsart</p>
-                                        <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                                            <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" class="h-4 w-4 border-input text-primary" />
-                                            <div class="flex min-w-0 flex-1 items-center gap-2">
-                                                <CreditCard class="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                <span class="text-sm">Karte (Stripe)</span>
+                                        <label class="flex cursor-pointer flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                            <div class="flex items-center gap-2">
+                                                <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" class="h-4 w-4 border-input text-primary" />
+                                                <span class="text-sm font-medium">Karte, PayPal, SEPA, …</span>
+                                            </div>
+                                            <div class="flex flex-wrap gap-2 pl-6">
+                                                <div
+                                                    v-for="method in molliePaymentMethods"
+                                                    :key="method.type"
+                                                    class="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                                                >
+                                                    <PaymentMethodLogo :type="method.type" :size="20" />
+                                                    <span class="text-sm">{{ method.label }}</span>
+                                                </div>
                                             </div>
                                         </label>
                                         <label

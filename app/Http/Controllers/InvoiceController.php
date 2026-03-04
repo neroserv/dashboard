@@ -13,8 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Stripe\Checkout\Session as StripeSession;
-use Stripe\StripeClient;
+use Mollie\Api\MollieApiClient;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -95,40 +94,32 @@ class InvoiceController extends Controller
             return redirect()->route('invoices.show', $invoice)->with('success', 'Die Rechnung wurde mit Guthaben bezahlt.');
         }
 
-        $stripe = new StripeClient(config('cashier.secret'));
-        $amountCents = (int) round($amount * 100);
+        $mollie = app(MollieApiClient::class);
+        $currency = strtoupper(config('cashier.currency', 'eur'));
         $params = [
-            'mode' => StripeSession::MODE_PAYMENT,
-            'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => route('invoices.show', $invoice),
+            'amount' => [
+                'currency' => $currency,
+                'value' => number_format($amount, 2, '.', ''),
+            ],
+            'description' => 'Rechnung '.$invoice->number,
+            'redirectUrl' => route('invoices.show', $invoice).'?payment=success',
             'metadata' => [
                 'type' => 'invoice_payment',
                 'invoice_id' => (string) $invoice->id,
                 'user_id' => (string) $user->id,
             ],
-            'line_items' => [
-                [
-                    'price_data' => [
-                        'currency' => config('cashier.currency', 'eur'),
-                        'unit_amount' => $amountCents,
-                        'product_data' => [
-                            'name' => 'Rechnung '.$invoice->number,
-                            'description' => 'Zahlung für Rechnung vom '.$invoice->invoice_date?->format('d.m.Y'),
-                        ],
-                    ],
-                    'quantity' => 1,
-                ],
-            ],
         ];
-        if ($user->stripe_id) {
-            $params['customer'] = $user->stripe_id;
-        } else {
-            $params['customer_email'] = $user->email;
+        if ($user->mollie_customer_id) {
+            $params['customerId'] = $user->mollie_customer_id;
         }
-        $session = $stripe->checkout->sessions->create($params);
-        $url = $session->url ?? null;
+        $webhookUrl = \App\Support\MollieWebhookUrl::get();
+        if ($webhookUrl !== null) {
+            $params['webhookUrl'] = $webhookUrl;
+        }
+        $payment = $mollie->payments->create($params);
+        $url = $payment->getCheckoutUrl();
         if (! $url || ! str_starts_with($url, 'https://')) {
-            return redirect()->route('invoices.show', $invoice)->with('error', 'Stripe Checkout konnte nicht erstellt werden.');
+            return redirect()->route('invoices.show', $invoice)->with('error', 'Mollie Checkout konnte nicht erstellt werden.');
         }
 
         return Inertia::location($url);

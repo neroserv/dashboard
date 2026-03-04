@@ -8,27 +8,23 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * Mollie Cashier: orders table.
+     * Mollie Cashier: payments table.
      */
     public function up(): void
     {
-        Schema::create('orders', function (Blueprint $table) {
+        Schema::create('payments', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('order_id')->nullable();
+            $table->string('mollie_payment_id');
+            $table->string('mollie_payment_status');
+            $table->string('mollie_mandate_id')->nullable();
             $table->string('owner_type');
             $table->unsignedBigInteger('owner_id');
-            $table->string('number');
             $table->string('currency', 3);
-            $table->integer('subtotal');
-            $table->integer('tax');
-            $table->integer('total');
-            $table->integer('balance_before')->default(0);
-            $table->integer('credit_used')->default(0);
-            $table->integer('total_due');
+            $table->unsignedInteger('amount')->default(0);
             $table->unsignedInteger('amount_refunded')->default(0);
             $table->unsignedInteger('amount_charged_back')->default(0);
-            $table->string('mollie_payment_id')->nullable();
-            $table->string('mollie_payment_status', 16)->nullable();
-            $table->datetime('processed_at')->nullable();
+            $table->text('first_payment_actions')->nullable();
             $table->timestamps();
         });
     }
@@ -38,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('orders');
+        Schema::dropIfExists('payments');
     }
 };

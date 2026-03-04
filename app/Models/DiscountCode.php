@@ -19,8 +19,8 @@ class DiscountCode extends Model
         'max_redemptions',
         'times_redeemed',
         'is_active',
-        'stripe_coupon_id',
-        'stripe_promotion_code_id',
+        'mollie_coupon_id',
+        'mollie_promotion_code_id',
     ];
 
     /**

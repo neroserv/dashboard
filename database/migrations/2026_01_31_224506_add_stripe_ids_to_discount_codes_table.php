@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('discount_codes', function (Blueprint $table) {
-            $table->string('stripe_coupon_id')->nullable()->after('is_active');
-            $table->string('stripe_promotion_code_id')->nullable()->after('stripe_coupon_id');
+            $table->string('mollie_coupon_id')->nullable()->after('is_active');
+            $table->string('mollie_promotion_code_id')->nullable()->after('mollie_coupon_id');
         });
     }
 
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('discount_codes', function (Blueprint $table) {
-            $table->dropColumn(['stripe_coupon_id', 'stripe_promotion_code_id']);
+            $table->dropColumn(['mollie_coupon_id', 'mollie_promotion_code_id']);
         });
     }
 };

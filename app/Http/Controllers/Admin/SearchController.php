@@ -69,14 +69,14 @@ class SearchController extends Controller
             ]);
 
         $subscriptions = SiteSubscription::query()
-            ->where('stripe_subscription_id', 'like', $term)
+            ->where('mollie_subscription_id', 'like', $term)
             ->with('site:uuid,name')
             ->limit($limit)
             ->get()
             ->map(fn (SiteSubscription $sub) => [
                 'id' => $sub->id,
                 'site_uuid' => $sub->site?->uuid,
-                'label' => ($sub->site?->name ?? 'Site #'.$sub->site_id).' – '.$sub->stripe_subscription_id,
+                'label' => ($sub->site?->name ?? 'Site #'.$sub->site_id).' – '.$sub->mollie_subscription_id,
                 'url' => $sub->site_id ? route('admin.sites.show', $sub->site) : route('admin.subscriptions.index'),
             ]);
 

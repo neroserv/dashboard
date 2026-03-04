@@ -16,87 +16,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Default Stripe Price ID (Meine Seiten)
-    |--------------------------------------------------------------------------
-    |
-    | Fallback Stripe Price ID when no product is configured in the panel.
-    | Prices are managed centrally in the Admin Panel / DB.
-    |
-    */
-
-    'default_meine_seiten_price_id' => env('STRIPE_MEINE_SEITEN_PRICE_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Stripe Product ID (Meine Seiten)
-    |--------------------------------------------------------------------------
-    |
-    | One Stripe Product under which template prices are created as Stripe
-    | Prices. Required for Option 2 (sync template price -> Stripe Price).
-    |
-    */
-
-    'stripe_meine_seiten_product_id' => env('STRIPE_MEINE_SEITEN_PRODUCT_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Stripe Product ID (Webspace)
-    |--------------------------------------------------------------------------
-    |
-    | One Stripe Product under which webspace plan prices are created as
-    | Stripe Prices. Used for HostingPlan sync and checkout.
-    |
-    */
-
-    'stripe_webspace_product_id' => env('STRIPE_WEBSPACE_PRODUCT_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Stripe Product ID (Game Server / Pterodactyl)
-    |--------------------------------------------------------------------------
-    |
-    | One Stripe Product under which game server plan prices are created as
-    | Stripe Prices. Used for Pterodactyl HostingPlan sync and gaming checkout.
-    |
-    */
-
-    'stripe_game_server_product_id' => env('STRIPE_GAME_SERVER_PRODUCT_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Additional Domain Price ID
-    |--------------------------------------------------------------------------
-    |
-    | Stripe Price ID for additional domains (Zusatzdomain).
-    |
-    */
-
-    'additional_domain_price_id' => env('STRIPE_ADDITIONAL_DOMAIN_PRICE_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Custom Domain (Bring-your-own) Price ID
-    |--------------------------------------------------------------------------
-    |
-    | Stripe Price ID for custom domain add-on.
-    |
-    */
-
-    'custom_domain_price_id' => env('STRIPE_CUSTOM_DOMAIN_PRICE_ID'),
-
-    /*
-    |--------------------------------------------------------------------------
     | AI Token Packages (Menge => Preis in EUR)
     |--------------------------------------------------------------------------
     |
-    | Ein Stripe-Produkt (z. B. "AI Tokens") in Stripe anlegen und die
-    | Produkt-ID (prod_…) in .env als STRIPE_AI_TOKENS_PRODUCT_ID eintragen.
-    | Beim ersten Checkout werden die Einmalpreise automatisch in Stripe
-    | angelegt. Preise hier in EUR angeben (z. B. 5 für 5 €).
+    | Preise in EUR. Bei Mollie werden keine Produkt-/Preis-IDs genutzt;
+    | der Betrag wird bei Zahlung aus dieser Config übergeben.
     |
     */
-
-    'stripe_ai_tokens_product_id' => env('STRIPE_AI_TOKENS_PRODUCT_ID'),
 
     'ai_token_packages' => [
         500 => (float) env('AI_TOKENS_PRICE_500', 5),
@@ -147,7 +73,7 @@ return [
     | Balance Top-Up (Guthaben aufladen)
     |--------------------------------------------------------------------------
     |
-    | Minimum amount in EUR for customer self top-up via Stripe Checkout.
+    | Minimum amount in EUR for customer self top-up via Mollie Checkout.
     |
     */
 
@@ -164,5 +90,37 @@ return [
     */
 
     'balance_period_months' => (int) env('BALANCE_PERIOD_MONTHS', 1),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mollie Payment Method Labels (DE)
+    |--------------------------------------------------------------------------
+    |
+    | German labels for Mollie payment method types. Used when displaying
+    | active payment methods in the panel.
+    |
+    */
+
+    'mollie_payment_method_labels' => [
+        'ideal' => 'iDEAL',
+        'creditcard' => 'Karte',
+        'paypal' => 'PayPal',
+        'bancontact' => 'Bancontact',
+        'sofort' => 'SOFORT',
+        'giropay' => 'giropay',
+        'eps' => 'EPS',
+        'belfius' => 'Belfius',
+        'kbc' => 'KBC/CBC',
+        'p24' => 'Przelewy24',
+        'applepay' => 'Apple Pay',
+        'directdebit' => 'SEPA-Lastschrift',
+        'klarnapaylater' => 'Klarna Pay Later',
+        'klarnasliceit' => 'Klarna Slice It',
+        'przelewy24' => 'Przelewy24',
+        'blik' => 'BLIK',
+        'twint' => 'TWINT',
+        'billie' => 'Billie',
+        'in3' => 'in3',
+    ],
 
 ];

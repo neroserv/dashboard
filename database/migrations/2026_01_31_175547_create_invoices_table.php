@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('site_subscription_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('stripe_invoice_id')->nullable()->unique();
+            $table->string('mollie_payment_id')->nullable()->unique();
             $table->string('number')->unique();
             $table->string('type')->default('subscription'); // subscription, one-time, etc.
             $table->decimal('amount', 10, 2);

@@ -32,7 +32,6 @@ class UpdateHostingPlanRequest extends FormRequest
             'mailboxes' => ['integer', 'min:0'],
             'databases' => ['integer', 'min:0'],
             'price' => ['required', 'numeric', 'min:0'],
-            'stripe_price_id' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],
         ];

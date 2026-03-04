@@ -69,11 +69,11 @@ class DashboardWidgetDataService
                 'minutesAgo' => $this->lastWebhookMinutesAgo(),
             ],
             'active-subscriptions' => [
-                'count' => SiteSubscription::whereNotNull('stripe_subscription_id')->count(),
+                'count' => SiteSubscription::whereNotNull('mollie_subscription_id')->count(),
             ],
             'subscriptions-ending-week' => [
                 'count' => SiteSubscription::query()
-                    ->whereNotNull('stripe_subscription_id')->where('stripe_status', 'active')
+                    ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
                     ->whereBetween('current_period_ends_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])
                     ->count(),
             ],
@@ -83,7 +83,7 @@ class DashboardWidgetDataService
             'expiring-subscriptions' => [
                 'items' => SiteSubscription::query()
                     ->with('site:uuid,name')
-                    ->whereNotNull('stripe_subscription_id')->where('stripe_status', 'active')
+                    ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
                     ->whereBetween('current_period_ends_at', [now(), now()->addDays(7)])
                     ->orderBy('current_period_ends_at')->limit(20)->get()
                     ->map(fn ($sub) => [
@@ -435,7 +435,7 @@ class DashboardWidgetDataService
         $endOfNextSeven = now()->addDays(7);
         $expiringSubscriptions = SiteSubscription::query()
             ->with('site:uuid,name')
-            ->whereNotNull('stripe_subscription_id')->where('stripe_status', 'active')
+            ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
             ->whereBetween('current_period_ends_at', [now(), $endOfNextSeven])
             ->orderBy('current_period_ends_at')->limit(20)->get()
             ->map(fn ($sub) => [

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { watch, computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { notify } from '@/composables/useNotify';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import billing from '@/routes/billing';
 import type { BreadcrumbItem } from '@/types';
 import { ExternalLink, Sparkles, Wallet } from 'lucide-vue-next';
 import { ref } from 'vue';
+import PaymentMethodLogo from '@/components/PaymentMethodLogo.vue';
 
 type Invoice = {
     id: number;
@@ -74,6 +75,7 @@ const props = defineProps<Props>();
 
 const balanceTopUpAmount = ref<number>(props.balanceTopUpMinAmount ?? 5);
 const balanceTopUpSubmitting = ref(false);
+const selectedPaymentMethod = ref<string>('');
 
 function checkoutAiTokens(amount: number): void {
     router.post(billing.aiTokens.checkout.url(), { token_amount: amount }, {
@@ -87,7 +89,11 @@ function submitBalanceTopUp(): void {
     const min = props.balanceTopUpMinAmount ?? 5;
     if (!url || balanceTopUpAmount.value < min) return;
     balanceTopUpSubmitting.value = true;
-    router.post(url, { amount: balanceTopUpAmount.value }, {
+    const payload: { amount: number; method?: string } = { amount: balanceTopUpAmount.value };
+    if (selectedPaymentMethod.value) {
+        payload.method = selectedPaymentMethod.value;
+    }
+    router.post(url, payload, {
         preserveScroll: true,
         preserveState: true,
         onFinish: () => { balanceTopUpSubmitting.value = false; },
@@ -95,6 +101,20 @@ function submitBalanceTopUp(): void {
 }
 
 const page = usePage();
+// Zahlungsmethoden vom Server (Mollie API GET /v2/methods)
+const molliePaymentMethods = computed(
+    () => (page.props.molliePaymentMethods as { type: string; label: string }[]) ?? [],
+);
+watch(
+    molliePaymentMethods,
+    (methods) => {
+        if (methods.length && !selectedPaymentMethod.value) {
+            selectedPaymentMethod.value = methods[0].type;
+        }
+    },
+    { immediate: true },
+);
+
 watch(
     () => (page.props.flash as { error?: string; success?: string })?.error,
     (message) => {
@@ -223,24 +243,54 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </TableBody>
                     </Table>
                     <p v-else class="text-muted text-sm">Noch keine Transaktionen.</p>
-                    <div v-if="props.balanceTopUpEnabled && props.balanceCheckoutUrl" class="flex flex-wrap items-end gap-2 pt-2">
-                        <label class="flex flex-col gap-1 text-sm">
-                            <span>Betrag (€)</span>
-                            <Input
-                                v-model.number="balanceTopUpAmount"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                class="w-24"
-                            />
-                        </label>
-                        <Button
-                            :disabled="balanceTopUpSubmitting || balanceTopUpAmount < (props.balanceTopUpMinAmount ?? 5)"
-                            size="sm"
-                            @click="submitBalanceTopUp"
-                        >
-                            {{ balanceTopUpSubmitting ? 'Wird weitergeleitet…' : 'Guthaben aufladen' }}
-                        </Button>
+                    <div v-if="props.balanceTopUpEnabled && props.balanceCheckoutUrl" class="space-y-4 pt-4">
+                        <div>
+                            <h5 class="mb-2 text-sm font-medium">Zahlungsmethode</h5>
+                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                <label
+                                    v-for="method in molliePaymentMethods"
+                                    :key="method.type"
+                                    class="flex cursor-pointer flex-col"
+                                >
+                                    <input
+                                        v-model="selectedPaymentMethod"
+                                        type="radio"
+                                        :value="method.type"
+                                        name="balance_topup_method"
+                                        class="sr-only"
+                                    />
+                                    <div
+                                        class="flex flex-col items-center gap-2 rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
+                                        :class="selectedPaymentMethod === method.type ? 'border-primary ring-2 ring-primary/20' : 'border-border'"
+                                    >
+                                        <PaymentMethodLogo :type="method.type" :size="28" />
+                                        <span class="text-xs font-medium">{{ method.label }}</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                Wählen Sie eine Zahlungsmethode – Sie werden direkt dorthin weitergeleitet.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <label class="flex flex-col gap-1 text-sm">
+                                <span>Betrag (€)</span>
+                                <Input
+                                    v-model.number="balanceTopUpAmount"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    class="w-28"
+                                />
+                            </label>
+                            <Button
+                                :disabled="balanceTopUpSubmitting || balanceTopUpAmount < (props.balanceTopUpMinAmount ?? 5)"
+                                size="sm"
+                                @click="submitBalanceTopUp"
+                            >
+                                {{ balanceTopUpSubmitting ? 'Wird weitergeleitet…' : 'Guthaben aufladen' }}
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -276,8 +326,18 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <CardHeader>
                     <CardTitle>Zahlungsart</CardTitle>
                     <CardDescription>
-                        Verwalten Sie Ihre Zahlungsmethode und Abrechnungen bei Stripe
+                        Verwalten Sie Ihre Zahlungsmethode und Abrechnungen
                     </CardDescription>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <div
+                            v-for="method in molliePaymentMethods"
+                            :key="method.type"
+                            class="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5"
+                        >
+                            <PaymentMethodLogo :type="method.type" :size="18" />
+                            <span class="text-xs">{{ method.label }}</span>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <p v-if="paymentMethodSummary" class="text-sm">

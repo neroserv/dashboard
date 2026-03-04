@@ -100,6 +100,14 @@ class User extends Authenticatable
         return $this->pin_hash !== null;
     }
 
+    /**
+     * Whether the user has a Mollie customer ID (for billing/checkout).
+     */
+    public function hasMollieCustomerId(): bool
+    {
+        return ! empty($this->{$this->getMollieCustomerIdColumn()});
+    }
+
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);

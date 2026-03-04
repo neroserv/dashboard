@@ -26,7 +26,6 @@ class HostingPlan extends Model
         'mailboxes',
         'databases',
         'price',
-        'stripe_price_id',
         'is_active',
         'sort_order',
     ];

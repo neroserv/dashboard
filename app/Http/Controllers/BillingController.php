@@ -6,12 +6,13 @@ use App\Models\BalanceTransaction;
 use App\Models\Brand;
 use App\Models\CustomerBalance;
 use App\Services\AiTokenService;
+use App\Support\MollieWebhookUrl;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
-use Stripe\Checkout\Session as StripeSession;
-use Stripe\StripeClient;
+use Mollie\Api\MollieApiClient;
 
 class BillingController extends Controller
 {
@@ -40,10 +41,10 @@ class BillingController extends Controller
             ]));
 
         $paymentMethodSummary = null;
-        if ($user->hasDefaultPaymentMethod()) {
+        if ($user->hasMollieCustomerId()) {
             $paymentMethodSummary = [
-                'brand' => $user->pm_type,
-                'last4' => $user->pm_last_four,
+                'brand' => 'mollie',
+                'last4' => null,
             ];
         }
 
@@ -107,46 +108,57 @@ class BillingController extends Controller
         $amountCents = (int) round($amount * 100);
 
         try {
-            $stripe = new StripeClient(config('cashier.secret'));
+            $mollie = app(MollieApiClient::class);
+            $currency = strtoupper(config('cashier.currency', 'eur'));
             $params = [
-                'mode' => StripeSession::MODE_PAYMENT,
-                'success_url' => route('billing.index').'?balance=success',
-                'cancel_url' => route('billing.index'),
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Guthaben aufladen: '.number_format($amount, 2, ',', '.').' €',
+                'redirectUrl' => route('billing.index').'?balance=success',
                 'metadata' => [
                     'balance_topup' => '1',
                     'user_id' => (string) $user->id,
                     'amount_eur' => (string) $amount,
                 ],
-                'line_items' => [
-                    [
-                        'price_data' => [
-                            'currency' => config('cashier.currency', 'eur'),
-                            'unit_amount' => $amountCents,
-                            'product_data' => [
-                                'name' => 'Guthaben aufladen',
-                                'description' => 'Aufladung Ihres Kontoguthabens um '.number_format($amount, 2, ',', '.').' €',
-                            ],
-                        ],
-                        'quantity' => 1,
-                    ],
-                ],
             ];
-            if ($user->stripe_id) {
-                $params['customer'] = $user->stripe_id;
-            } else {
-                $params['customer_email'] = $user->email;
+            if ($user->mollie_customer_id) {
+                $params['customerId'] = $user->mollie_customer_id;
             }
-            $session = $stripe->checkout->sessions->create($params);
-            $stripeUrl = $session->url ?? null;
-            if (! $stripeUrl || ! str_starts_with($stripeUrl, 'https://')) {
-                return redirect()->route('billing.index')->with('error', 'Stripe Checkout lieferte keine gültige Weiterleitungs-URL.');
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $method = $request->validated('method');
+            if (is_string($method) && $method !== '') {
+                $params['method'] = $method;
+            }
+            $payment = $mollie->payments->create($params);
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('billing.index')->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
             }
 
-            return Inertia::location($stripeUrl);
+            return Inertia::location($checkoutUrl);
         } catch (\Throwable $e) {
+            Log::error('Billing Guthaben-Checkout: Mollie-Fehler', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
             report($e);
+            $message = 'Checkout konnte nicht gestartet werden.';
+            if (str_contains($e->getMessage(), 'API key') || str_contains($e->getMessage(), 'Invalid API key')) {
+                $message = 'Mollie API-Key fehlt oder ist ungültig. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen).';
+            } elseif (str_contains($e->getMessage(), 'webhook') && str_contains($e->getMessage(), 'unreachable')) {
+                $message = 'Mollie konnte die Webhook-URL nicht erreichen. Lokal: APP_URL nutzt .test/localhost – entweder MOLLIE_WEBHOOK_URL (ngrok-URL) setzen oder die Anwendung wurde angepasst, sodass der Webhook lokal weggelassen wird. Bitte Seite neu laden und erneut versuchen.';
+            } elseif (config('app.debug')) {
+                $message .= ' '.$e->getMessage();
+            } else {
+                $message .= ' Details in storage/logs/laravel.log.';
+            }
 
-            return redirect()->route('billing.index')->with('error', 'Checkout konnte nicht gestartet werden. Bitte später erneut versuchen.');
+            return redirect()->route('billing.index')->with('error', $message);
         }
     }
 }

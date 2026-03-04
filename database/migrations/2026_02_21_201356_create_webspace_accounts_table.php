@@ -21,8 +21,7 @@ return new class extends Migration
             $table->string('plesk_username');
             $table->text('plesk_password_encrypted')->nullable();
             $table->string('status')->default('pending'); // pending, active, suspended, terminated
-            $table->string('stripe_subscription_id')->nullable()->unique();
-            $table->string('stripe_price_id')->nullable();
+            $table->string('mollie_subscription_id')->nullable()->unique();
             $table->timestamp('current_period_ends_at')->nullable();
             $table->boolean('cancel_at_period_end')->default(false);
             $table->timestamp('ends_at')->nullable();

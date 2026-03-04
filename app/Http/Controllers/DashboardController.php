@@ -170,7 +170,7 @@ class DashboardController extends Controller
         if ($brandFeatures['sites_editor'] ?? true) {
             $count += Site::query()
                 ->where('user_id', $user->id)
-                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('stripe_subscription_id'))
+                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('mollie_subscription_id'))
                 ->count();
         }
         if ($brandFeatures['domains_shop'] ?? true) {
@@ -209,7 +209,7 @@ class DashboardController extends Controller
         if ($brandFeatures['sites_editor'] ?? true) {
             $sites = Site::query()
                 ->where('user_id', $user->id)
-                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('stripe_subscription_id'))
+                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('mollie_subscription_id'))
                 ->get(['id', 'uuid', 'name']);
             foreach ($sites as $site) {
                 $list[] = [

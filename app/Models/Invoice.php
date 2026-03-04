@@ -14,7 +14,7 @@ class Invoice extends Model
     protected $fillable = [
         'user_id',
         'site_subscription_id',
-        'stripe_invoice_id',
+        'mollie_payment_id',
         'number',
         'type',
         'amount',

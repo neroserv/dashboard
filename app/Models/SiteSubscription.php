@@ -13,9 +13,8 @@ class SiteSubscription extends Model
      */
     protected $fillable = [
         'site_id',
-        'stripe_subscription_id',
-        'stripe_price_id',
-        'stripe_status',
+        'mollie_subscription_id',
+        'mollie_status',
         'current_period_ends_at',
         'cancel_at_period_end',
         'ends_at',
