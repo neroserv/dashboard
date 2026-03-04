@@ -25,8 +25,8 @@ const isAdminDomain = computed(() => (page.props.isAdminDomain as boolean) ?? fa
 const loginTitle = computed(() => (isAdminDomain.value ? 'Admin-Anmeldung' : 'Anmelden'));
 const loginDescription = computed(() =>
     isAdminDomain.value
-        ? 'Gleiche Zugangsdaten wie im Kundenbereich.'
-        : 'Geben Sie Ihre E-Mail-Adresse und Ihr Passwort ein, um sich anzumelden',
+        ? 'Geben Sie Ihre E-Mail-Adresse und Ihr Passwort ein, um sich als Mitarbeiter zuverifizieren'
+        : 'Geben Sie Ihre E-Mail-Adresse und Ihr Passwort ein, um sich anzumelden'
 );
 </script>
 

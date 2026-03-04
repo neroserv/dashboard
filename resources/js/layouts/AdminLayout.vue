@@ -20,6 +20,7 @@ import {
     Settings,
     PackageCheck,
     GitBranch,
+    Activity,
 } from 'lucide-vue-next';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -76,6 +77,15 @@ const sidebarItems = computed<NavItem[]>(() => {
     if (hostingChildren.length > 0) {
         items.push({ title: 'Hosting', icon: PackageCheck, children: hostingChildren });
     }
+    if (hasPermissionOrView('admin.settings') || hasPermissionOrView('admin.hosting-servers')) {
+        items.push({
+            title: 'Monitoring',
+            icon: Activity,
+            children: [
+                { title: 'Ziele', href: '/admin/monitoring', icon: Activity },
+            ],
+        });
+    }
     if (hasPermissionOrView('admin.sites') || hasPermissionOrView('admin.templates')) {
         const inhalte: NavItem[] = [];
         if (hasPermissionOrView('admin.sites')) inhalte.push({ title: 'Sites', href: '/admin/sites', icon: Globe });
@@ -105,6 +115,7 @@ const sidebarItems = computed<NavItem[]>(() => {
     }
     if (hasPermissionOrView('admin.settings') || hasPermissionOrView('admin.jobs-monitor') || hasPermissionOrView('admin.cron-statistics') || hasPermissionOrView('admin.customers') || hasPermissionOrView('admin.groups') || hasPermissionOrView('admin.permissions') || hasPermissionOrView('admin.legacy-migration')) {
         const system: NavItem[] = [];
+        system.push({ title: 'API', href: '/admin/api', icon: Settings });
         if (hasPermissionOrView('admin.settings')) system.push({ title: 'Einstellungen', href: '/admin/settings', icon: Settings });
         if (hasPermissionOrView('admin.jobs-monitor')) system.push({ title: 'Jobs-Monitor', href: '/admin/jobs-monitor', icon: Settings });
         if (hasPermissionOrView('admin.cron-statistics')) system.push({ title: 'Cron / Worker-Statistik', href: '/admin/cron-statistics', icon: Settings });

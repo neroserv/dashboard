@@ -73,6 +73,10 @@ class HandleInertiaRequests extends Middleware
             'success' => $request->session()->get('success'),
             'info' => $request->session()->get('info'),
         ]);
+        $customFlash = $request->session()->get('flash');
+        if (is_array($customFlash)) {
+            $flash = array_merge($flash, $customFlash);
+        }
 
         $currentBrand = $request->attributes->get('current_brand');
         if ($currentBrand === null && \App\Models\Brand::getDefault() !== null) {

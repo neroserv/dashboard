@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\ApiOverviewController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CronStatisticsController;
 use App\Http\Controllers\Admin\CustomerController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\JobsMonitorController;
 use App\Http\Controllers\Admin\LegacyMigrationController;
+use App\Http\Controllers\Admin\MonitorTargetController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ResellerDomainController;
@@ -289,6 +291,8 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::put('emails/{emailTemplate:key}', [EmailController::class, 'update'])->name('emails.update');
     Route::post('emails/{emailTemplate:key}/preview', [EmailController::class, 'preview'])->name('emails.preview');
     Route::post('emails/{emailTemplate:key}/send-test', [EmailController::class, 'sendTest'])->name('emails.send-test');
+    Route::get('api', [ApiOverviewController::class, 'index'])->name('api.index');
+    Route::get('api/docs', [ApiOverviewController::class, 'docs'])->name('api.docs');
     Route::get('settings', [SystemSettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
     Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
@@ -300,6 +304,7 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('products', [ProductController::class, 'index'])->name('products.index');
     Route::get('hosting-servers/{hosting_server}/check', [HostingServerController::class, 'check'])->name('hosting-servers.check');
     Route::resource('hosting-servers', HostingServerController::class);
+    Route::resource('monitoring', MonitorTargetController::class)->except(['show'])->parameters(['monitoring' => 'monitor_target']);
     Route::get('hosting-plans/pterodactyl-options', [HostingPlanController::class, 'pterodactylOptions'])->name('hosting-plans.pterodactyl-options');
     Route::resource('hosting-plans', HostingPlanController::class);
     Route::get('webspace-accounts', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');

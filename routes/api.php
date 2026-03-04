@@ -1,11 +1,31 @@
 <?php
 
 use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\V1\BrandController;
+use App\Http\Controllers\Api\V1\DomainController;
+use App\Http\Controllers\Api\V1\HostingPlanController;
+use App\Http\Controllers\Api\V1\HostingServerController;
+use App\Http\Controllers\Api\V1\PterodactylController;
+use App\Http\Controllers\Api\V1\StatsController;
 use App\Http\Controllers\ModuleSubmissionController;
 use App\Models\Brand;
 use App\Models\Domain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'throttle:api'])->prefix('v1')->group(function () {
+    Route::get('stats', StatsController::class)->name('api.v1.stats');
+    Route::get('domains/tlds', [DomainController::class, 'tlds'])->name('api.v1.domains.tlds');
+    Route::post('domains/check-availability', [DomainController::class, 'checkAvailability'])->name('api.v1.domains.check-availability');
+    Route::get('hosting-plans', [HostingPlanController::class, 'index'])->name('api.v1.hosting-plans.index');
+    Route::get('hosting-servers', [HostingServerController::class, 'index'])->name('api.v1.hosting-servers.index');
+    Route::get('hosting-servers/{hostingServer}', [HostingServerController::class, 'show'])->name('api.v1.hosting-servers.show');
+    Route::get('pterodactyl/nests', [PterodactylController::class, 'nests'])->name('api.v1.pterodactyl.nests');
+    Route::get('pterodactyl/eggs', [PterodactylController::class, 'eggs'])->name('api.v1.pterodactyl.eggs');
+    Route::get('brand', [BrandController::class, 'show'])->name('api.v1.brand.show');
+    Route::get('brand/features', [BrandController::class, 'features'])->name('api.v1.brand.features');
+    Route::get('brand/contact', [BrandController::class, 'contact'])->name('api.v1.brand.contact');
+});
 
 Route::middleware(['web', 'auth', 'throttle:10,1'])->prefix('ai')->group(function () {
     Route::post('seo-suggestions', [AiController::class, 'seoSuggestions'])->name('api.ai.seo-suggestions');
