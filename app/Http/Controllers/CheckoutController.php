@@ -202,6 +202,9 @@ class CheckoutController extends Controller
             if ($type === 'game_server') {
                 return $this->handleGamingCheckoutSuccessFromMollie($request, $user, $metadata);
             }
+            if ($type === 'webspace_renewal') {
+                return $this->handleWebspaceRenewalSuccessFromMollie($request, $user, $metadata);
+            }
 
             return redirect()->route('sites.index')->with('success', 'Zahlung erhalten. Vielen Dank.');
         }
@@ -251,6 +254,9 @@ class CheckoutController extends Controller
 
         $domain = $payload['domain'] ?? '';
         $currency = strtoupper(config('cashier.currency', 'eur'));
+        $currentBrand = $request->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        $isPrepaid = (bool) ($brandFeatures['prepaid_balance'] ?? false);
 
         try {
             $mollie = app(MollieApiClient::class);
@@ -266,6 +272,7 @@ class CheckoutController extends Controller
                     'hosting_plan_id' => (string) $plan->id,
                     'domain' => $domain,
                     'user_id' => (string) $user->id,
+                    'prepaid' => $isPrepaid ? '1' : '0',
                 ],
             ];
             if ($user->mollie_customer_id) {
@@ -409,13 +416,66 @@ class CheckoutController extends Controller
         $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
             ? $account->current_period_ends_at
             : now();
+        $wasSuspended = $account->status === 'suspended';
         $account->update([
             'current_period_ends_at' => $from->copy()->addMonths($periodMonths),
+            'status' => 'active',
         ]);
+        if ($wasSuspended && $account->hostingServer && $account->pterodactyl_server_id) {
+            try {
+                $client = app(\App\Services\ControlPanels\PterodactylClient::class);
+                $client->unsuspendServer($account->fresh());
+            } catch (\Throwable) {
+                // status already active
+            }
+        }
 
         return redirect()
             ->route('gaming-accounts.show', $account)
             ->with('success', 'Der Game-Server wurde erfolgreich verlängert.');
+    }
+
+    /**
+     * Handle successful Mollie one-time payment for webspace renewal.
+     */
+    protected function handleWebspaceRenewalSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
+    {
+        $accountId = (int) ($metadata['webspace_account_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+
+        if ($userId !== $user->id || $accountId < 1) {
+            Log::debug('Checkout success webspace renewal: invalid metadata');
+
+            return redirect()->route('webspace-accounts.index')->with('error', 'Ungültige Zahlungsdaten.');
+        }
+
+        $account = WebspaceAccount::find($accountId);
+        if (! $account || $account->user_id !== $user->id) {
+            return redirect()->route('webspace-accounts.index')->with('error', 'Webspace nicht gefunden.');
+        }
+
+        $periodMonths = max(1, min(3, (int) ($metadata['period_months'] ?? 1)));
+        $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+            ? $account->current_period_ends_at
+            : now();
+        $wasSuspended = $account->status === 'suspended';
+        $account->update([
+            'current_period_ends_at' => $from->copy()->addMonths($periodMonths),
+            'status' => 'active',
+        ]);
+        if ($wasSuspended && $account->hostingServer) {
+            try {
+                $plesk = app(\App\Services\ControlPanels\PleskClient::class);
+                $plesk->setServer($account->hostingServer);
+                $plesk->unsuspendAccount($account->plesk_username);
+            } catch (\Throwable) {
+                // status already active
+            }
+        }
+
+        return redirect()
+            ->route('webspace-accounts.show', $account)
+            ->with('success', 'Der Webspace wurde erfolgreich verlängert.');
     }
 
     /**
@@ -563,7 +623,9 @@ class CheckoutController extends Controller
             return redirect()->route('gaming-accounts.index')->with('error', 'Ungültige Abo-Daten.');
         }
 
-        $existing = GameServerAccount::where('mollie_subscription_id', $molliePaymentId)->first();
+        $existing = GameServerAccount::where('mollie_payment_id', $molliePaymentId)
+            ->orWhere('mollie_subscription_id', $molliePaymentId)
+            ->first();
         if ($existing) {
             return redirect()->route('gaming-accounts.show', $existing->id)->with('success', 'Ihr Game-Server ist aktiv.');
         }
@@ -594,11 +656,12 @@ class CheckoutController extends Controller
                 'hosting_server_id' => null,
                 'name' => $serverName,
                 'status' => 'pending',
-                'mollie_subscription_id' => $molliePaymentId,
+                'mollie_subscription_id' => null,
+                'mollie_payment_id' => $molliePaymentId,
                 'current_period_ends_at' => $periodEnd,
                 'cancel_at_period_end' => false,
                 'ends_at' => null,
-                'renewal_type' => 'auto',
+                'renewal_type' => 'manual',
             ]);
 
             return redirect()->route('gaming-accounts.show', $account->id)
@@ -655,11 +718,12 @@ class CheckoutController extends Controller
             'product_id' => $plan->product?->id,
             'name' => $serverName,
             'status' => 'pending',
-            'mollie_subscription_id' => $molliePaymentId,
+            'mollie_subscription_id' => null,
+            'mollie_payment_id' => $molliePaymentId,
             'current_period_ends_at' => $periodEnd,
             'cancel_at_period_end' => false,
             'ends_at' => null,
-            'renewal_type' => 'auto',
+            'renewal_type' => 'manual',
             'option_values' => ! empty($optionChoices) ? $optionChoices : null,
         ]);
 
@@ -978,7 +1042,9 @@ class CheckoutController extends Controller
             return redirect()->route('webspace-accounts.index')->with('error', 'Ungültige Abo-Daten.');
         }
 
-        $existing = WebspaceAccount::where('mollie_subscription_id', $molliePaymentId)->first();
+        $existing = WebspaceAccount::where('mollie_payment_id', $molliePaymentId)
+            ->orWhere('mollie_subscription_id', $molliePaymentId)
+            ->first();
         if ($existing) {
             return redirect()->route('webspace-accounts.show', $existing->id)->with('success', 'Ihr Webspace ist aktiv.');
         }
@@ -988,21 +1054,34 @@ class CheckoutController extends Controller
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
         }
 
+        $isPrepaid = ($metadata['prepaid'] ?? '0') === '1';
         $periodEnd = now()->addMonth();
         $server = HostingServer::where('is_active', true)->first();
+
+        $baseData = [
+            'hosting_plan_id' => $plan->id,
+            'domain' => $domain,
+            'current_period_ends_at' => $periodEnd,
+            'cancel_at_period_end' => false,
+            'ends_at' => null,
+        ];
+        if ($isPrepaid) {
+            $baseData['mollie_subscription_id'] = null;
+            $baseData['mollie_payment_id'] = $molliePaymentId;
+            $baseData['renewal_type'] = 'manual';
+        } else {
+            $baseData['mollie_subscription_id'] = $molliePaymentId;
+            $baseData['mollie_payment_id'] = null;
+            $baseData['renewal_type'] = 'auto';
+        }
+
         if (! $server) {
             Log::error('Checkout success webspace: no active HostingServer');
-            $account = $user->webspaceAccounts()->create([
-                'hosting_plan_id' => $plan->id,
-                'domain' => $domain,
+            $account = $user->webspaceAccounts()->create(array_merge($baseData, [
+                'hosting_server_id' => null,
                 'plesk_username' => 'webspace_'.Str::random(8),
                 'status' => 'pending',
-                'mollie_subscription_id' => $molliePaymentId,
-                'current_period_ends_at' => $periodEnd,
-                'cancel_at_period_end' => false,
-                'ends_at' => null,
-                'renewal_type' => 'auto',
-            ]);
+            ]));
             $plan->product?->id && $account->update(['product_id' => $plan->product->id]);
 
             return redirect()->route('webspace-accounts.show', $account->id)
@@ -1012,19 +1091,12 @@ class CheckoutController extends Controller
         $pleskUsername = 'ws'.str_pad((string) ((WebspaceAccount::max('id') ?? 0) + 1), 4, '0', STR_PAD_LEFT).Str::lower(Str::random(6));
         $password = Str::password(20);
 
-        $account = $user->webspaceAccounts()->create([
-            'hosting_plan_id' => $plan->id,
+        $account = $user->webspaceAccounts()->create(array_merge($baseData, [
             'hosting_server_id' => $server->id,
-            'domain' => $domain,
             'plesk_username' => $pleskUsername,
             'plesk_password_encrypted' => Crypt::encryptString($password),
             'status' => 'pending',
-            'mollie_subscription_id' => $molliePaymentId,
-            'current_period_ends_at' => $periodEnd,
-            'cancel_at_period_end' => false,
-            'ends_at' => null,
-            'renewal_type' => 'auto',
-        ]);
+        ]));
         if ($plan->product?->id) {
             $account->update(['product_id' => $plan->product->id]);
         }

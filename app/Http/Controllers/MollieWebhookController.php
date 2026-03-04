@@ -10,6 +10,7 @@ use App\Notifications\InvoiceCreatedNotification;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Mollie\Api\Resources\Payment;
@@ -40,10 +41,11 @@ class MollieWebhookController extends CashierWebhookController
             return new Response(null, 200);
         }
 
+        $metadataArray = $payment->metadata !== null ? (is_array($payment->metadata) ? $payment->metadata : (array) $payment->metadata) : [];
         Log::info('Mollie webhook: payment received', [
             'id' => $payment->id,
             'status' => $payment->status,
-            'metadata' => $payment->metadata ? (array) $payment->metadata : null,
+            'metadata' => $metadataArray,
         ]);
 
         if ($payment->status === PaymentStatus::STATUS_PAID) {
@@ -51,6 +53,11 @@ class MollieWebhookController extends CashierWebhookController
             if ($handled) {
                 return new Response(null, 200);
             }
+        } else {
+            Log::debug('Mollie webhook: payment not paid, skipping balance/invoice handling', [
+                'id' => $payment->id,
+                'status' => $payment->status,
+            ]);
         }
 
         return parent::handleWebhook($request);
@@ -63,7 +70,16 @@ class MollieWebhookController extends CashierWebhookController
     {
         $metadata = $payment->metadata;
         $meta = $metadata !== null ? (is_array($metadata) ? $metadata : (array) $metadata) : [];
-        if (($meta['balance_topup'] ?? null) !== '1') {
+
+        $balanceTopUp = $meta['balance_topup'] ?? null;
+        $isBalanceTopUp = $balanceTopUp === '1' || $balanceTopUp === 1 || $balanceTopUp === true;
+        if (! $isBalanceTopUp) {
+            Log::debug('Mollie webhook: not a balance top-up (metadata.balance_topup)', [
+                'payment_id' => $payment->id,
+                'balance_topup_value' => $balanceTopUp,
+                'metadata_keys' => array_keys($meta),
+            ]);
+
             return false;
         }
 
@@ -102,24 +118,43 @@ class MollieWebhookController extends CashierWebhookController
             return true;
         }
 
-        $year = date('Y');
-        $nextSeq = (int) Invoice::whereYear('invoice_date', $year)->max('id') + 1;
-        $number = 'INV-'.$year.'-'.str_pad((string) $nextSeq, 5, '0', STR_PAD_LEFT);
+        $invoice = DB::transaction(function () use ($payment, $user, $amountEur) {
+            $year = date('Y');
+            $nextSeq = (int) Invoice::whereYear('invoice_date', $year)->max('id') + 1;
+            $number = 'INV-'.$year.'-'.str_pad((string) $nextSeq, 5, '0', STR_PAD_LEFT);
 
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'site_subscription_id' => null,
-            'mollie_payment_id' => $payment->id,
-            'number' => $number,
-            'type' => 'prepaid_charge',
-            'amount' => $amountEur,
-            'tax' => 0,
-            'status' => 'paid',
-            'billing_period_start' => null,
-            'billing_period_end' => null,
-            'invoice_date' => now(),
-            'metadata' => ['mollie_payment_id' => $payment->id],
-        ]);
+            $invoice = Invoice::create([
+                'user_id' => $user->id,
+                'site_subscription_id' => null,
+                'mollie_payment_id' => $payment->id,
+                'number' => $number,
+                'type' => 'prepaid_charge',
+                'amount' => $amountEur,
+                'tax' => 0,
+                'status' => 'paid',
+                'billing_period_start' => null,
+                'billing_period_end' => null,
+                'invoice_date' => now(),
+                'metadata' => ['mollie_payment_id' => $payment->id],
+            ]);
+
+            BalanceTransaction::create([
+                'user_id' => $user->id,
+                'amount' => $amountEur,
+                'type' => 'mollie_topup',
+                'description' => 'Guthaben aufladen (Mollie)',
+                'reference_type' => Invoice::class,
+                'reference_id' => $invoice->id,
+            ]);
+
+            $balance = CustomerBalance::firstOrCreate(
+                ['user_id' => $user->id],
+                ['balance' => 0]
+            );
+            $balance->increment('balance', $amountEur);
+
+            return $invoice;
+        });
 
         try {
             $pdfPath = $this->invoicePdfService->generate($invoice);
@@ -139,22 +174,11 @@ class MollieWebhookController extends CashierWebhookController
             report($e);
         }
 
-        BalanceTransaction::create([
-            'user_id' => $user->id,
-            'amount' => $amountEur,
-            'type' => 'mollie_topup',
-            'description' => 'Guthaben aufladen (Mollie)',
-            'reference_type' => Invoice::class,
-            'reference_id' => $invoice->id,
-        ]);
-
-        $balance = CustomerBalance::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0]
-        );
-        $balance->increment('balance', $amountEur);
-
-        $invoice->user->notify(new InvoiceCreatedNotification($invoice));
+        try {
+            $invoice->user->notify(new InvoiceCreatedNotification($invoice));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         Log::info('Mollie webhook: balance top-up processed', [
             'user_id' => $user->id,

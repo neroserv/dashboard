@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,8 @@ import {
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { ref, computed } from 'vue';
-import { Eye, EyeOff, Copy, ExternalLink, Mail, Server, LayoutDashboard, KeyRound } from 'lucide-vue-next';
+import { Eye, EyeOff, Copy, ExternalLink, Mail, Server, LayoutDashboard, KeyRound, CalendarPlus, Calendar } from 'lucide-vue-next';
+import PaymentMethodModal from '@/components/PaymentMethodModal.vue';
 
 type WebspaceAccount = {
     id: number;
@@ -48,13 +49,36 @@ type Props = {
     pleskPassword: string | null;
     webmailUrl: string;
     resourceUsage: ResourceUsage | null;
+    canRenew?: boolean;
+    renewalAmount?: number;
+    canPayWithBalance?: boolean;
+    customerBalance?: number;
+    renewUrl?: string;
+    isSuspendedOrExpired?: boolean;
 };
 
 const props = withDefaults(defineProps<Props>(), {
     resourceUsage: null,
+    canRenew: false,
+    renewalAmount: 0,
+    canPayWithBalance: false,
+    customerBalance: 0,
+    renewUrl: '',
+    isSuspendedOrExpired: false,
 });
 
 const showPassword = ref(false);
+const renewModalOpen = ref(false);
+
+const renewalPeriodOptions: { months: 1 | 2 | 3; label: string }[] = [
+    { months: 1, label: '30 Tage (1 Monat)' },
+    { months: 2, label: '60 Tage (2 Monate)' },
+    { months: 3, label: '90 Tage (3 Monate)' },
+];
+
+const page = usePage();
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {});
+const showAboVerwalten = computed(() => !brandFeatures.value?.prepaid_balance);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -133,9 +157,26 @@ function resourcePercent(used: number, limit: number): number {
                         <Heading level="h5" class="mt-2">Webspace</Heading>
                         <Text class="mt-0.5 font-mono text-sm" muted>{{ webspaceAccount.domain }}</Text>
                         <Text class="mt-0.5 text-xs" muted>{{ webspaceAccount.hosting_plan.name }}</Text>
+                        <div class="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-center">
+                            <div class="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                                <Calendar class="h-3.5 w-3.5 shrink-0" />
+                                <span>Läuft bis</span>
+                            </div>
+                            <div class="mt-0.5 text-sm font-semibold">{{ formatDate(webspaceAccount.current_period_ends_at) }}</div>
+                            <div v-if="webspaceAccount.cancel_at_period_end" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                Kündigung zum Periodenende
+                            </div>
+                        </div>
                     </div>
                     <div class="mt-4 flex flex-col gap-3">
+                        <template v-if="isSuspendedOrExpired">
+                            <Button class="w-full justify-start gap-2" disabled>
+                                <ExternalLink class="h-4 w-4" />
+                                Gesperrt – bitte verlängern
+                            </Button>
+                        </template>
                         <Link
+                            v-else
                             :href="`/webspace-accounts/${webspaceAccount.id}/plesk-login`"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -145,7 +186,17 @@ function resourcePercent(used: number, limit: number): number {
                                 Zum Plesk-Panel
                             </Button>
                         </Link>
-                        <Link href="/billing/portal">
+                        <template v-if="canRenew && renewUrl">
+                            <Button
+                                variant="default"
+                                class="w-full justify-start gap-2"
+                                @click="renewModalOpen = true"
+                            >
+                                <CalendarPlus class="h-4 w-4" />
+                                Verlängern
+                            </Button>
+                        </template>
+                        <Link v-if="showAboVerwalten" href="/billing/subscriptions">
                             <Button variant="outline" class="w-full justify-start gap-2">
                                 Abo verwalten
                             </Button>
@@ -207,8 +258,8 @@ function resourcePercent(used: number, limit: number): number {
                                 </CardContent>
                             </Card>
 
-                            <!-- Abo -->
-                            <Card>
+                            <!-- Abo (nur bei Abo-Marken) oder Genutzte Ressourcen (bei Prepaid in der Lücke) -->
+                            <Card v-if="showAboVerwalten">
                                 <CardHeader>
                                     <CardTitle>Abo</CardTitle>
                                     <CardDescription>Verlängerung und Kündigung</CardDescription>
@@ -227,15 +278,76 @@ function resourcePercent(used: number, limit: number): number {
                                             <span v-else>Nein</span>
                                         </div>
                                     </dl>
-                                    <Link href="/billing/portal">
+                                    <Link href="/billing/subscriptions">
                                         <Button variant="outline" class="w-full">Abo im Kundenbereich verwalten</Button>
                                     </Link>
                                 </CardContent>
                             </Card>
+                            <!-- Bei Prepaid: Genutzte Ressourcen in die gleiche Grid-Position -->
+                            <Card v-else-if="resourceUsage" class="resource-usage-card">
+                                <CardHeader>
+                                    <CardTitle>Genutzte Ressourcen</CardTitle>
+                                    <CardDescription>
+                                        Speicherplatz und Kontingente aus dem Plesk-Panel
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent class="space-y-4">
+                                    <div>
+                                        <div class="mb-1 flex justify-between text-sm">
+                                            <span class="font-medium">Speicherplatz</span>
+                                            <span class="text-muted-foreground">
+                                                {{ formatBytesToGb(resourceUsage.disk_used_bytes) }} / {{ formatBytesToGb(resourceUsage.disk_limit_bytes) }} GB
+                                            </span>
+                                        </div>
+                                        <div class="h-2 rounded-full bg-muted">
+                                            <div
+                                                class="h-full rounded-full bg-primary transition-all"
+                                                :style="{ width: `${resourcePercent(resourceUsage.disk_used_bytes, resourceUsage.disk_limit_bytes)}%` }"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="mb-1 flex justify-between text-sm">
+                                            <span class="font-medium">Domains</span>
+                                            <span class="text-muted-foreground">{{ resourceUsage.domains_used }} / {{ resourceUsage.domains_limit }}</span>
+                                        </div>
+                                        <div class="h-2 rounded-full bg-muted">
+                                            <div
+                                                class="h-full rounded-full bg-primary transition-all"
+                                                :style="{ width: `${resourcePercent(resourceUsage.domains_used, resourceUsage.domains_limit)}%` }"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="mb-1 flex justify-between text-sm">
+                                            <span class="font-medium">E-Mail-Postfächer</span>
+                                            <span class="text-muted-foreground">{{ resourceUsage.mailboxes_used }} / {{ resourceUsage.mailboxes_limit }}</span>
+                                        </div>
+                                        <div class="h-2 rounded-full bg-muted">
+                                            <div
+                                                class="h-full rounded-full bg-primary transition-all"
+                                                :style="{ width: `${resourcePercent(resourceUsage.mailboxes_used, resourceUsage.mailboxes_limit)}%` }"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="mb-1 flex justify-between text-sm">
+                                            <span class="font-medium">Datenbanken</span>
+                                            <span class="text-muted-foreground">{{ resourceUsage.databases_used }} / {{ resourceUsage.databases_limit }}</span>
+                                        </div>
+                                        <div class="h-2 rounded-full bg-muted">
+                                            <div
+                                                class="h-full rounded-full bg-primary transition-all"
+                                                :style="{ width: `${resourcePercent(resourceUsage.databases_used, resourceUsage.databases_limit)}%` }"
+                                            />
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
 
-                        <!-- Genutzte Ressourcen (Plesk API) -->
-                        <Card v-if="resourceUsage" class="mt-4">
+                        <!-- Genutzte Ressourcen unter dem Grid (nur wenn Abo-Karte oben gezeigt wurde) -->
+                        <Card v-if="showAboVerwalten && resourceUsage" class="mt-4">
                             <CardHeader>
                                 <CardTitle>Genutzte Ressourcen</CardTitle>
                                 <CardDescription>
@@ -395,7 +507,14 @@ function resourcePercent(used: number, limit: number): number {
                                     </div>
                                 </div>
                                 <div class="flex flex-wrap gap-3 pt-2">
+                                    <template v-if="isSuspendedOrExpired">
+                                        <Button disabled>
+                                            <ExternalLink class="mr-2 h-4 w-4" />
+                                            Gesperrt – bitte verlängern
+                                        </Button>
+                                    </template>
                                     <a
+                                        v-else
                                         :href="`/webspace-accounts/${webspaceAccount.id}/plesk-login`"
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -418,5 +537,19 @@ function resourcePercent(used: number, limit: number): number {
                 </Tabs>
             </div>
         </div>
+
+        <PaymentMethodModal
+            v-if="canRenew && renewUrl"
+            :open="renewModalOpen"
+            :amount="renewalAmount"
+            title="Verlängerung bezahlen"
+            description="Webspace verlängern."
+            :can-pay-with-balance="canPayWithBalance"
+            :customer-balance="customerBalance"
+            :submit-url="renewUrl"
+            :period-options="renewalPeriodOptions"
+            :base-amount-per-month="renewalAmount"
+            @update:open="renewModalOpen = $event"
+        />
     </AppLayout>
 </template>

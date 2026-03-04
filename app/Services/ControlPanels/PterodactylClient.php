@@ -79,6 +79,90 @@ class PterodactylClient implements ControlPanelContract
     }
 
     /**
+     * POST request to Pterodactyl Application API (e.g. suspend, unsuspend).
+     */
+    protected function apiPost(string $path): void
+    {
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = $config['api_key'] ?? $this->server?->api_token ?? '';
+        if ($baseUri === '' || $apiKey === '') {
+            throw new Exception('Pterodactyl: base_uri and api_key must be set in server config');
+        }
+        $url = $baseUri.$path;
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => 'application/json',
+        ])->timeout(15)->post($url);
+        if (! $response->successful()) {
+            $body = $response->json();
+            $msg = $body['errors'][0]['detail'] ?? $body['errors'][0]['code'] ?? $response->reason();
+
+            throw new Exception('Pterodactyl API: '.$msg);
+        }
+    }
+
+    /**
+     * DELETE request to Pterodactyl Application API (e.g. delete server).
+     */
+    protected function apiDelete(string $path): void
+    {
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = $config['api_key'] ?? $this->server?->api_token ?? '';
+        if ($baseUri === '' || $apiKey === '') {
+            throw new Exception('Pterodactyl: base_uri and api_key must be set in server config');
+        }
+        $url = $baseUri.$path;
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => 'application/json',
+        ])->timeout(30)->delete($url);
+        if (! $response->successful()) {
+            $body = $response->json();
+            $msg = $body['errors'][0]['detail'] ?? $body['errors'][0]['code'] ?? $response->reason();
+
+            throw new Exception('Pterodactyl API: '.$msg);
+        }
+    }
+
+    /**
+     * Suspend a server (Application API). Use when account period has expired.
+     */
+    public function suspendServer(GameServerAccount $account): void
+    {
+        if (! $account->pterodactyl_server_id || ! $account->hostingServer) {
+            throw new Exception('Pterodactyl: server id or hosting server missing');
+        }
+        $this->setServer($account->hostingServer);
+        $this->apiPost('/api/application/servers/'.$account->pterodactyl_server_id.'/suspend');
+    }
+
+    /**
+     * Unsuspend a server (Application API). Use after successful renewal.
+     */
+    public function unsuspendServer(GameServerAccount $account): void
+    {
+        if (! $account->pterodactyl_server_id || ! $account->hostingServer) {
+            throw new Exception('Pterodactyl: server id or hosting server missing');
+        }
+        $this->setServer($account->hostingServer);
+        $this->apiPost('/api/application/servers/'.$account->pterodactyl_server_id.'/unsuspend');
+    }
+
+    /**
+     * Delete a server from the panel (Application API). Use after grace period.
+     */
+    public function deleteServer(GameServerAccount $account): void
+    {
+        if (! $account->pterodactyl_server_id || ! $account->hostingServer) {
+            throw new Exception('Pterodactyl: server id or hosting server missing');
+        }
+        $this->setServer($account->hostingServer);
+        $this->apiDelete('/api/application/servers/'.$account->pterodactyl_server_id);
+    }
+
+    /**
      * Raw request to Pterodactyl Client API (resources, power). Uses client_api_key if set, else api_key.
      *
      * @param  array<string, mixed>  $body
@@ -403,7 +487,14 @@ class PterodactylClient implements ControlPanelContract
                 'params' => $paramsForLog,
             ]);
 
-            throw new Exception('Pterodactyl: '.$e->getMessage(), (int) $e->getCode(), $e);
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'No nodes satisfying the requirements') || str_contains($msg, 'could not be found')) {
+                $memory = (int) ($params['memory'] ?? 512);
+                $disk = (int) ($params['disk'] ?? 5120);
+                $msg = "Kein Node mit freien Ressourcen gefunden (benötigt: {$memory} MB RAM, {$disk} MB Disk). Im Pterodactyl-Panel prüfen: Nodes → freie Kapazität, Allocations → ungenutzte Ports.";
+            }
+
+            throw new Exception('Pterodactyl: '.$msg, (int) $e->getCode(), $e);
         }
     }
 
@@ -467,23 +558,53 @@ class PterodactylClient implements ControlPanelContract
 
     /**
      * Resolve a free allocation from any deployable node (used when no specific node is set).
-     * Avoids NoViableAllocationException by choosing the allocation ourselves instead of letting the panel decide.
+     * Tries with plan location_ids first; if no node is found, retries without location filter.
      *
      * @param  array<string, mixed>  $params  Must include memory, disk; optional location_ids
-     * @return int Allocation id, or 0 if none found
+     * @return int Allocation id
      */
     protected function resolveDeployableAllocation(array $params): int
     {
-        $memory = (int) ($params['memory'] ?? 512);
-        $disk = (int) ($params['disk'] ?? 5120);
         $locationIds = $params['location_ids'] ?? [];
         if (! is_array($locationIds)) {
             $locationIds = $locationIds ? [$locationIds] : [];
         }
+        $triedWithLocations = ! empty($locationIds);
         if (empty($locationIds)) {
             $locations = $this->getLocations();
             $locationIds = array_column($locations, 'id');
         }
+
+        $allocId = $this->fetchDeployableAllocation((int) ($params['memory'] ?? 512), (int) ($params['disk'] ?? 5120), $locationIds);
+        if ($allocId > 0) {
+            return $allocId;
+        }
+
+        if ($triedWithLocations) {
+            $allocId = $this->fetchDeployableAllocation((int) ($params['memory'] ?? 512), (int) ($params['disk'] ?? 5120), []);
+            if ($allocId > 0) {
+                Log::info('Pterodactyl: deployable allocation found without location filter (fallback).');
+
+                return $allocId;
+            }
+        }
+
+        $memory = (int) ($params['memory'] ?? 512);
+        $disk = (int) ($params['disk'] ?? 5120);
+        throw new Exception(
+            'Pterodactyl: Kein Node mit freien Ressourcen gefunden. '
+            ."Benötigt: {$memory} MB RAM, {$disk} MB Disk. "
+            .'Bitte im Panel prüfen: Nodes haben genug freie Kapazität? Unter Nodes → Allocations sind ungenutzte Ports vorhanden?'
+        );
+    }
+
+    /**
+     * Call deployable API and return first free allocation id, or 0.
+     *
+     * @param  array<int>  $locationIds  Empty = any location
+     */
+    protected function fetchDeployableAllocation(int $memory, int $disk, array $locationIds): int
+    {
         $query = [
             'memory' => $memory,
             'disk' => $disk,
@@ -507,11 +628,8 @@ class PterodactylClient implements ControlPanelContract
                 }
             }
         }
-        if (empty($nodes)) {
-            throw new Exception('Pterodactyl: No deployable nodes found (insufficient memory/disk on nodes or no locations). Add capacity or select other locations.');
-        }
 
-        throw new Exception('Pterodactyl: No free port allocations on any deployable node. Add more allocations in the panel (Nodes → Node → Allocations).');
+        return 0;
     }
 
     /**

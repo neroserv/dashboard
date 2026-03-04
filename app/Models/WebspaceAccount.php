@@ -20,6 +20,7 @@ class WebspaceAccount extends Model
         'plesk_password_encrypted',
         'status',
         'mollie_subscription_id',
+        'mollie_payment_id',
         'current_period_ends_at',
         'cancel_at_period_end',
         'ends_at',
@@ -56,5 +57,17 @@ class WebspaceAccount extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * True if the account is suspended or period has ended (no control, only renew).
+     */
+    public function isSuspendedOrExpired(): bool
+    {
+        if ($this->status === 'suspended') {
+            return true;
+        }
+
+        return $this->current_period_ends_at !== null && $this->current_period_ends_at->isPast();
     }
 }

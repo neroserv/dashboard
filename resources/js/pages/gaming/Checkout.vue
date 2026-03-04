@@ -479,7 +479,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                             />
                                             <div class="flex min-w-0 flex-1 items-center gap-2">
                                                 <Wallet class="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                <span class="text-sm">Guthaben</span>
+                                                <span class="text-sm">Mit Guthaben bezahlen</span>
                                                 <span v-if="canSubmitWithBalance" class="truncate text-xs text-muted-foreground">
                                                     ({{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
                                                 </span>
@@ -489,7 +489,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     </div>
                                     <div class="mt-auto flex flex-col gap-2">
                                     <Button type="submit" class="w-full" size="lg" :disabled="processing">
-                                        {{ processing ? 'Wird weitergeleitet…' : 'Weiter zur Zahlung' }}
+                                        {{ processing ? 'Wird weitergeleitet…' : (paymentMethod === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Weiter zur Zahlung') }}
                                     </Button>
                                     <Link href="/gaming" class="block">
                                         <Button type="button" variant="outline" class="w-full">Abbrechen</Button>

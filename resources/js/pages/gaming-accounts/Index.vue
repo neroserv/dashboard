@@ -136,7 +136,7 @@ function statusVariant(overview: ServerOverview | null, fallbackStatus: string):
                             </div>
                             <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Calendar class="h-3.5 w-3.5 shrink-0" />
-                                <span>Verlängerung: {{ formatDate(acc.current_period_ends_at) }}</span>
+                                <span>Läuft bis: {{ formatDate(acc.current_period_ends_at) }}</span>
                             </div>
                             <div class="flex justify-end pt-1">
                                 <Button variant="ghost" size="sm" class="text-primary" as="span">

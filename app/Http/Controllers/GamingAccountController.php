@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Cashier\Checkout;
+use Mollie\Api\Exceptions\ApiException as MollieApiException;
+use Mollie\Api\MollieApiClient;
 use RuntimeException;
 use Stripe\Checkout\Session as StripeSession;
 use Stripe\Exception\InvalidRequestException;
@@ -125,6 +127,8 @@ class GamingAccountController extends Controller
             $customerBalance = $balance ? (float) $balance->balance : 0.0;
         }
 
+        $isSuspendedOrExpired = $gameServerAccount->isSuspendedOrExpired();
+
         return Inertia::render('gaming-accounts/Show', [
             'gameServerAccount' => $gameServerAccount,
             'loginUrl' => $loginUrl,
@@ -135,6 +139,7 @@ class GamingAccountController extends Controller
             'canPayWithBalance' => $canPayWithBalance,
             'customerBalance' => $customerBalance,
             'renewUrl' => route('gaming-accounts.renew', $gameServerAccount),
+            'isSuspendedOrExpired' => $isSuspendedOrExpired,
         ]);
     }
 
@@ -150,6 +155,12 @@ class GamingAccountController extends Controller
 
         if ($gameServerAccount->user_id !== $request->user()->id) {
             abort(404);
+        }
+
+        if ($gameServerAccount->isSuspendedOrExpired()) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Der Server ist gesperrt oder abgelaufen. Bitte verlängern Sie zuerst.');
         }
 
         $action = $request->input('action', '');
@@ -185,6 +196,10 @@ class GamingAccountController extends Controller
 
         if ($gameServerAccount->user_id !== $request->user()->id) {
             return response()->json(['error' => 'not found'], 404);
+        }
+
+        if ($gameServerAccount->isSuspendedOrExpired()) {
+            return response()->json(['error' => 'suspended', 'serverOverview' => null], 403);
         }
 
         $gameServerAccount->load('hostingServer');
@@ -249,9 +264,19 @@ class GamingAccountController extends Controller
             $from = $gameServerAccount->current_period_ends_at && $gameServerAccount->current_period_ends_at->isFuture()
                 ? $gameServerAccount->current_period_ends_at
                 : now();
+            $wasSuspended = $gameServerAccount->status === 'suspended';
             $gameServerAccount->update([
                 'current_period_ends_at' => $from->copy()->addMonths($periodMonths),
+                'status' => 'active',
             ]);
+            if ($wasSuspended && $gameServerAccount->hostingServer && $gameServerAccount->pterodactyl_server_id) {
+                try {
+                    $client = app(PterodactylClient::class);
+                    $client->unsuspendServer($gameServerAccount->fresh());
+                } catch (\Throwable) {
+                    // status already active; Pterodactyl unsuspend can be retried manually if needed
+                }
+            }
 
             return redirect()
                 ->route('gaming-accounts.show', $gameServerAccount)
@@ -337,9 +362,51 @@ class GamingAccountController extends Controller
         }
     }
 
+    /**
+     * Cancel subscription at period end (Mollie). Only owner.
+     */
+    public function cancelSubscription(Request $request, GameServerAccount $gameServerAccount): RedirectResponse
+    {
+        $redirect = $this->ensureGamingFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        if ($gameServerAccount->user_id !== $request->user()->id) {
+            abort(403, 'Nur der Besitzer kann das Abo kündigen.');
+        }
+
+        if (! $gameServerAccount->mollie_subscription_id) {
+            return redirect()
+                ->route('billing.subscriptions')
+                ->with('error', 'Kein Abo mit diesem Game-Server verknüpft.');
+        }
+
+        $user = $request->user();
+        if (! $user->mollie_customer_id) {
+            return redirect()
+                ->route('billing.subscriptions')
+                ->with('error', 'Kein Mollie-Kunde verknüpft.');
+        }
+
+        try {
+            app(MollieApiClient::class)->subscriptions->cancelForId($user->mollie_customer_id, $gameServerAccount->mollie_subscription_id);
+        } catch (MollieApiException $e) {
+            return redirect()
+                ->route('billing.subscriptions')
+                ->with('error', 'Die Kündigung konnte nicht durchgeführt werden. Bitte versuchen Sie es später erneut.');
+        }
+
+        $gameServerAccount->update(['cancel_at_period_end' => true]);
+
+        return redirect()
+            ->route('billing.subscriptions')
+            ->with('success', 'Ihr Game-Server-Abo wurde zum Periodenende gekündigt.');
+    }
+
     protected function accountCanRenew(GameServerAccount $account): bool
     {
-        if ($account->renewal_type !== 'manual' || $account->stripe_subscription_id !== null) {
+        if ($account->renewal_type !== 'manual' || $account->mollie_subscription_id !== null) {
             return false;
         }
 

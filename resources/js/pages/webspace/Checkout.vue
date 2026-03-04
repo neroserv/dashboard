@@ -96,6 +96,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     class="space-y-6"
                     v-slot="{ errors, processing }"
                 >
+                    <input type="hidden" name="payment_method" :value="paymentMethod" />
                     <CardContent class="space-y-4">
                         <div class="space-y-2">
                             <Label for="domain">Domain *</Label>
@@ -130,7 +131,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             </select>
                             <InputError :message="errors.hosting_plan_id" />
                         </div>
-                        <div v-if="props.canPayWithBalance && props.selectedPlan" class="space-y-2 rounded-md border p-4">
+                        <div v-if="props.canPayWithBalance" class="space-y-2 rounded-md border p-4">
                             <Label class="text-base">Zahlungsart</Label>
                             <div class="flex flex-col gap-3">
                                 <label class="flex cursor-pointer flex-col gap-2">
@@ -170,7 +171,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     </CardContent>
                     <CardFooter class="flex gap-2">
                         <Button type="submit" :disabled="processing">
-                            {{ processing ? 'Wird weitergeleitet…' : 'Weiter zur Zahlung' }}
+                            {{ processing ? 'Wird weitergeleitet…' : (paymentMethod === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Weiter zur Zahlung') }}
                         </Button>
                         <Link href="/webspace">
                             <Button type="button" variant="outline">Abbrechen</Button>

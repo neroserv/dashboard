@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\MollieWebhookController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CronStatisticsController;
@@ -44,6 +43,7 @@ use App\Http\Controllers\GamingAccountController;
 use App\Http\Controllers\GamingController;
 use App\Http\Controllers\InvoiceController as CustomerInvoiceController;
 use App\Http\Controllers\ModuleController;
+use App\Http\Controllers\MollieWebhookController;
 use App\Http\Controllers\PostfachController;
 use App\Http\Controllers\RedeemVoucherController;
 use App\Http\Controllers\SiteCollaboratorController;
@@ -145,6 +145,11 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('webspace-accounts', [WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');
     Route::get('webspace-accounts/{webspace_account}/plesk-login', [WebspaceAccountController::class, 'pleskLogin'])->name('webspace-accounts.plesk-login');
     Route::get('webspace-accounts/{webspace_account}', [WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
+    Route::post('webspace-accounts/{webspace_account}/renew', [WebspaceAccountController::class, 'renew'])
+        ->middleware('billing.profile')
+        ->name('webspace-accounts.renew');
+    Route::post('webspace-accounts/{webspace_account}/subscription/cancel', [WebspaceAccountController::class, 'cancelSubscription'])
+        ->name('webspace-accounts.subscription.cancel');
 
     Route::get('gaming', [GamingController::class, 'index'])->name('gaming.index');
     Route::get('gaming/checkout/pterodactyl-nests', [GamingController::class, 'pterodactylNests'])->name('gaming.checkout.pterodactyl-nests');
@@ -158,12 +163,15 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::post('gaming-accounts/{game_server_account}/renew', [GamingAccountController::class, 'renew'])
         ->middleware('billing.profile')
         ->name('gaming-accounts.renew');
+    Route::post('gaming-accounts/{game_server_account}/subscription/cancel', [GamingAccountController::class, 'cancelSubscription'])
+        ->name('gaming-accounts.subscription.cancel');
 
     Route::get('invoices/{invoice}', [CustomerInvoiceController::class, 'showView'])->name('invoices.show');
     Route::post('invoices/{invoice}/pay', [CustomerInvoiceController::class, 'pay'])->name('invoices.pay');
     Route::get('invoices/{invoice}/pdf', [CustomerInvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
     Route::get('invoices/{invoice}/xml', [CustomerInvoiceController::class, 'downloadXml'])->name('invoices.xml');
     Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::get('billing/subscriptions', [BillingController::class, 'subscriptions'])->name('billing.subscriptions');
     Route::get('billing/portal', [BillingPortalController::class, 'redirect'])->name('billing.portal');
     Route::post('billing/ai-tokens/checkout', [AiTokenController::class, 'checkout'])
         ->middleware('billing.profile')

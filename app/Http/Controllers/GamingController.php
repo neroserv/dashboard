@@ -109,17 +109,17 @@ class GamingController extends Controller
             ->orderBy('name')
             ->get();
 
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
         $payload = [
             'hostingPlans' => $plans,
             'selectedPlan' => $plan,
         ];
-        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
-        if ($plan && ($brandFeatures['prepaid_balance'] ?? false)) {
+        if ($brandFeatures['prepaid_balance'] ?? false) {
             $customerBalance = CustomerBalance::where('user_id', $request->user()->id)->first();
             $payload['canPayWithBalance'] = true;
             $payload['customerBalance'] = $customerBalance ? (float) $customerBalance->balance : 0.0;
-            $payload['amountRequired'] = (float) $plan->price;
+            $payload['amountRequired'] = $plan ? (float) $plan->price : 0.0;
         }
 
         return Inertia::render('gaming/Checkout', $payload);

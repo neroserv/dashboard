@@ -29,6 +29,7 @@ import {
     RotateCw,
     Loader2,
     CalendarPlus,
+    Calendar,
 } from 'lucide-vue-next';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { notify } from '@/composables/useNotify';
@@ -71,6 +72,7 @@ type Props = {
     canPayWithBalance?: boolean;
     customerBalance?: number;
     renewUrl?: string;
+    isSuspendedOrExpired?: boolean;
 };
 
 const props = withDefaults(defineProps<Props>(), {
@@ -79,6 +81,7 @@ const props = withDefaults(defineProps<Props>(), {
     canPayWithBalance: false,
     customerBalance: 0,
     renewUrl: '',
+    isSuspendedOrExpired: false,
 });
 
 const powerLoading = ref<string | null>(null);
@@ -93,6 +96,15 @@ const renewalPeriodOptions: { months: 1 | 3 | 6 | 12; label: string }[] = [
 ];
 
 const displayOverview = computed(() => liveOverview.value ?? props.serverOverview ?? null);
+
+const page = usePage();
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {});
+const showAboVerwalten = computed(
+    () => !brandFeatures.value?.prepaid_balance && !props.canRenew,
+);
+const showRenewButton = computed(
+    () => props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+);
 
 let overviewPollInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -229,15 +241,31 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                         <Heading level="h5" class="mt-2">Game Server</Heading>
                         <Text class="mt-0.5 text-sm" muted>{{ gameServerAccount.name }}</Text>
                         <Text class="mt-0.5 text-xs" muted>{{ gameServerAccount.hosting_plan.name }}</Text>
+                        <div class="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-center">
+                            <div class="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                                <Calendar class="h-3.5 w-3.5 shrink-0" />
+                                <span>Läuft bis</span>
+                            </div>
+                            <div class="mt-0.5 text-sm font-semibold">{{ formatDate(gameServerAccount.current_period_ends_at) }}</div>
+                            <div v-if="gameServerAccount.cancel_at_period_end" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                Kündigung zum Periodenende
+                            </div>
+                        </div>
                     </div>
                     <div class="mt-4 flex flex-col gap-3">
-                        <Link v-if="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer">
+                        <template v-if="isSuspendedOrExpired">
+                            <Button class="w-full justify-start gap-2" disabled>
+                                <ExternalLink class="h-4 w-4" />
+                                Gesperrt – bitte verlängern
+                            </Button>
+                        </template>
+                        <Link v-else-if="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer">
                             <Button class="w-full justify-start gap-2">
                                 <ExternalLink class="h-4 w-4" />
                                 Zum Pterodactyl-Panel
                             </Button>
                         </Link>
-                        <template v-if="canRenew && renewUrl">
+                        <template v-if="showRenewButton">
                             <Button
                                 variant="default"
                                 class="w-full justify-start gap-2"
@@ -247,7 +275,7 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                 Verlängern
                             </Button>
                         </template>
-                        <Link v-if="!canRenew" href="/billing/portal">
+                        <Link v-if="showAboVerwalten" href="/billing/subscriptions">
                             <Button variant="outline" class="w-full justify-start gap-2">
                                 Abo verwalten
                             </Button>
@@ -354,7 +382,13 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="space-y-4">
-                                    <div v-if="displayOverview?.can_power" class="flex flex-wrap gap-2">
+                                    <div
+                                        v-if="isSuspendedOrExpired"
+                                        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                                    >
+                                        Der Server ist gesperrt oder abgelaufen. Bitte verlängern Sie, um die Steuerung wieder zu nutzen.
+                                    </div>
+                                    <div v-else-if="displayOverview?.can_power" class="flex flex-wrap gap-2">
                                         <Button
                                             size="sm"
                                             class="bg-green-600 hover:bg-green-700"
@@ -396,7 +430,8 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                             Stop
                                         </Button>
                                     </div>
-                                    <dl class="grid gap-2 text-sm">
+                                    <!-- Abo-Infos nur bei Abo (nicht bei Prepaid/Verlängerung) -->
+                                    <dl v-if="!canRenew" class="grid gap-2 text-sm">
                                         <div class="flex justify-between py-2 border-b">
                                             <dt class="text-muted-foreground">Nächste Verlängerung</dt>
                                             <dd>{{ formatDate(gameServerAccount.current_period_ends_at) }}</dd>
@@ -560,7 +595,7 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                 </div>
                                 <div class="pt-2">
                                     <a
-                                        v-if="loginUrl"
+                                        v-if="loginUrl && !isSuspendedOrExpired"
                                         :href="loginUrl"
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -569,6 +604,9 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                         <ExternalLink class="mr-2 h-4 w-4" />
                                         Im Panel anmelden
                                     </a>
+                                    <p v-else-if="isSuspendedOrExpired" class="text-sm text-muted-foreground">
+                                        Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -584,12 +622,15 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Link v-if="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer">
+                                <Link v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener noreferrer">
                                     <Button>
                                         <ExternalLink class="mr-2 h-4 w-4" />
                                         Panel öffnen (Passwort verwalten)
                                     </Button>
                                 </Link>
+                                <Text v-else-if="isSuspendedOrExpired" class="text-muted-foreground">
+                                    Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
+                                </Text>
                                 <Text v-else class="text-muted-foreground">
                                     Sobald der Server aktiv ist, können Sie sich im Panel anmelden und dort das
                                     Passwort verwalten.
@@ -612,12 +653,15 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                                     <label class="text-sm font-medium">Aktueller Name</label>
                                     <Input :model-value="gameServerAccount.name" readonly class="bg-muted" />
                                 </div>
-                                <Link v-if="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer">
+                                <Link v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener noreferrer">
                                     <Button variant="outline">
                                         <Pencil class="mr-2 h-4 w-4" />
                                         Im Panel umbenennen
                                     </Button>
                                 </Link>
+                                <Text v-else-if="isSuspendedOrExpired" class="text-muted-foreground">
+                                    Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
+                                </Text>
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -626,7 +670,7 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
         </div>
 
         <PaymentMethodModal
-            v-if="canRenew && renewUrl"
+            v-if="showRenewButton"
             :open="renewModalOpen"
             :amount="renewalAmount"
             title="Verlängerung bezahlen"

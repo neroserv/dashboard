@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\BalanceTransaction;
 use App\Models\Brand;
 use App\Models\CustomerBalance;
+use App\Models\GameServerAccount;
+use App\Models\WebspaceAccount;
 use App\Services\AiTokenService;
 use App\Support\MollieWebhookUrl;
 use Carbon\Carbon;
@@ -93,6 +95,53 @@ class BillingController extends Controller
         }
 
         return Inertia::render('billing/Index', $payload);
+    }
+
+    /**
+     * Abo-Verwaltung: Liste aller Abos (Game-Server + Webspace) mit Mollie-Subscription, Kündigung zum Periodenende.
+     */
+    public function subscriptions(Request $request): Response
+    {
+        $user = $request->user();
+
+        $gameServerSubscriptions = GameServerAccount::where('user_id', $user->id)
+            ->whereNotNull('mollie_subscription_id')
+            ->with('hostingPlan')
+            ->get()
+            ->map(fn (GameServerAccount $a) => [
+                'id' => $a->id,
+                'type' => 'gaming',
+                'name' => $a->name,
+                'plan_name' => $a->hostingPlan?->name,
+                'current_period_ends_at' => $a->current_period_ends_at?->toIso8601String(),
+                'cancel_at_period_end' => (bool) $a->cancel_at_period_end,
+                'show_url' => route('gaming-accounts.show', $a),
+                'cancel_url' => route('gaming-accounts.subscription.cancel', $a),
+            ])
+            ->values()
+            ->all();
+
+        $webspaceSubscriptions = WebspaceAccount::where('user_id', $user->id)
+            ->whereNotNull('mollie_subscription_id')
+            ->with('hostingPlan')
+            ->get()
+            ->map(fn (WebspaceAccount $a) => [
+                'id' => $a->id,
+                'type' => 'webspace',
+                'name' => $a->domain,
+                'plan_name' => $a->hostingPlan?->name,
+                'current_period_ends_at' => $a->current_period_ends_at?->toIso8601String(),
+                'cancel_at_period_end' => (bool) $a->cancel_at_period_end,
+                'show_url' => route('webspace-accounts.show', $a),
+                'cancel_url' => route('webspace-accounts.subscription.cancel', $a),
+            ])
+            ->values()
+            ->all();
+
+        return Inertia::render('billing/Subscriptions', [
+            'gameServerSubscriptions' => $gameServerSubscriptions,
+            'webspaceSubscriptions' => $webspaceSubscriptions,
+        ]);
     }
 
     public function balanceCheckout(\App\Http\Requests\BalanceCheckoutRequest $request): \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response

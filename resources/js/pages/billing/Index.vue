@@ -24,9 +24,33 @@ import { Input } from '@/components/ui/input';
 import { dashboard } from '@/routes';
 import billing from '@/routes/billing';
 import type { BreadcrumbItem } from '@/types';
-import { ExternalLink, Sparkles, Wallet } from 'lucide-vue-next';
+import {
+    ExternalLink,
+    Sparkles,
+    Wallet,
+    Coins,
+    Pencil,
+    Lock,
+    ArrowRight,
+    Shield,
+    Zap,
+    Ban,
+    Headset,
+    Receipt,
+} from 'lucide-vue-next';
 import { ref } from 'vue';
 import PaymentMethodLogo from '@/components/PaymentMethodLogo.vue';
+
+const QUICK_AMOUNTS = [
+    { value: 5 },
+    { value: 10 },
+    { value: 20, badge: 'Beliebt' },
+    { value: 50, badge: 'Empfohlen' },
+    { value: 100 },
+    { value: 200 },
+] as const;
+const BALANCE_TOPUP_MIN = 5;
+const BALANCE_TOPUP_MAX = 500;
 
 type Invoice = {
     id: number;
@@ -84,9 +108,15 @@ function checkoutAiTokens(amount: number): void {
     });
 }
 
+const balanceTopUpMin = computed(() => props.balanceTopUpMinAmount ?? BALANCE_TOPUP_MIN);
+
+function setQuickAmount(amount: number): void {
+    balanceTopUpAmount.value = amount;
+}
+
 function submitBalanceTopUp(): void {
     const url = props.balanceCheckoutUrl;
-    const min = props.balanceTopUpMinAmount ?? 5;
+    const min = balanceTopUpMin.value;
     if (!url || balanceTopUpAmount.value < min) return;
     balanceTopUpSubmitting.value = true;
     const payload: { amount: number; method?: string } = { amount: balanceTopUpAmount.value };
@@ -99,6 +129,16 @@ function submitBalanceTopUp(): void {
         onFinish: () => { balanceTopUpSubmitting.value = false; },
     });
 }
+
+const summaryAmount = computed(() => {
+    const raw = Number(balanceTopUpAmount.value) || 0;
+    const min = balanceTopUpMin.value;
+    const clamped = Math.min(BALANCE_TOPUP_MAX, Math.max(0, raw));
+    return clamped >= min ? clamped : 0;
+});
+const summaryFormatted = computed(() =>
+    summaryAmount.value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+);
 
 const page = usePage();
 // Zahlungsmethoden vom Server (Mollie API GET /v2/methods)
@@ -217,7 +257,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     <CardDescription>
                         Aktueller Stand: {{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
                         <template v-if="props.balanceTopUpEnabled">
-                            – Guthaben können Sie per Karte aufladen (Mindestbetrag {{ (props.balanceTopUpMinAmount ?? 5).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €).
+                            – Guthaben können Sie per Karte aufladen (Mindestbetrag {{ balanceTopUpMin.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €).
                         </template>
                     </CardDescription>
                 </CardHeader>
@@ -234,7 +274,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <TableRow v-for="tx in props.balanceTransactions" :key="tx.id">
                                 <TableCell>{{ tx.created_at }}</TableCell>
                                 <TableCell>
-                                    <span :class="tx.amount >= 0 ? 'text-green-600' : 'text-red-600'">
+                                    <span :class="tx.amount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                         {{ tx.amount >= 0 ? '+' : '' }}{{ tx.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
                                     </span>
                                 </TableCell>
@@ -243,54 +283,176 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </TableBody>
                     </Table>
                     <p v-else class="text-muted text-sm">Noch keine Transaktionen.</p>
-                    <div v-if="props.balanceTopUpEnabled && props.balanceCheckoutUrl" class="space-y-4 pt-4">
-                        <div>
-                            <h5 class="mb-2 text-sm font-medium">Zahlungsmethode</h5>
-                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                                <label
-                                    v-for="method in molliePaymentMethods"
-                                    :key="method.type"
-                                    class="flex cursor-pointer flex-col"
-                                >
-                                    <input
-                                        v-model="selectedPaymentMethod"
-                                        type="radio"
-                                        :value="method.type"
-                                        name="balance_topup_method"
-                                        class="sr-only"
-                                    />
-                                    <div
-                                        class="flex flex-col items-center gap-2 rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
-                                        :class="selectedPaymentMethod === method.type ? 'border-primary ring-2 ring-primary/20' : 'border-border'"
-                                    >
-                                        <PaymentMethodLogo :type="method.type" :size="28" />
-                                        <span class="text-xs font-medium">{{ method.label }}</span>
+
+                    <!-- Guthaben aufladen: 2-Spalten-Layout (Hauptbereich + Sidebar) -->
+                    <div
+                        v-if="props.balanceTopUpEnabled && props.balanceCheckoutUrl"
+                        class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]"
+                    >
+                        <div class="space-y-6">
+                            <!-- Schritt 1: Betrag wählen -->
+                            <Card class="overflow-hidden">
+                                <CardHeader class="pb-3">
+                                    <CardTitle class="flex items-center gap-2 text-base font-semibold">
+                                        <span
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-extrabold text-primary"
+                                        >
+                                            1
+                                        </span>
+                                        Betrag wählen
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="space-y-4">
+                                    <div>
+                                        <p class="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                            <Coins class="h-4 w-4 text-primary" />
+                                            Schnellauswahl
+                                        </p>
+                                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                            <button
+                                                v-for="opt in QUICK_AMOUNTS"
+                                                :key="opt.value"
+                                                type="button"
+                                                class="relative flex flex-col items-center justify-center rounded-xl border-2 bg-muted/30 py-4 transition-all hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                                :class="balanceTopUpAmount === opt.value ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border'"
+                                                @click="setQuickAmount(opt.value)"
+                                            >
+                                                <span
+                                                    v-if="opt.badge"
+                                                    class="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium"
+                                                    :class="opt.badge === 'Beliebt' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-primary/15 text-primary'"
+                                                >
+                                                    {{ opt.badge === 'Beliebt' ? '⭐ ' : '💰 ' }}{{ opt.badge }}
+                                                </span>
+                                                <span class="text-lg font-bold">{{ opt.value }}€</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                </label>
-                            </div>
-                            <p class="mt-1 text-xs text-muted-foreground">
-                                Wählen Sie eine Zahlungsmethode – Sie werden direkt dorthin weitergeleitet.
-                            </p>
+                                    <div>
+                                        <p class="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                            <Pencil class="h-4 w-4 text-primary" />
+                                            Oder eigenen Betrag eingeben
+                                        </p>
+                                        <div class="flex flex-col gap-1">
+                                            <div class="flex items-center overflow-hidden rounded-lg border bg-background">
+                                                <span class="flex items-center justify-center bg-muted/50 px-3 py-2.5 text-sm font-medium text-muted-foreground">€</span>
+                                                <Input
+                                                    v-model.number="balanceTopUpAmount"
+                                                    type="number"
+                                                    step="0.01"
+                                                    :min="balanceTopUpMin"
+                                                    :max="BALANCE_TOPUP_MAX"
+                                                    placeholder="Wunschbetrag..."
+                                                    class="min-w-0 border-0 bg-transparent focus-visible:ring-0"
+                                                />
+                                            </div>
+                                            <p class="text-xs text-muted-foreground">{{ balanceTopUpMin }} – {{ BALANCE_TOPUP_MAX }} €</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <!-- Schritt 2: Zahlungsart wählen -->
+                            <Card class="overflow-hidden">
+                                <CardHeader class="pb-3">
+                                    <CardTitle class="flex items-center gap-2 text-base font-semibold">
+                                        <span
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-extrabold text-primary"
+                                        >
+                                            2
+                                        </span>
+                                        Zahlungsart wählen
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent class="space-y-4">
+                                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                        <label
+                                            v-for="method in molliePaymentMethods"
+                                            :key="method.type"
+                                            class="relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all hover:bg-muted/30"
+                                            :class="selectedPaymentMethod === method.type ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border'"
+                                        >
+                                            <input
+                                                v-model="selectedPaymentMethod"
+                                                type="radio"
+                                                :value="method.type"
+                                                name="balance_topup_method"
+                                                class="sr-only"
+                                            />
+                                            <PaymentMethodLogo :type="method.type" :size="32" />
+                                            <span class="text-center text-sm font-medium">{{ method.label }}</span>
+                                            <span
+                                                v-if="selectedPaymentMethod === method.type"
+                                                class="absolute right-2 top-2 text-primary"
+                                                aria-hidden
+                                            >
+                                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                                </svg>
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        Sie werden zur sicheren Zahlungsseite weitergeleitet.
+                                    </p>
+                                    <div class="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+                                        <p>
+                                            Der Betrag wird nur einmalig fällig, es entstehen keine weiteren Kosten und es ist keine Kündigung notwendig.
+                                            <strong class="text-foreground"> Eine Auszahlung von aufgeladenem Guthaben ist ausgeschlossen</strong>
+                                            (§ 312g Abs. 2 Nr. 1 BGB). Mit der Aufladung stimmen Sie den AGB zu.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        class="w-full gap-2"
+                                        :disabled="balanceTopUpSubmitting || summaryAmount < balanceTopUpMin"
+                                        @click="submitBalanceTopUp"
+                                    >
+                                        <Lock class="h-4 w-4" />
+                                        <span>{{ balanceTopUpSubmitting ? 'Weiterleitung…' : 'Jetzt sicher aufladen' }}</span>
+                                        <ArrowRight class="h-4 w-4" />
+                                    </Button>
+                                </CardContent>
+                            </Card>
                         </div>
-                        <div class="flex flex-wrap items-end gap-2">
-                            <label class="flex flex-col gap-1 text-sm">
-                                <span>Betrag (€)</span>
-                                <Input
-                                    v-model.number="balanceTopUpAmount"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    class="w-28"
-                                />
-                            </label>
-                            <Button
-                                :disabled="balanceTopUpSubmitting || balanceTopUpAmount < (props.balanceTopUpMinAmount ?? 5)"
-                                size="sm"
-                                @click="submitBalanceTopUp"
-                            >
-                                {{ balanceTopUpSubmitting ? 'Wird weitergeleitet…' : 'Guthaben aufladen' }}
-                            </Button>
-                        </div>
+
+                        <!-- Sidebar: Zusammenfassung -->
+                        <Card class="h-fit lg:sticky lg:top-4">
+                            <CardHeader class="pb-2">
+                                <CardTitle class="flex items-center gap-2 text-base font-semibold">
+                                    <Receipt class="h-5 w-5 text-primary" />
+                                    Zusammenfassung
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent class="space-y-4">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-muted-foreground">Aufladebetrag</span>
+                                    <span class="font-semibold">{{ summaryFormatted }} €</span>
+                                </div>
+                                <hr class="border-border" />
+                                <div class="flex justify-between text-sm font-medium">
+                                    <span class="text-muted-foreground">Gutgeschrieben</span>
+                                    <span class="text-lg">{{ summaryFormatted }} €</span>
+                                </div>
+                                <ul class="space-y-2 pt-2 text-xs text-muted-foreground">
+                                    <li class="flex items-start gap-2">
+                                        <Shield class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                        <span>Sichere Zahlung mit SSL-Verschlüsselung</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <Zap class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                        <span>Sofortige Gutschrift bei den meisten Zahlarten</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <Ban class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                        <span>Einmalig — kein Abo, keine versteckten Kosten</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <Headset class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                        <span>Support bei Problemen rund um die Uhr</span>
+                                    </li>
+                                </ul>
+                            </CardContent>
+                        </Card>
                     </div>
                 </CardContent>
             </Card>
