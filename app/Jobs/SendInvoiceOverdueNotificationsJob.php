@@ -6,9 +6,11 @@ use App\Models\Invoice;
 use App\Notifications\InvoiceOverdueNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class SendInvoiceOverdueNotificationsJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function handle(): void

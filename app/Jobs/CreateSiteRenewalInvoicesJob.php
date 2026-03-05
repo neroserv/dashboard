@@ -10,14 +10,22 @@ use App\Notifications\SubscriptionRenewalInvoiceCreatedNotification;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use Carbon\Carbon;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\StripeClient;
 
 class CreateSiteRenewalInvoicesJob implements ShouldQueue
 {
+    use Dispatchable;
+    use InteractsWithQueue;
+    use IsMonitored;
     use Queueable;
+    use SerializesModels;
 
     /**
      * Create renewal invoices for site subscriptions ending within this many days.

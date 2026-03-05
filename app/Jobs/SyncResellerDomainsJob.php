@@ -8,9 +8,11 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class SyncResellerDomainsJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function handle(SkrimeApiService $skrime): void

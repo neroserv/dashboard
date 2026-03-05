@@ -8,18 +8,18 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class CheckSslStatus implements ShouldQueue
 {
-    use InteractsWithQueue, Queueable, SerializesModels;
+    use InteractsWithQueue, IsMonitored, Queueable, SerializesModels;
 
     /**
      * Create a new job instance.
      */
     public function __construct(
         public ?Domain $domain = null
-    ) {
-    }
+    ) {}
 
     /**
      * Execute the job.

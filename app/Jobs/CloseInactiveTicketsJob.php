@@ -7,9 +7,11 @@ use App\Models\Ticket;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class CloseInactiveTicketsJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function __construct(

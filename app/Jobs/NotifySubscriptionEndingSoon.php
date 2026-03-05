@@ -7,9 +7,11 @@ use App\Notifications\SubscriptionEndingSoonNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class NotifySubscriptionEndingSoon implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function __construct(

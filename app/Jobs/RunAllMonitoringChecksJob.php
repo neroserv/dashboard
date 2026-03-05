@@ -8,9 +8,11 @@ use App\Services\Monitoring\MonitorRegistry;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class RunAllMonitoringChecksJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function handle(MonitorRegistry $registry): void

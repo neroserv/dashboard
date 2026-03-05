@@ -7,9 +7,11 @@ use App\Services\TldPricelistSyncService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class SyncTldPricelistJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public int $timeout = 300;

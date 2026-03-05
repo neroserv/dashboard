@@ -9,9 +9,11 @@ use App\Services\InvoicePdfService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class VoidUnpaidInvoicesAfterGraceJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function handle(InvoicePdfService $pdfService, InvoiceEInvoiceService $eInvoiceService): void

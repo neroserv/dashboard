@@ -8,9 +8,11 @@ use App\Models\NewsletterSubscription;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class SendNewsletterPostJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function __construct(

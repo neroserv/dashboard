@@ -9,9 +9,11 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class SyncAllResellerDomainsJob implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public int $timeout = 300;

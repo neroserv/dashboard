@@ -19,9 +19,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use romanzipp\QueueMonitor\Traits\IsMonitored;
 
 class ProcessExpiredSubscriptions implements ShouldQueue
 {
+    use IsMonitored;
     use Queueable;
 
     public function handle(): void
