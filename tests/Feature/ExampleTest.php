@@ -3,5 +3,6 @@
 test('returns a successful response', function () {
     $response = $this->get(route('home'));
 
-    $response->assertOk();
+    // Unauthenticated users are redirected to login
+    $response->assertRedirect(route('login'));
 });

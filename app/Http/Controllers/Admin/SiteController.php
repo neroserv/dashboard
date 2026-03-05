@@ -22,7 +22,10 @@ class SiteController extends Controller
     {
         $site->load(['template', 'user', 'siteSubscription']);
 
-        $data = $site->makeHidden('id')->toArray();
+        $data = array_merge(
+            ['id' => $site->id],
+            $site->makeHidden('id')->toArray()
+        );
         $sub = $site->siteSubscription;
         if ($sub && $sub->current_period_ends_at) {
             $data['site_subscription']['current_period_ends_at_formatted'] = Carbon::parse($sub->current_period_ends_at)->format('d.m.Y');

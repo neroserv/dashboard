@@ -53,8 +53,8 @@ beforeEach(function () {
 test('owner can view game server account show page with tabs and user email', function () {
     actingAs($this->user);
 
-    $response = $this->withServerVariables(['HTTP_HOST' => 'gaming.praxishosting.test'])
-        ->get(route('gaming-accounts.show', $this->account));
+    $path = parse_url(route('gaming-accounts.show', $this->account), PHP_URL_PATH);
+    $response = $this->get('http://gaming.praxishosting.test'.$path);
 
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
@@ -66,8 +66,8 @@ test('owner can view game server account show page with tabs and user email', fu
 });
 
 test('guest is redirected to login', function () {
-    $response = $this->withServerVariables(['HTTP_HOST' => 'gaming.praxishosting.test'])
-        ->get(route('gaming-accounts.show', $this->account));
+    $path = parse_url(route('gaming-accounts.show', $this->account), PHP_URL_PATH);
+    $response = $this->get('http://gaming.praxishosting.test'.$path);
 
     $response->assertRedirect(route('login'));
 });
@@ -76,8 +76,8 @@ test('non-owner gets 404', function () {
     $otherUser = User::factory()->create(['brand_id' => $this->brand->id]);
     actingAs($otherUser);
 
-    $response = $this->withServerVariables(['HTTP_HOST' => 'gaming.praxishosting.test'])
-        ->get(route('gaming-accounts.show', $this->account));
+    $path = parse_url(route('gaming-accounts.show', $this->account), PHP_URL_PATH);
+    $response = $this->get('http://gaming.praxishosting.test'.$path);
 
     $response->assertNotFound();
 });
