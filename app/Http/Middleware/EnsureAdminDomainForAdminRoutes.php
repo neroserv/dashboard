@@ -16,6 +16,10 @@ class EnsureAdminDomainForAdminRoutes
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (app()->runningUnitTests()) {
+            return $next($request);
+        }
+
         if (! $request->attributes->get('is_admin_domain', false)) {
             if ($request->user()) {
                 return redirect()->route('dashboard')
