@@ -159,8 +159,17 @@ const endpoints: EndpointSpec[] = [
         method: 'GET',
         path: '/domains/tlds',
         summary: 'TLDs mit Preisen',
-        description: 'Alle angebotenen TLDs mit Create-, Renew-, Transfer-, Restore- und Verkaufspreisen.',
-        parameters: [],
+        description:
+            'Angebotene TLDs mit Create-, Renew-, Transfer-, Restore- und Verkaufspreisen. Paginiert (15 pro Seite). Zuerst werden .de, .net, .com, .eu, .at, .ch angezeigt, danach alle weiteren alphabetisch.',
+        parameters: [
+            {
+                name: 'page',
+                in: 'query',
+                type: 'integer',
+                required: false,
+                description: 'Seitennummer (Standard: 1)',
+            },
+        ],
         responseExample: `{
   "data": [
     {
@@ -171,7 +180,21 @@ const endpoints: EndpointSpec[] = [
       "restore_price": 10.00,
       "sale_price": 6.00
     }
-  ]
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 3,
+    "per_page": 15,
+    "total": 42,
+    "from": 1,
+    "to": 15
+  },
+  "links": {
+    "first": "https://.../api/v1/domains/tlds?page=1",
+    "last": "https://.../api/v1/domains/tlds?page=3",
+    "prev": null,
+    "next": "https://.../api/v1/domains/tlds?page=2"
+  }
 }`,
     },
     {

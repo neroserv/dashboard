@@ -35,7 +35,7 @@ test('api v1 stats returns data with valid token', function () {
     ]);
 });
 
-test('api v1 domains tlds returns list with valid token', function () {
+test('api v1 domains tlds returns paginated list with valid token', function () {
     TldPricelist::create([
         'tld' => 'de',
         'create_price' => 5.00,
@@ -54,6 +54,60 @@ test('api v1 domains tlds returns list with valid token', function () {
     $response->assertOk();
     $response->assertJsonPath('data.0.tld', 'de');
     $response->assertJsonPath('data.0.create_price', 5);
+    $response->assertJsonPath('meta.per_page', 15);
+    $response->assertJsonPath('meta.total', 1);
+    $response->assertJsonStructure(['data', 'meta' => ['current_page', 'last_page', 'per_page', 'total', 'from', 'to'], 'links' => ['first', 'last', 'prev', 'next']]);
+});
+
+test('api v1 domains tlds returns priority TLDs first in order de net com eu at ch', function () {
+    foreach (['at', 'ch', 'com', 'de', 'eu', 'net', 'io', 'org'] as $tld) {
+        TldPricelist::create([
+            'tld' => $tld,
+            'create_price' => 5.00,
+            'renew_price' => 5.00,
+            'transfer_price' => 5.00,
+            'restore_price' => 10.00,
+            'margin_type' => 'fixed',
+            'margin_value' => 1.00,
+        ]);
+    }
+    $user = User::factory()->create();
+    $token = $user->createToken('test')->plainTextToken;
+
+    $response = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/v1/domains/tlds');
+
+    $response->assertOk();
+    $tlds = collect($response->json('data'))->pluck('tld')->all();
+    expect($tlds)->toBe(['de', 'net', 'com', 'eu', 'at', 'ch', 'io', 'org']);
+});
+
+test('api v1 domains tlds paginates at 15 per page', function () {
+    for ($i = 0; $i < 20; $i++) {
+        TldPricelist::create([
+            'tld' => 'tld'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+            'create_price' => 5.00,
+            'renew_price' => 5.00,
+            'transfer_price' => 5.00,
+            'restore_price' => 10.00,
+            'margin_type' => 'fixed',
+            'margin_value' => 1.00,
+        ]);
+    }
+    $user = User::factory()->create();
+    $token = $user->createToken('test')->plainTextToken;
+
+    $page1 = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/v1/domains/tlds?page=1');
+    $page2 = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/v1/domains/tlds?page=2');
+
+    $page1->assertOk();
+    $page2->assertOk();
+    expect($page1->json('data'))->toHaveCount(15);
+    expect($page2->json('data'))->toHaveCount(5);
+    expect($page1->json('meta.total'))->toBe(20);
+    expect($page1->json('meta.last_page'))->toBe(2);
 });
 
 test('api v1 hosting-plans returns plans with valid token', function () {

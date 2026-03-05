@@ -11,14 +11,33 @@ use Illuminate\Http\Request;
 
 class DomainController extends ApiV1Controller
 {
+    private const TLDs_PER_PAGE = 15;
+
     /**
-     * List all TLDs with prices (create, renew, transfer, sale_price for create).
+     * Priority TLDs shown first (in this order), then all others alphabetically.
+     *
+     * @var list<string>
+     */
+    private const PRIORITY_TLDS = ['de', 'net', 'com', 'eu', 'at', 'ch'];
+
+    /**
+     * List TLDs with prices (create, renew, transfer, sale_price for create).
+     * Paginated (15 per page). Priority TLDs (.de, .net, .com, .eu, .at, .ch) appear first.
      */
     public function tlds(Request $request, DomainPricingService $pricing): JsonResponse
     {
-        $rows = TldPricelist::query()->orderBy('tld')->get();
+        $cases = [];
+        foreach (self::PRIORITY_TLDS as $i => $tld) {
+            $cases[] = "WHEN '".addslashes($tld)."' THEN ".($i + 1);
+        }
+        $orderCase = 'CASE tld '.implode(' ', $cases).' ELSE '.(count(self::PRIORITY_TLDS) + 1).' END';
+        $query = TldPricelist::query()
+            ->orderByRaw("{$orderCase} ASC")
+            ->orderBy('tld');
 
-        $tlds = $rows->map(function ($row) use ($pricing) {
+        $paginator = $query->paginate(self::TLDs_PER_PAGE)->withQueryString();
+
+        $data = $paginator->through(function ($row) use ($pricing) {
             $createPrice = (float) $row->create_price;
             $salePrice = $createPrice > 0
                 ? $pricing->calculateSalePrice($createPrice, $row->tld)
@@ -32,9 +51,25 @@ class DomainController extends ApiV1Controller
                 'restore_price' => round((float) $row->restore_price, 2),
                 'sale_price' => round($salePrice, 2),
             ];
-        })->values()->all();
+        });
 
-        return response()->json(['data' => $tlds]);
+        return response()->json([
+            'data' => $data->items(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+            'links' => [
+                'first' => $paginator->url(1),
+                'last' => $paginator->url($paginator->lastPage()),
+                'prev' => $paginator->previousPageUrl(),
+                'next' => $paginator->nextPageUrl(),
+            ],
+        ]);
     }
 
     /**
