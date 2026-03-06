@@ -185,17 +185,18 @@ function resourcePercent(used: number, limit: number): number {
                                 Gesperrt – bitte verlängern
                             </Button>
                         </template>
-                        <Link
+                        <a
                             v-else
                             :href="`/webspace-accounts/${webspaceAccount.id}/plesk-login`"
                             target="_blank"
                             rel="noopener noreferrer"
+                            class="inline-block w-full"
                         >
                             <Button class="w-full justify-start gap-2">
                                 <ExternalLink class="h-4 w-4" />
                                 Zum Plesk-Panel
                             </Button>
-                        </Link>
+                        </a>
                         <template v-if="canRenew && renewUrl">
                             <Button
                                 variant="default"

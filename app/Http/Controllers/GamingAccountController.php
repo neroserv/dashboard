@@ -25,6 +25,8 @@ use Stripe\StripeClient;
 
 class GamingAccountController extends Controller
 {
+    use \App\Http\Controllers\Concerns\RedirectsToMollieSubscriptionFirstPayment;
+
     protected function ensureGamingFeature(Request $request): ?RedirectResponse
     {
         $brand = $request->attributes->get('current_brand');
@@ -483,7 +485,7 @@ class GamingAccountController extends Controller
         }
 
         $currency = strtoupper(config('cashier.currency', 'eur'));
-        $params = [
+        $subscriptionParams = [
             'amount' => [
                 'currency' => $currency,
                 'value' => number_format($amount, 2, '.', ''),
@@ -495,12 +497,21 @@ class GamingAccountController extends Controller
         try {
             $subscription = app(MollieApiClient::class)->subscriptions->createForId(
                 $user->mollie_customer_id,
-                $params
+                $subscriptionParams
             );
         } catch (MollieApiException $e) {
-            return redirect()
-                ->route('gaming-accounts.show', $gameServerAccount)
-                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+            return $this->redirectToMollieFirstPaymentForSubscription(
+                $request,
+                $user,
+                $amount,
+                $currency,
+                'Game-Server Abo: '.$gameServerAccount->name,
+                'gaming',
+                $gameServerAccount->id,
+                'gaming-accounts.show',
+                [$gameServerAccount],
+                'Dieser Game-Server kann nicht für ein Mollie-Abo eingerichtet werden.'
+            );
         }
 
         $gameServerAccount->update([

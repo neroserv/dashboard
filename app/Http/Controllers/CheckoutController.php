@@ -218,6 +218,9 @@ class CheckoutController extends Controller
             if ($type === 'webspace_renewal') {
                 return $this->handleWebspaceRenewalSuccessFromMollie($request, $user, $metadata);
             }
+            if ($type === 'mollie_subscription_first') {
+                return $this->handleMollieSubscriptionFirstSuccessFromMollie($request, $user, $metadata);
+            }
 
             return redirect()->route('sites.index')->with('success', 'Zahlung erhalten. Vielen Dank.');
         }
@@ -1100,6 +1103,89 @@ class CheckoutController extends Controller
 
         return redirect()->route('teamspeak-accounts.show', $account)
             ->with('success', 'Der TeamSpeak-Server wurde erfolgreich verlängert.');
+    }
+
+    /**
+     * After first payment for Mollie subscription setup: create the subscription and link it to the account.
+     */
+    protected function handleMollieSubscriptionFirstSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
+    {
+        $accountType = $metadata['account_type'] ?? '';
+        $accountId = (int) ($metadata['account_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+
+        if ($userId !== $user->id || $accountId < 1 || ! in_array($accountType, ['gaming', 'webspace', 'teamspeak'], true)) {
+            Log::debug('Checkout success mollie_subscription_first: invalid metadata');
+
+            return redirect()->route('dashboard')->with('error', 'Ungültige Abo-Daten.');
+        }
+
+        $account = null;
+        $showRoute = 'dashboard';
+        if ($accountType === 'gaming') {
+            $account = GameServerAccount::find($accountId);
+            $showRoute = 'gaming-accounts.show';
+        } elseif ($accountType === 'webspace') {
+            $account = WebspaceAccount::find($accountId);
+            $showRoute = 'webspace-accounts.show';
+        } else {
+            $account = TeamSpeakServerAccount::find($accountId);
+            $showRoute = 'teamspeak-accounts.show';
+        }
+
+        if (! $account || $account->user_id !== $user->id) {
+            return redirect()->route('dashboard')->with('error', 'Konto nicht gefunden.');
+        }
+
+        $plan = $account->hostingPlan;
+        if (! $plan || ! $plan->is_active) {
+            return redirect()->route($showRoute, [$account])->with('error', 'Paket nicht mehr verfügbar.');
+        }
+
+        $amount = (float) $plan->price;
+        if ($amount <= 0) {
+            return redirect()->route($showRoute, [$account])->with('error', 'Kein gültiger Preis für dieses Paket.');
+        }
+
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+        $description = match ($accountType) {
+            'gaming' => 'Game-Server Abo: '.$account->name,
+            'webspace' => 'Webspace Abo: '.$account->domain,
+            'teamspeak' => 'TeamSpeak-Server Abo: '.$account->name,
+        };
+
+        try {
+            $subscription = app(MollieApiClient::class)->subscriptions->createForId(
+                $user->mollie_customer_id,
+                [
+                    'amount' => [
+                        'currency' => $currency,
+                        'value' => number_format($amount, 2, '.', ''),
+                    ],
+                    'interval' => '1 month',
+                    'description' => $description,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::error('Checkout success mollie_subscription_first: subscription create failed', [
+                'account_type' => $accountType,
+                'account_id' => $accountId,
+                'message' => $e->getMessage(),
+            ]);
+            report($e);
+
+            return redirect()->route($showRoute, [$account])
+                ->with('error', 'Abo konnte nach der Zahlung nicht eingerichtet werden. Bitte kontaktieren Sie uns.');
+        }
+
+        $account->update([
+            'mollie_subscription_id' => $subscription->id,
+            'renewal_type' => 'auto',
+            'cancel_at_period_end' => false,
+        ]);
+
+        return redirect()->route($showRoute, [$account])
+            ->with('success', 'Mollie-Abo wurde eingerichtet. Die Abbuchung erfolgt monatlich automatisch.');
     }
 
     /**

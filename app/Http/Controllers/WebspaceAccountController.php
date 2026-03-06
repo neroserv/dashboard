@@ -20,6 +20,8 @@ use Mollie\Api\MollieApiClient;
 
 class WebspaceAccountController extends Controller
 {
+    use \App\Http\Controllers\Concerns\RedirectsToMollieSubscriptionFirstPayment;
+
     /**
      * List current user's webspace accounts.
      */
@@ -279,7 +281,7 @@ class WebspaceAccountController extends Controller
         }
 
         $currency = strtoupper(config('cashier.currency', 'eur'));
-        $params = [
+        $subscriptionParams = [
             'amount' => [
                 'currency' => $currency,
                 'value' => number_format($amount, 2, '.', ''),
@@ -291,12 +293,21 @@ class WebspaceAccountController extends Controller
         try {
             $subscription = app(MollieApiClient::class)->subscriptions->createForId(
                 $user->mollie_customer_id,
-                $params
+                $subscriptionParams
             );
         } catch (MollieApiException $e) {
-            return redirect()
-                ->route('webspace-accounts.show', $webspaceAccount)
-                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+            return $this->redirectToMollieFirstPaymentForSubscription(
+                $request,
+                $user,
+                $amount,
+                $currency,
+                'Webspace Abo: '.$webspaceAccount->domain,
+                'webspace',
+                $webspaceAccount->id,
+                'webspace-accounts.show',
+                [$webspaceAccount],
+                'Dieser Webspace kann nicht für ein Mollie-Abo eingerichtet werden.'
+            );
         }
 
         $webspaceAccount->update([

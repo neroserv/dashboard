@@ -20,6 +20,8 @@ use Mollie\Api\MollieApiClient;
 
 class TeamSpeakAccountController extends Controller
 {
+    use \App\Http\Controllers\Concerns\RedirectsToMollieSubscriptionFirstPayment;
+
     protected function ensureTeamSpeakFeature(Request $request): ?RedirectResponse
     {
         $brand = $request->attributes->get('current_brand');
@@ -645,7 +647,7 @@ class TeamSpeakAccountController extends Controller
         }
 
         $currency = strtoupper(config('cashier.currency', 'eur'));
-        $params = [
+        $subscriptionParams = [
             'amount' => [
                 'currency' => $currency,
                 'value' => number_format($amount, 2, '.', ''),
@@ -657,12 +659,21 @@ class TeamSpeakAccountController extends Controller
         try {
             $subscription = app(MollieApiClient::class)->subscriptions->createForId(
                 $user->mollie_customer_id,
-                $params
+                $subscriptionParams
             );
         } catch (MollieApiException $e) {
-            return redirect()
-                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
-                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+            return $this->redirectToMollieFirstPaymentForSubscription(
+                $request,
+                $user,
+                $amount,
+                $currency,
+                'TeamSpeak-Server Abo: '.$teamSpeakServerAccount->name,
+                'teamspeak',
+                $teamSpeakServerAccount->id,
+                'teamspeak-accounts.show',
+                [$teamSpeakServerAccount],
+                'Dieser TeamSpeak-Server kann nicht für ein Mollie-Abo eingerichtet werden.'
+            );
         }
 
         $teamSpeakServerAccount->update([
