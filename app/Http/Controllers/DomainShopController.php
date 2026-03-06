@@ -61,13 +61,15 @@ class DomainShopController extends Controller
             $domain = $baseName.'.'.$tld;
             try {
                 $check = $skrime->checkAvailability($domain);
-                $pricingInfo = $pricing->getPricingForTld($tld, 'create');
+                $createInfo = $pricing->getPricingForTld($tld, 'create');
+                $transferInfo = $pricing->getPricingForTld($tld, 'transfer');
                 $results[] = [
                     'domain' => $domain,
                     'available' => $check['available'],
                     'premium' => $check['premium'],
-                    'sale_price' => $pricingInfo['sale_price'],
-                    'purchase_price' => $pricingInfo['purchase_price'],
+                    'sale_price' => $createInfo['sale_price'],
+                    'purchase_price' => $createInfo['purchase_price'],
+                    'transfer_sale_price' => $transferInfo['sale_price'],
                 ];
             } catch (\Throwable) {
                 $results[] = [
@@ -76,6 +78,7 @@ class DomainShopController extends Controller
                     'premium' => false,
                     'sale_price' => 0,
                     'purchase_price' => 0,
+                    'transfer_sale_price' => 0,
                     'error' => true,
                 ];
             }
@@ -89,6 +92,7 @@ class DomainShopController extends Controller
         $domain = $request->query('domain');
         $salePrice = $request->query('sale_price');
         $tld = $request->query('tld');
+        $isTransfer = $request->boolean('transfer');
         if (! $domain || $salePrice === null || $salePrice === '') {
             return redirect()->route('domains.search')->with('error', 'Bitte Domain und Preis aus der Suche wählen.');
         }
@@ -100,7 +104,10 @@ class DomainShopController extends Controller
             'domain' => $domain,
             'sale_price' => (float) $salePrice,
             'tld' => $tld ?? '',
+            'transfer' => $isTransfer,
             'profile_contact' => $profileContact,
+            'tosUrl' => config('billing.tos_url', '#'),
+            'privacyUrl' => config('billing.privacy_url', '#'),
         ];
 
         $currentBrand = $request->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
@@ -155,9 +162,11 @@ class DomainShopController extends Controller
 
             $domain = $data['domain'];
             $nameservers = config('skrime.default_nameservers', []);
+            $isTransfer = ! empty($data['transfer']);
+            $authCode = $isTransfer ? trim((string) ($data['auth_code'] ?? '')) : null;
 
             try {
-                $orderData = $skrime->orderDomain($domain, $contact, $nameservers);
+                $orderData = $skrime->orderDomain($domain, $contact, $nameservers, $authCode);
             } catch (\Throwable $e) {
                 Log::error('Domain checkout balance: Skrime orderDomain fehlgeschlagen.', [
                     'domain' => $domain,
@@ -192,6 +201,8 @@ class DomainShopController extends Controller
             'purchase_price' => (float) ($data['purchase_price'] ?? 0),
             'contact' => $contact,
             'user_id' => $user->id,
+            'transfer' => ! empty($data['transfer']),
+            'auth_code' => ! empty($data['transfer']) ? trim((string) ($data['auth_code'] ?? '')) : null,
         ]);
 
         try {
@@ -199,7 +210,7 @@ class DomainShopController extends Controller
             $params = [
                 'mode' => StripeSession::MODE_PAYMENT,
                 'success_url' => route('domains.checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('domains.checkout', ['domain' => $data['domain'], 'sale_price' => $salePrice, 'tld' => $data['tld'] ?? '']),
+                'cancel_url' => route('domains.checkout', array_filter(['domain' => $data['domain'], 'sale_price' => $salePrice, 'tld' => $data['tld'] ?? '', 'transfer' => ! empty($data['transfer']) ? 1 : null])),
                 'metadata' => [
                     'domain_checkout_token' => $token,
                     'user_id' => (string) $user->id,
@@ -312,13 +323,15 @@ class DomainShopController extends Controller
         $skrime = app(SkrimeApiService::class);
         $domain = $payload['domain'];
         $nameservers = config('skrime.default_nameservers', []);
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers)]);
+        $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
+        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers), 'transfer' => ! empty($payload['transfer'])]);
 
         try {
             $orderData = $skrime->orderDomain(
                 $domain,
                 $payload['contact'],
-                $nameservers
+                $nameservers,
+                $authCode
             );
             Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
         } catch (\Throwable $e) {
@@ -395,14 +408,16 @@ class DomainShopController extends Controller
 
         $domain = $payload['domain'];
         $nameservers = config('skrime.default_nameservers', []);
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers)]);
+        $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
+        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers), 'transfer' => ! empty($payload['transfer'])]);
 
         try {
             $skrime = app(SkrimeApiService::class);
             $orderData = $skrime->orderDomain(
                 $domain,
                 $payload['contact'],
-                $nameservers
+                $nameservers,
+                $authCode
             );
             Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
         } catch (\Throwable $e) {

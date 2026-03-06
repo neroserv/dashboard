@@ -21,6 +21,8 @@ class UpdateTldPricelistBulkRequest extends FormRequest
             'tlds.*' => ['string', 'max:32'],
             'margin_type' => ['required', 'string', 'in:fixed,percent'],
             'margin_value' => ['required', 'numeric', 'min:0'],
+            'margin_renew_value' => ['nullable', 'numeric', 'min:0'],
+            'margin_transfer_value' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 }

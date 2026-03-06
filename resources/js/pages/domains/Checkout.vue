@@ -30,13 +30,22 @@ type Props = {
     domain: string;
     sale_price: number;
     tld: string;
+    transfer?: boolean;
     profile_contact: Contact;
     canPayWithBalance?: boolean;
     customerBalance?: number;
     amountRequired?: number;
+    tosUrl?: string;
+    privacyUrl?: string;
 };
 
 const props = defineProps<Props>();
+
+const canSubmit = computed(() => {
+    if (!form.accept_tos || !form.accept_early_execution) return false;
+    if (props.transfer) return Boolean((form.auth_code ?? '').toString().trim());
+    return true;
+});
 
 const paymentMethod = ref<'stripe' | 'balance'>('stripe');
 const canSubmitWithBalance = computed(() =>
@@ -49,8 +58,12 @@ const form = useForm({
     sale_price: props.sale_price,
     purchase_price: 0,
     tld: props.tld,
+    transfer: Boolean(props.transfer),
+    auth_code: '',
     use_profile_contact: true,
     payment_method: 'stripe' as 'stripe' | 'balance',
+    accept_tos: false,
+    accept_early_execution: false,
     contact: {
         firstname: props.profile_contact.firstname,
         lastname: props.profile_contact.lastname,
@@ -119,6 +132,29 @@ function submit() {
                 <input v-model="form.domain" type="hidden" />
                 <input v-model="form.sale_price" type="hidden" />
                 <input v-model="form.tld" type="hidden" />
+
+                <Card v-if="props.transfer" class="mb-6">
+                    <CardHeader>
+                        <CardTitle>Auth-Code (EPP-Code) für Domain-Transfer</CardTitle>
+                        <CardDescription>
+                            Der Auth-Code wird von Ihrem bisherigen Registrar bereitgestellt. Ohne diesen Code kann der Transfer nicht durchgeführt werden.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="space-y-2">
+                            <Label for="auth_code">Auth-Code *</Label>
+                            <Input
+                                id="auth_code"
+                                v-model="form.auth_code"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="z. B. ABC123XYZ"
+                                :aria-invalid="!!form.errors.auth_code"
+                            />
+                            <InputError :message="form.errors.auth_code" />
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardHeader>
@@ -208,6 +244,40 @@ function submit() {
                             </div>
                         </div>
 
+                        <div class="space-y-4 rounded-lg border bg-muted/30 p-4">
+                            <h3 class="font-semibold">Rechtliches</h3>
+                            <label class="flex cursor-pointer items-start gap-3">
+                                <input
+                                    v-model="form.accept_tos"
+                                    type="checkbox"
+                                    value="1"
+                                    class="mt-1 h-4 w-4 rounded border-input"
+                                    :aria-invalid="!!form.errors.accept_tos"
+                                />
+                                <span class="text-sm">
+                                    Ich habe die
+                                    <a :href="props.tosUrl ?? '#'" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">allgemeinen Geschäftsbedingungen</a>
+                                    und
+                                    <a :href="props.privacyUrl ?? '#'" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">Datenschutzerklärung</a>
+                                    gelesen und akzeptiere diese.
+                                </span>
+                            </label>
+                            <InputError :message="form.errors.accept_tos" />
+                            <label class="flex cursor-pointer items-start gap-3">
+                                <input
+                                    v-model="form.accept_early_execution"
+                                    type="checkbox"
+                                    value="1"
+                                    class="mt-1 h-4 w-4 rounded border-input"
+                                    :aria-invalid="!!form.errors.accept_early_execution"
+                                />
+                                <span class="text-sm">
+                                    Ich wünsche die vollständige Ausführung der Dienstleistung vor Fristablauf des Widerrufsrechts gemäß Fernabsatzgesetz. Die automatische Einrichtung und Erbringung der Dienstleistung führt zum Erlöschen des Widerrufsrechts.
+                                </span>
+                            </label>
+                            <InputError :message="form.errors.accept_early_execution" />
+                        </div>
+
                         <div v-if="props.canPayWithBalance" class="space-y-2 rounded-md border p-4">
                             <Label class="text-base">Zahlungsart</Label>
                             <div class="flex flex-col gap-3">
@@ -246,7 +316,7 @@ function submit() {
                         </div>
 
                         <div class="pt-4">
-                            <Button type="submit" :disabled="form.processing">
+                            <Button type="submit" :disabled="form.processing || !canSubmit">
                                 {{ paymentMethod === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Weiter zur Zahlung' }}
                             </Button>
                         </div>

@@ -19,6 +19,8 @@ class TldPricelist extends Model
         'restore_price',
         'margin_type',
         'margin_value',
+        'margin_renew_value',
+        'margin_transfer_value',
     ];
 
     /**
@@ -32,6 +34,8 @@ class TldPricelist extends Model
             'transfer_price' => 'decimal:2',
             'restore_price' => 'decimal:2',
             'margin_value' => 'decimal:2',
+            'margin_renew_value' => 'decimal:2',
+            'margin_transfer_value' => 'decimal:2',
         ];
     }
 }

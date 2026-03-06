@@ -114,6 +114,8 @@ class GamingController extends Controller
         $payload = [
             'hostingPlans' => $plans,
             'selectedPlan' => $plan,
+            'tosUrl' => config('billing.tos_url', '#'),
+            'privacyUrl' => config('billing.privacy_url', '#'),
         ];
         if ($brandFeatures['prepaid_balance'] ?? false) {
             $customerBalance = CustomerBalance::where('user_id', $request->user()->id)->first();
@@ -246,6 +248,12 @@ class GamingController extends Controller
             'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
             'option_choices' => ['nullable', 'array'],
             'option_choices.*' => ['nullable'],
+            'period_months' => ['required', 'integer', 'in:1,3,6'],
+            'accept_tos' => ['required', 'accepted'],
+            'accept_early_execution' => ['required', 'accepted'],
+        ], [
+            'accept_tos.accepted' => 'Bitte bestätigen Sie die AGB und Datenschutzerklärung.',
+            'accept_early_execution.accepted' => 'Bitte bestätigen Sie den Widerrufsverzicht.',
         ]);
 
         $plan = HostingPlan::find($validated['hosting_plan_id']);
@@ -262,7 +270,8 @@ class GamingController extends Controller
         $optionChoices = $optionSurchargeService->validateOptionChoices($plan, $validated['option_choices'] ?? []);
         $surcharge = $optionSurchargeService->computeSurcharge($plan, $optionChoices);
         $basePrice = (float) $plan->price;
-        $totalAmount = round($basePrice + $surcharge, 2);
+        $periodMonths = (int) $validated['period_months'];
+        $totalAmount = round(($basePrice + $surcharge) * $periodMonths, 2);
 
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
@@ -284,6 +293,7 @@ class GamingController extends Controller
                 'user_id' => $user->id,
                 'server_name' => $validated['server_name'] ?? null,
                 'option_choices' => $optionChoices,
+                'period_months' => $periodMonths,
             ];
             $request->session()->forget('checkout_gaming');
 
@@ -297,6 +307,7 @@ class GamingController extends Controller
             'option_choices' => $optionChoices,
             'option_surcharge' => $surcharge,
             'total_amount' => $totalAmount,
+            'period_months' => $periodMonths,
         ];
         $request->session()->put('checkout_gaming', $payload);
 

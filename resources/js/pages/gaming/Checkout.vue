@@ -55,9 +55,17 @@ type Props = {
     customerBalance?: number;
     amountRequired?: number;
     pterodactylEggs?: { id: number; name: string }[];
+    tosUrl?: string;
+    privacyUrl?: string;
 };
 
 const props = defineProps<Props>();
+
+const periodMonths = ref<number>(1);
+const acceptTos = ref(false);
+const acceptEarlyExecution = ref(false);
+
+const PERIOD_OPTIONS = [1, 3, 6] as const;
 
 const page = usePage();
 const molliePaymentMethods = computed(
@@ -124,10 +132,15 @@ const optionSurchargeItems = computed(() => {
 });
 
 const basePrice = computed(() => Number(currentPlan.value?.price ?? 0));
-const totalAmount = computed(() => basePrice.value + totalOptionSurcharge.value);
+const monthlyTotal = computed(() => basePrice.value + totalOptionSurcharge.value);
+const totalAmount = computed(() => Math.round(monthlyTotal.value * periodMonths.value * 100) / 100);
 
 const canSubmitWithBalance = computed(() =>
     Boolean(props.canPayWithBalance && (props.customerBalance ?? 0) >= totalAmount.value),
+);
+
+const canSubmit = computed(
+    () => Boolean(acceptTos.value && acceptEarlyExecution.value && currentPlan.value),
 );
 
 watch(
@@ -250,8 +263,8 @@ const breadcrumbs: BreadcrumbItem[] = [
                 class="block"
                 v-slot="{ errors, processing }"
             >
-                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
-                    <Card class="flex flex-col lg:h-full lg:min-h-0">
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch">
+                    <Card class="flex flex-col lg:col-span-2 lg:h-full lg:min-h-0">
                         <CardHeader>
                                 <CardTitle class="flex items-center gap-2 text-lg">
                                     <Server class="h-5 w-5" />
@@ -400,6 +413,26 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 </template>
 
                                 <div class="space-y-2">
+                                    <Label for="period_months">Laufzeit *</Label>
+                                    <select
+                                        id="period_months"
+                                        name="period_months"
+                                        v-model.number="periodMonths"
+                                        required
+                                        class="flex h-11 w-full rounded-lg border border-input bg-background px-4 py-2 text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        :aria-invalid="!!errors.period_months"
+                                    >
+                                        <option
+                                            v-for="m in PERIOD_OPTIONS"
+                                            :key="m"
+                                            :value="m"
+                                        >
+                                            {{ m }} Monat(e) – {{ (monthlyTotal * m).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+                                        </option>
+                                    </select>
+                                    <InputError :message="errors.period_months" />
+                                </div>
+                                <div class="space-y-2">
                                     <Label for="server_name">Server-Name (optional)</Label>
                                     <Input
                                         id="server_name"
@@ -410,6 +443,41 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         :aria-invalid="!!errors.server_name"
                                     />
                                     <InputError :message="errors.server_name" />
+                                </div>
+                                <div class="space-y-4 rounded-lg border bg-muted/30 p-4">
+                                    <h3 class="font-semibold">Rechtliches</h3>
+                                    <label class="flex cursor-pointer items-start gap-3">
+                                        <input
+                                            v-model="acceptTos"
+                                            type="checkbox"
+                                            name="accept_tos"
+                                            value="1"
+                                            class="mt-1 h-4 w-4 rounded border-input"
+                                            :aria-invalid="!!errors.accept_tos"
+                                        />
+                                        <span class="text-sm">
+                                            Ich habe die
+                                            <a :href="props.tosUrl ?? '#'" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">allgemeinen Geschäftsbedingungen</a>
+                                            und
+                                            <a :href="props.privacyUrl ?? '#'" target="_blank" rel="noopener noreferrer" class="underline hover:no-underline">Datenschutzerklärung</a>
+                                            gelesen und akzeptiere diese.
+                                        </span>
+                                    </label>
+                                    <InputError :message="errors.accept_tos" />
+                                    <label class="flex cursor-pointer items-start gap-3">
+                                        <input
+                                            v-model="acceptEarlyExecution"
+                                            type="checkbox"
+                                            name="accept_early_execution"
+                                            value="1"
+                                            class="mt-1 h-4 w-4 rounded border-input"
+                                            :aria-invalid="!!errors.accept_early_execution"
+                                        />
+                                        <span class="text-sm">
+                                            Ich wünsche die vollständige Ausführung der Dienstleistung vor Fristablauf des Widerrufsrechts gemäß Fernabsatzgesetz. Die automatische Einrichtung und Erbringung der Dienstleistung führt zum Erlöschen des Widerrufsrechts.
+                                        </span>
+                                    </label>
+                                    <InputError :message="errors.accept_early_execution" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -440,10 +508,14 @@ const breadcrumbs: BreadcrumbItem[] = [
                                                 </span>
                                             </div>
                                         </template>
+                                        <div class="flex justify-between">
+                                            <span class="text-muted-foreground">Laufzeit</span>
+                                            <span>{{ periodMonths }} Monat(e)</span>
+                                        </div>
                                         <div class="border-t pt-3 text-base font-semibold">
                                             <div class="flex justify-between">
-                                                <span>Gesamt</span>
-                                                <span class="tabular-nums">{{ totalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €/Monat</span>
+                                                <span>Heute fällig</span>
+                                                <span class="tabular-nums">{{ totalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €</span>
                                             </div>
                                         </div>
                                     </div>
@@ -481,16 +553,16 @@ const breadcrumbs: BreadcrumbItem[] = [
                                                 <Wallet class="h-4 w-4 shrink-0 text-muted-foreground" />
                                                 <span class="text-sm">Mit Guthaben bezahlen</span>
                                                 <span v-if="canSubmitWithBalance" class="truncate text-xs text-muted-foreground">
-                                                    ({{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
+                                                    (Aktuell {{ (props.customerBalance ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €)
                                                 </span>
                                                 <span v-else class="text-xs text-destructive">(nicht ausreichend)</span>
                                             </div>
                                         </label>
                                     </div>
                                     <div class="mt-auto flex flex-col gap-2">
-                                    <Button type="submit" class="w-full" size="lg" :disabled="processing">
-                                        {{ processing ? 'Wird weitergeleitet…' : (paymentMethod === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Weiter zur Zahlung') }}
-                                    </Button>
+                                        <Button type="submit" class="w-full" size="lg" :disabled="processing || !canSubmit">
+                                            {{ processing ? 'Wird weitergeleitet…' : (paymentMethod === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Kostenpflichtig bestellen') }}
+                                        </Button>
                                     <Link href="/gaming" class="block">
                                         <Button type="button" variant="outline" class="w-full">Abbrechen</Button>
                                     </Link>

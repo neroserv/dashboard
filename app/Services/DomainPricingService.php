@@ -24,7 +24,7 @@ class DomainPricingService
     }
 
     /**
-     * Get purchase price for a TLD (create or renew). Uses tld_pricelist first, then Skrime cache.
+     * Get purchase price for a TLD (create, renew, or transfer). Uses tld_pricelist first, then Skrime cache.
      */
     public function getPurchasePrice(string $tld, string $type = 'create'): float
     {
@@ -35,7 +35,11 @@ class DomainPricingService
 
         $row = TldPricelist::query()->where('tld', $tldKey)->first();
         if ($row) {
-            $price = $type === 'renew' ? (float) $row->renew_price : (float) $row->create_price;
+            $price = match ($type) {
+                'renew' => (float) $row->renew_price,
+                'transfer' => (float) ($row->transfer_price ?? 0),
+                default => (float) $row->create_price,
+            };
 
             return $price > 0 ? round($price, 2) : $this->getPurchasePriceFromSkrime($tldKey, $type);
         }
@@ -49,7 +53,11 @@ class DomainPricingService
     protected function getPurchasePriceFromSkrime(string $tldKey, string $type): float
     {
         $list = $this->getPricelist();
-        $key = $type === 'renew' ? 'renew' : 'create';
+        $key = match ($type) {
+            'renew' => 'renew',
+            'transfer' => 'transfer',
+            default => 'create',
+        };
         foreach ($list as $row) {
             if (strtolower((string) ($row['tld'] ?? '')) === $tldKey) {
                 return (float) ($row[$key] ?? 0);
@@ -60,15 +68,19 @@ class DomainPricingService
     }
 
     /**
-     * Calculate sale price from purchase price. Uses tld_pricelist margin if present, else config.
+     * Calculate sale price from purchase price. Uses tld_pricelist margin for the given type (create/renew/transfer).
      */
-    public function calculateSalePrice(float $purchasePrice, string $tld = ''): float
+    public function calculateSalePrice(float $purchasePrice, string $tld = '', string $type = 'create'): float
     {
         $tldKey = strtolower(ltrim($tld, '.'));
         $row = $tldKey !== '' ? TldPricelist::query()->where('tld', $tldKey)->first() : null;
         if ($row) {
             $marginType = $row->margin_type ?? 'fixed';
-            $marginValue = (float) ($row->margin_value ?? 0);
+            $marginValue = (float) match ($type) {
+                'renew' => $row->margin_renew_value ?? $row->margin_value ?? 0,
+                'transfer' => $row->margin_transfer_value ?? $row->margin_value ?? 0,
+                default => $row->margin_value ?? 0,
+            };
             if ($marginType === 'percent') {
                 return round($purchasePrice * (1 + $marginValue / 100), 2);
             }
@@ -87,24 +99,24 @@ class DomainPricingService
     }
 
     /**
-     * Get sale price for a TLD and type (create/renew).
+     * Get sale price for a TLD and type (create/renew/transfer).
      */
     public function getSalePrice(string $tld, string $type = 'create'): float
     {
         $purchase = $this->getPurchasePrice($tld, $type);
 
-        return $this->calculateSalePrice($purchase, $tld);
+        return $this->calculateSalePrice($purchase, $tld, $type);
     }
 
     /**
-     * Get pricing info for a TLD (purchase, sale, margin) for create.
+     * Get pricing info for a TLD (purchase, sale, margin) for create/renew/transfer.
      *
      * @return array{purchase_price: float, sale_price: float, margin: float, tld: string}
      */
     public function getPricingForTld(string $tld, string $type = 'create'): array
     {
         $purchase = $this->getPurchasePrice($tld, $type);
-        $sale = $this->calculateSalePrice($purchase, $tld);
+        $sale = $this->calculateSalePrice($purchase, $tld, $type);
 
         return [
             'purchase_price' => round($purchase, 2),

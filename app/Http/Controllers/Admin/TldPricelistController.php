@@ -31,16 +31,23 @@ class TldPricelistController extends Controller
         $paginator = $query->paginate(25)->withQueryString();
 
         $items = collect($paginator->items())->map(function (TldPricelist $row) use ($pricing) {
-            $info = $pricing->getPricingForTld($row->tld, 'create');
+            $createInfo = $pricing->getPricingForTld($row->tld, 'create');
+            $renewInfo = $pricing->getPricingForTld($row->tld, 'renew');
+            $transferInfo = $pricing->getPricingForTld($row->tld, 'transfer');
 
             return [
                 'id' => $row->id,
                 'tld' => $row->tld,
                 'create_price' => (float) $row->create_price,
                 'renew_price' => (float) $row->renew_price,
+                'transfer_price' => (float) ($row->transfer_price ?? 0),
                 'margin_type' => $row->margin_type,
                 'margin_value' => (float) $row->margin_value,
-                'sale_price' => $info['sale_price'],
+                'margin_renew_value' => $row->margin_renew_value !== null ? (float) $row->margin_renew_value : null,
+                'margin_transfer_value' => $row->margin_transfer_value !== null ? (float) $row->margin_transfer_value : null,
+                'sale_price' => $createInfo['sale_price'],
+                'sale_price_renew' => $renewInfo['sale_price'],
+                'sale_price_transfer' => $transferInfo['sale_price'],
             ];
         })->values()->all();
 
@@ -68,15 +75,26 @@ class TldPricelistController extends Controller
         $tlds = $request->validated('tlds', []);
         $marginType = $request->validated('margin_type');
         $marginValue = (float) $request->validated('margin_value');
+        $marginRenewRaw = $request->input('margin_renew_value');
+        $marginTransferRaw = $request->input('margin_transfer_value');
+        $marginRenewValue = ($marginRenewRaw !== '' && $marginRenewRaw !== null) ? (float) $marginRenewRaw : null;
+        $marginTransferValue = ($marginTransferRaw !== '' && $marginTransferRaw !== null) ? (float) $marginTransferRaw : null;
 
         $query = TldPricelist::query();
         if (! empty($tlds)) {
             $query->whereIn('tld', array_map('strtolower', $tlds));
         }
-        $count = $query->update([
+        $data = [
             'margin_type' => $marginType,
             'margin_value' => $marginValue,
-        ]);
+        ];
+        if ($marginRenewValue !== null) {
+            $data['margin_renew_value'] = $marginRenewValue;
+        }
+        if ($marginTransferValue !== null) {
+            $data['margin_transfer_value'] = $marginTransferValue;
+        }
+        $count = $query->update($data);
 
         return redirect()->route('admin.domains.tld-pricelist.index')->with('success', "Marge für {$count} TLD(s) aktualisiert.");
     }

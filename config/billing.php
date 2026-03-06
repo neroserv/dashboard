@@ -93,6 +93,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Legal URLs (Checkout AGB / Datenschutz)
+    |--------------------------------------------------------------------------
+    |
+    | URLs for terms of service and privacy policy. Shown in checkout checkboxes.
+    | Fallback to # if not set.
+    |
+    */
+
+    'tos_url' => env('BILLING_TOS_URL', '#'),
+    'privacy_url' => env('BILLING_PRIVACY_URL', '#'),
+
+    /*
+    |--------------------------------------------------------------------------
     | TeamSpeak Cost per Slot (Admin-Kennzahlen)
     |--------------------------------------------------------------------------
     |

@@ -19,9 +19,14 @@ type TldItem = {
     tld: string;
     create_price: number;
     renew_price: number;
+    transfer_price: number;
     margin_type: string;
     margin_value: number;
+    margin_renew_value: number | null;
+    margin_transfer_value: number | null;
     sale_price: number;
+    sale_price_renew: number;
+    sale_price_transfer: number;
 };
 
 type PaginationLink = {
@@ -69,6 +74,8 @@ const applyMarginToAll = ref(false);
 const bulkForm = useForm({
     margin_type: 'percent',
     margin_value: '10',
+    margin_renew_value: '' as string,
+    margin_transfer_value: '' as string,
     tlds: [] as string[],
 });
 
@@ -182,8 +189,8 @@ const submitBulk = () => {
                                 <option value="fixed">Festbetrag (€)</option>
                             </select>
                         </div>
-                        <div class="space-y-2 min-w-[120px]">
-                            <Label for="bulk-margin-value">Wert</Label>
+                        <div class="space-y-2 min-w-[100px]">
+                            <Label for="bulk-margin-value">Verkauf (Create)</Label>
                             <Input
                                 id="bulk-margin-value"
                                 v-model="bulkForm.margin_value"
@@ -195,6 +202,28 @@ const submitBulk = () => {
                             <p v-if="bulkForm.errors.margin_value" class="text-sm text-destructive">
                                 {{ bulkForm.errors.margin_value }}
                             </p>
+                        </div>
+                        <div class="space-y-2 min-w-[100px]">
+                            <Label for="bulk-margin-renew">Verkauf (Renew)</Label>
+                            <Input
+                                id="bulk-margin-renew"
+                                v-model="bulkForm.margin_renew_value"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="leer = Create"
+                            />
+                        </div>
+                        <div class="space-y-2 min-w-[100px]">
+                            <Label for="bulk-margin-transfer">Verkauf (Transfer)</Label>
+                            <Input
+                                id="bulk-margin-transfer"
+                                v-model="bulkForm.margin_transfer_value"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="leer = Create"
+                            />
                         </div>
                         <div class="flex items-end gap-2">
                             <label class="flex items-center gap-2 text-sm">
@@ -224,7 +253,7 @@ const submitBulk = () => {
                 <CardHeader>
                     <CardTitle>Alle TLDs</CardTitle>
                     <CardDescription>
-                        Einkauf (Create/Renew), Marge, berechneter Verkaufspreis (Create).
+                        Einkauf und Verkaufspreise für Create, Renew und Transfer. Margen getrennt pro Aktion.
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
@@ -258,8 +287,10 @@ const submitBulk = () => {
                                 <TableHead>TLD</TableHead>
                                 <TableHead>Einkauf (Create)</TableHead>
                                 <TableHead>Einkauf (Renew)</TableHead>
-                                <TableHead>Marge</TableHead>
+                                <TableHead>Einkauf (Transfer)</TableHead>
                                 <TableHead>Verkauf (Create)</TableHead>
+                                <TableHead>Verkauf (Renew)</TableHead>
+                                <TableHead>Verkauf (Transfer)</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -275,13 +306,13 @@ const submitBulk = () => {
                                 <TableCell class="font-medium">.{{ item.tld }}</TableCell>
                                 <TableCell>{{ item.create_price.toFixed(2) }} €</TableCell>
                                 <TableCell>{{ item.renew_price.toFixed(2) }} €</TableCell>
-                                <TableCell>
-                                    {{ item.margin_type === 'percent' ? `${item.margin_value} %` : `${item.margin_value} €` }}
-                                </TableCell>
+                                <TableCell>{{ item.transfer_price.toFixed(2) }} €</TableCell>
                                 <TableCell>{{ item.sale_price.toFixed(2) }} €</TableCell>
+                                <TableCell>{{ item.sale_price_renew.toFixed(2) }} €</TableCell>
+                                <TableCell>{{ item.sale_price_transfer.toFixed(2) }} €</TableCell>
                             </TableRow>
                             <TableRow v-if="items.length === 0">
-                                <TableCell colspan="6" class="text-center text-muted">
+                                <TableCell colspan="7" class="text-center text-muted">
                                     Keine TLDs. Klicken Sie auf „Pricelist von Skrime importieren“, um alle verfügbaren Endungen zu laden.
                                 </TableCell>
                             </TableRow>

@@ -21,8 +21,12 @@ class DomainCheckoutRequest extends FormRequest
             'sale_price' => ['required', 'numeric', 'min:0'],
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'tld' => ['nullable', 'string', 'max:20'],
+            'transfer' => ['sometimes', 'boolean'],
+            'auth_code' => ['required_if:transfer,true', 'string', 'min:1', 'max:255'],
             'use_profile_contact' => ['required', 'boolean'],
             'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
+            'accept_tos' => ['required', 'accepted'],
+            'accept_early_execution' => ['required', 'accepted'],
         ];
         if (! $this->boolean('use_profile_contact')) {
             $rules['contact'] = ['required', 'array'];
@@ -40,5 +44,17 @@ class DomainCheckoutRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'accept_tos.accepted' => 'Bitte bestätigen Sie die AGB und Datenschutzerklärung.',
+            'accept_early_execution.accepted' => 'Bitte bestätigen Sie den Widerrufsverzicht.',
+            'auth_code.required_if' => 'Für einen Domain-Transfer ist der Auth-Code (EPP-Code) erforderlich.',
+        ];
     }
 }

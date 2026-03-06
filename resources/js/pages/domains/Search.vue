@@ -24,6 +24,7 @@ type Result = {
     premium: boolean;
     sale_price: number;
     purchase_price: number;
+    transfer_sale_price?: number;
     error?: boolean;
 };
 
@@ -70,6 +71,14 @@ async function search() {
 function goToCheckout(r: Result) {
     if (!r.available || r.error) return;
     router.visit(`/domains/checkout?domain=${encodeURIComponent(r.domain)}&sale_price=${r.sale_price}&tld=${r.domain.split('.').pop() ?? ''}`);
+}
+
+function goToTransferCheckout(r: Result) {
+    if (r.available || r.error) return;
+    const tld = r.domain.split('.').pop() ?? '';
+    const salePrice = r.transfer_sale_price ?? 0;
+    if (salePrice <= 0) return;
+    router.visit(`/domains/checkout?domain=${encodeURIComponent(r.domain)}&sale_price=${salePrice}&tld=${tld}&transfer=1`);
 }
 </script>
 
@@ -137,13 +146,20 @@ function goToCheckout(r: Result) {
                                         {{ r.available ? 'Verfügbar' : 'Belegt' }}
                                     </Badge>
                                     <Badge v-if="r.premium" variant="info">Premium</Badge>
-                                    <span class="font-medium">{{ r.sale_price.toFixed(2) }} €</span>
+                                    <span class="font-medium">{{ (r.available ? r.sale_price : (r.transfer_sale_price ?? 0)).toFixed(2) }} €</span>
                                     <Button
                                         v-if="r.available"
                                         size="sm"
                                         @click="goToCheckout(r)"
                                     >
                                         Bestellen
+                                    </Button>
+                                    <Button
+                                        v-else-if="(r.transfer_sale_price ?? 0) > 0"
+                                        size="sm"
+                                        @click="goToTransferCheckout(r)"
+                                    >
+                                        Transfer
                                     </Button>
                                 </template>
                             </div>

@@ -62,6 +62,8 @@ class WebspaceController extends Controller
         $payload = [
             'hostingPlans' => $plans,
             'selectedPlan' => $plan,
+            'tosUrl' => config('billing.tos_url', '#'),
+            'privacyUrl' => config('billing.privacy_url', '#'),
         ];
         if ($brandFeatures['prepaid_balance'] ?? false) {
             $customerBalance = CustomerBalance::where('user_id', $request->user()->id)->first();
@@ -82,8 +84,13 @@ class WebspaceController extends Controller
             'hosting_plan_id' => ['required', 'exists:hosting_plans,id'],
             'domain' => ['required', 'string', 'max:253', 'regex:/^([a-z0-9]([a-z0-9\-]*[a-z0-9])?\.)+[a-z]{2,}$/i'],
             'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
+            'period_months' => ['required', 'integer', 'in:1,3,6'],
+            'accept_tos' => ['required', 'accepted'],
+            'accept_early_execution' => ['required', 'accepted'],
         ], [
             'domain.regex' => 'Bitte eine gültige Domain angeben (z. B. example.com).',
+            'accept_tos.accepted' => 'Bitte bestätigen Sie die AGB und Datenschutzerklärung.',
+            'accept_early_execution.accepted' => 'Bitte bestätigen Sie den Widerrufsverzicht.',
         ]);
 
         $plan = HostingPlan::find($validated['hosting_plan_id']);
@@ -91,16 +98,19 @@ class WebspaceController extends Controller
             return redirect()->route('webspace.checkout')->with('error', 'Paket nicht verfügbar.');
         }
 
+        $periodMonths = (int) $validated['period_months'];
+        $basePrice = (float) $plan->price;
+        $totalAmount = round($basePrice * $periodMonths, 2);
+
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
         $paymentMethod = $validated['payment_method'] ?? 'stripe';
 
         if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
             $user = $request->user();
-            $amount = (float) $plan->price;
             try {
-                app(BalancePaymentService::class)->pay($user, $amount, 'webspace', 'Webspace: '.$plan->name, [
-                    'description' => 'Webspace '.$plan->name.' – '.$validated['domain'].' (1 Monat)',
+                app(BalancePaymentService::class)->pay($user, $totalAmount, 'webspace', 'Webspace: '.$plan->name, [
+                    'description' => 'Webspace '.$plan->name.' – '.$validated['domain'].' ('.$periodMonths.' Monat(e))',
                 ]);
             } catch (InsufficientBalanceException $e) {
                 return redirect()->route('webspace.checkout', ['plan' => $plan->id])
@@ -111,6 +121,7 @@ class WebspaceController extends Controller
                 'hosting_plan_id' => $plan->id,
                 'domain' => $validated['domain'],
                 'user_id' => $user->id,
+                'period_months' => $periodMonths,
             ];
             $request->session()->forget('checkout_webspace');
 
@@ -121,6 +132,8 @@ class WebspaceController extends Controller
             'hosting_plan_id' => $plan->id,
             'domain' => $validated['domain'],
             'user_id' => $request->user()->id,
+            'period_months' => $periodMonths,
+            'total_amount' => $totalAmount,
         ];
         $request->session()->put('checkout_webspace', $payload);
 

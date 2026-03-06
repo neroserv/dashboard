@@ -257,7 +257,7 @@ class CheckoutController extends Controller
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
         }
 
-        $amount = $plan->price !== null ? (float) $plan->price : null;
+        $amount = isset($payload['total_amount']) ? (float) $payload['total_amount'] : ($plan->price !== null ? (float) $plan->price : null);
         if ($amount === null || $amount <= 0) {
             $request->session()->forget('checkout_webspace');
 
@@ -266,6 +266,7 @@ class CheckoutController extends Controller
         }
 
         $domain = $payload['domain'] ?? '';
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? 1)));
         $currency = strtoupper(config('cashier.currency', 'eur'));
         $currentBrand = $request->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
@@ -278,7 +279,7 @@ class CheckoutController extends Controller
                     'currency' => $currency,
                     'value' => number_format($amount, 2, '.', ''),
                 ],
-                'description' => 'Webspace: '.$domain,
+                'description' => 'Webspace: '.$domain.' ('.$periodMonths.' Monat(e))',
                 'redirectUrl' => route('checkout.success'),
                 'metadata' => [
                     'type' => 'webspace',
@@ -286,6 +287,7 @@ class CheckoutController extends Controller
                     'domain' => $domain,
                     'user_id' => (string) $user->id,
                     'prepaid' => $isPrepaid ? '1' : '0',
+                    'period_months' => (string) $periodMonths,
                 ],
             ];
             if ($user->mollie_customer_id) {
@@ -339,9 +341,12 @@ class CheckoutController extends Controller
             return redirect()->route('gaming.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
         }
 
-        $amount = $plan->price !== null ? (float) $plan->price : 0;
-        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
-        $amount += $optionSurcharge;
+        $amount = (float) ($payload['total_amount'] ?? 0);
+        if ($amount <= 0) {
+            $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
+            $basePrice = $plan->price !== null ? (float) $plan->price : 0;
+            $amount = round(($basePrice + $optionSurcharge) * max(1, min(6, (int) ($payload['period_months'] ?? 1))), 2);
+        }
         if ($amount <= 0) {
             $request->session()->forget('checkout_gaming');
 
@@ -351,11 +356,13 @@ class CheckoutController extends Controller
 
         $serverName = $payload['server_name'] ?? $plan->name.' #'.($user->gameServerAccounts()->count() + 1);
         $optionChoices = $payload['option_choices'] ?? [];
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? 1)));
         $metadata = [
             'type' => 'game_server',
             'hosting_plan_id' => (string) $plan->id,
             'user_id' => (string) $user->id,
             'server_name' => $serverName,
+            'period_months' => (string) $periodMonths,
         ];
         if (! empty($optionChoices)) {
             $metadata['option_choices'] = json_encode($optionChoices);
@@ -425,9 +432,12 @@ class CheckoutController extends Controller
             return redirect()->route('teamspeak.index')->with('error', 'Paket nicht gefunden oder inaktiv.');
         }
 
-        $amount = $plan->price !== null ? (float) $plan->price : 0;
-        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
-        $amount += $optionSurcharge;
+        $amount = (float) ($payload['total_amount'] ?? 0);
+        if ($amount <= 0) {
+            $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
+            $basePrice = $plan->price !== null ? (float) $plan->price : 0;
+            $amount = round(($basePrice + $optionSurcharge) * max(1, min(6, (int) ($payload['period_months'] ?? 1))), 2);
+        }
         if ($amount <= 0) {
             $request->session()->forget('checkout_teamspeak');
 
@@ -437,8 +447,10 @@ class CheckoutController extends Controller
 
         $serverName = $payload['server_name'] ?? $plan->name.' #'.($user->teamSpeakServerAccounts()->count() + 1);
         $optionChoices = $payload['option_choices'] ?? [];
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? 1)));
         $metadata = [
             'type' => 'teamspeak',
+            'period_months' => (string) $periodMonths,
             'hosting_plan_id' => (string) $plan->id,
             'user_id' => (string) $user->id,
             'server_name' => $serverName,
@@ -714,7 +726,8 @@ class CheckoutController extends Controller
         $userId = (int) ($metadata['user_id'] ?? 0);
         $serverName = $metadata['server_name'] ?? $user->name.' Game Server';
         $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
-        $periodEnd = now()->addMonth();
+        $periodMonths = max(1, min(6, (int) ($metadata['period_months'] ?? 1)));
+        $periodEnd = now()->addMonths($periodMonths);
 
         if ($userId !== $user->id || $planId < 1) {
             Log::debug('Checkout success gaming: invalid metadata');
@@ -866,7 +879,8 @@ class CheckoutController extends Controller
         $userId = (int) ($metadata['user_id'] ?? 0);
         $serverName = $metadata['server_name'] ?? $user->name.' TeamSpeak';
         $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
-        $periodEnd = now()->addMonth();
+        $periodMonths = max(1, min(6, (int) ($metadata['period_months'] ?? 1)));
+        $periodEnd = now()->addMonths($periodMonths);
 
         if ($userId !== $user->id || $planId < 1) {
             Log::debug('Checkout success teamspeak: invalid metadata');
@@ -1164,7 +1178,7 @@ class CheckoutController extends Controller
         }
 
         $serverName = $serverName ?: $plan->name.' #'.($user->gameServerAccounts()->count() + 1);
-        $periodMonths = $this->getBalancePeriodMonths($request, $user);
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? $this->getBalancePeriodMonths($request, $user))));
         $periodEndsAt = now()->addMonths($periodMonths);
 
         if (! $server) {
@@ -1302,7 +1316,7 @@ class CheckoutController extends Controller
         }
 
         $serverName = $serverName ?: $plan->name.' #'.($user->teamSpeakServerAccounts()->count() + 1);
-        $periodMonths = $this->getBalancePeriodMonths($request, $user);
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? $this->getBalancePeriodMonths($request, $user))));
         $periodEndsAt = now()->addMonths($periodMonths);
 
         $optionChoices = $payload['option_choices'] ?? [];
@@ -1406,9 +1420,9 @@ class CheckoutController extends Controller
             return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
         }
 
-        $server = HostingServer::where('is_active', true)->first();
-        $periodMonths = $this->getBalancePeriodMonths($request, $user);
+        $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? $this->getBalancePeriodMonths($request, $user))));
         $periodEndsAt = now()->addMonths($periodMonths);
+        $server = HostingServer::where('is_active', true)->first();
 
         if (! $server) {
             Log::error('Webspace balance checkout: no active HostingServer');
@@ -1505,7 +1519,8 @@ class CheckoutController extends Controller
         }
 
         $isPrepaid = ($metadata['prepaid'] ?? '0') === '1';
-        $periodEnd = now()->addMonth();
+        $periodMonths = max(1, min(6, (int) ($metadata['period_months'] ?? 1)));
+        $periodEnd = now()->addMonths($periodMonths);
         $server = HostingServer::where('is_active', true)->first();
 
         $baseData = [
