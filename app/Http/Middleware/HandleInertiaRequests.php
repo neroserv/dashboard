@@ -151,6 +151,7 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
+            'csrfToken' => $request->session()->token(),
             'flash' => $flash,
             'currentUrl' => $request->url(),
             'name' => $currentBrand?->name ?? Setting::get('app_name') ?: config('app.name'),

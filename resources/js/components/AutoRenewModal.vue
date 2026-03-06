@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { Wallet, RefreshCcw } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
@@ -28,13 +28,11 @@ const emit = defineEmits<{
 
 const submitting = ref<'balance' | 'mollie' | null>(null);
 
+const page = usePage();
+const csrfToken = () => (page.props.csrfToken as string) ?? '';
+
 function close(): void {
     emit('update:open', false);
-}
-
-function getCsrfToken(): string {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
 }
 
 function submitBalance(enabled: boolean): void {
@@ -114,7 +112,7 @@ function submitBalance(enabled: boolean): void {
                         class="w-full"
                         @submit="submitting = 'mollie'"
                     >
-                        <input type="hidden" name="_token" :value="getCsrfToken()" />
+                        <input type="hidden" name="_token" :value="csrfToken()" />
                         <Button
                             type="submit"
                             variant="outline"
