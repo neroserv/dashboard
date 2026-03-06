@@ -177,11 +177,13 @@ class DomainShopController extends Controller
             }
 
             $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
+            $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
+            $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
             ResellerDomain::create([
                 'domain' => $data['domain'],
                 'user_id' => $user->id,
-                'skrime_id' => $orderData['id'] ?? null,
-                'status' => $orderData['state'] ?? 'active',
+                'skrime_id' => $skrimeId,
+                'status' => $domainStatus,
                 'registered_at' => now(),
                 'expires_at' => $expiresAt,
                 'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
@@ -190,7 +192,11 @@ class DomainShopController extends Controller
                 'tld' => $data['tld'] ?? null,
             ]);
 
-            return redirect()->route('domains.index')->with('success', 'Domain '.$data['domain'].' wurde registriert.');
+            $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
+                ? 'Domain-Transfer für '.$data['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
+                : 'Domain '.$data['domain'].' wurde registriert.';
+
+            return redirect()->route('domains.index')->with('success', $successMessage);
         }
 
         $token = Str::random(32);
@@ -345,11 +351,13 @@ class DomainShopController extends Controller
         }
 
         $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
+        $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
+        $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
         ResellerDomain::create([
             'domain' => $payload['domain'],
             'user_id' => $user->id,
-            'skrime_id' => $orderData['id'] ?? null,
-            'status' => $orderData['state'] ?? 'active',
+            'skrime_id' => $skrimeId,
+            'status' => $domainStatus,
             'registered_at' => now(),
             'expires_at' => $expiresAt,
             'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
@@ -363,7 +371,11 @@ class DomainShopController extends Controller
             $invoice->update(['status' => 'paid']);
         }
 
-        return redirect()->route('domains.index')->with('success', 'Domain '.$payload['domain'].' wurde registriert (Dev: Zahlung simuliert).');
+        $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
+            ? 'Domain-Transfer für '.$payload['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
+            : 'Domain '.$payload['domain'].' wurde registriert (Dev: Zahlung simuliert).';
+
+        return redirect()->route('domains.index')->with('success', $successMessage);
     }
 
     public function checkoutSuccess(Request $request, InvoicePdfService $pdfService): RedirectResponse
@@ -431,11 +443,13 @@ class DomainShopController extends Controller
         }
 
         $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
+        $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
+        $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
         ResellerDomain::create([
             'domain' => $payload['domain'],
             'user_id' => $user->id,
-            'skrime_id' => $orderData['id'] ?? null,
-            'status' => $orderData['state'] ?? 'active',
+            'skrime_id' => $skrimeId,
+            'status' => $domainStatus,
             'registered_at' => now(),
             'expires_at' => $expiresAt,
             'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
@@ -449,7 +463,11 @@ class DomainShopController extends Controller
             $invoice->update(['status' => 'paid']);
         }
 
-        return redirect()->route('domains.index')->with('success', 'Domain '.$payload['domain'].' wurde registriert.');
+        $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
+            ? 'Domain-Transfer für '.$payload['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
+            : 'Domain '.$payload['domain'].' wurde registriert.';
+
+        return redirect()->route('domains.index')->with('success', $successMessage);
     }
 
     /**

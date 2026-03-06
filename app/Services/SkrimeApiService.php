@@ -90,11 +90,25 @@ class SkrimeApiService
 
         $response = $this->client()->post('/domain/order', $payload);
 
-        if (! $response->successful()) {
-            throw new \RuntimeException('Skrime domain order failed: '.$response->body());
+        if ($response->successful()) {
+            return $response->json('data', []);
         }
 
-        return $response->json('data', []);
+        $body = $response->json();
+        $data = $body['data'] ?? [];
+        $status = $data['status'] ?? null;
+        $pendingStatuses = ['pendingfoa', 'pending'];
+        if ($status && in_array(strtolower((string) $status), $pendingStatuses, true)) {
+            $orderData = $data;
+            if (isset($orderData['processId']) && empty($orderData['id'])) {
+                $orderData['id'] = $orderData['processId'];
+            }
+            $orderData['state'] = $orderData['status'] ?? $status;
+
+            return $orderData;
+        }
+
+        throw new \RuntimeException('Skrime domain order failed: '.$response->body());
     }
 
     /**
