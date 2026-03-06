@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\BalanceTransaction;
 use App\Models\CustomerBalance;
+use App\Models\GameServerAccount;
 use App\Models\Invoice;
+use App\Models\TeamSpeakServerAccount;
 use App\Models\User;
+use App\Models\WebspaceAccount;
 use App\Notifications\InvoiceCreatedNotification;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
@@ -49,6 +52,9 @@ class MollieWebhookController extends CashierWebhookController
         ]);
 
         if ($payment->status === PaymentStatus::STATUS_PAID) {
+            if ($this->handlePrepaidSubscriptionPayment($payment)) {
+                return new Response(null, 200);
+            }
             $handled = $this->handleBalanceTopUp($payment) || $this->handleInvoicePayment($payment);
             if ($handled) {
                 return new Response(null, 200);
@@ -61,6 +67,74 @@ class MollieWebhookController extends CashierWebhookController
         }
 
         return parent::handleWebhook($request);
+    }
+
+    /**
+     * When a Mollie subscription charges, extend the linked prepaid account's period by 1 month.
+     * Returns true if the payment was handled (prepaid game/server/webspace/teamspeak account found).
+     */
+    protected function handlePrepaidSubscriptionPayment(Payment $payment): bool
+    {
+        $subscriptionId = $payment->subscriptionId ?? null;
+        if ($subscriptionId === null || $subscriptionId === '') {
+            return false;
+        }
+
+        $account = GameServerAccount::where('mollie_subscription_id', $subscriptionId)->first();
+        if ($account) {
+            $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+                ? $account->current_period_ends_at
+                : now();
+            $account->update([
+                'current_period_ends_at' => $from->copy()->addMonth(),
+                'status' => 'active',
+            ]);
+            Log::info('Mollie webhook: prepaid subscription payment extended game server', [
+                'account_id' => $account->id,
+                'subscription_id' => $subscriptionId,
+                'payment_id' => $payment->id,
+            ]);
+
+            return true;
+        }
+
+        $account = WebspaceAccount::where('mollie_subscription_id', $subscriptionId)->first();
+        if ($account) {
+            $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+                ? $account->current_period_ends_at
+                : now();
+            $account->update([
+                'current_period_ends_at' => $from->copy()->addMonth(),
+                'status' => 'active',
+            ]);
+            Log::info('Mollie webhook: prepaid subscription payment extended webspace', [
+                'account_id' => $account->id,
+                'subscription_id' => $subscriptionId,
+                'payment_id' => $payment->id,
+            ]);
+
+            return true;
+        }
+
+        $account = TeamSpeakServerAccount::where('mollie_subscription_id', $subscriptionId)->first();
+        if ($account) {
+            $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+                ? $account->current_period_ends_at
+                : now();
+            $account->update([
+                'current_period_ends_at' => $from->copy()->addMonth(),
+                'status' => 'active',
+            ]);
+            Log::info('Mollie webhook: prepaid subscription payment extended TeamSpeak server', [
+                'account_id' => $account->id,
+                'subscription_id' => $subscriptionId,
+                'payment_id' => $payment->id,
+            ]);
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

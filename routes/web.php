@@ -154,6 +154,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
         ->name('webspace-accounts.renew');
     Route::post('webspace-accounts/{webspace_account}/subscription/cancel', [WebspaceAccountController::class, 'cancelSubscription'])
         ->name('webspace-accounts.subscription.cancel');
+    Route::post('webspace-accounts/{webspace_account}/auto-renew-balance', [WebspaceAccountController::class, 'setAutoRenewWithBalance'])
+        ->name('webspace-accounts.auto-renew-balance');
+    Route::post('webspace-accounts/{webspace_account}/auto-renew-mollie-subscription', [WebspaceAccountController::class, 'createMollieSubscription'])
+        ->name('webspace-accounts.auto-renew-mollie-subscription');
 
     Route::get('gaming', [GamingController::class, 'index'])->name('gaming.index');
     Route::get('gaming/checkout/pterodactyl-nests', [GamingController::class, 'pterodactylNests'])->name('gaming.checkout.pterodactyl-nests');
@@ -169,6 +173,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
         ->name('gaming-accounts.renew');
     Route::post('gaming-accounts/{game_server_account}/subscription/cancel', [GamingAccountController::class, 'cancelSubscription'])
         ->name('gaming-accounts.subscription.cancel');
+    Route::post('gaming-accounts/{game_server_account}/auto-renew-balance', [GamingAccountController::class, 'setAutoRenewWithBalance'])
+        ->name('gaming-accounts.auto-renew-balance');
+    Route::post('gaming-accounts/{game_server_account}/auto-renew-mollie-subscription', [GamingAccountController::class, 'createMollieSubscription'])
+        ->name('gaming-accounts.auto-renew-mollie-subscription');
 
     Route::get('teamspeak', [TeamSpeakController::class, 'index'])->name('teamspeak.index');
     Route::get('teamspeak/checkout', [TeamSpeakController::class, 'checkout'])->name('teamspeak.checkout');
@@ -188,6 +196,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::post('teamspeak-accounts/{team_speak_server_account}/backups/{snapshot}/deploy', [TeamSpeakAccountController::class, 'deployBackup'])->name('teamspeak-accounts.backups.deploy');
     Route::delete('teamspeak-accounts/{team_speak_server_account}/backups/{snapshot}', [TeamSpeakAccountController::class, 'destroyBackup'])->name('teamspeak-accounts.backups.destroy');
     Route::post('teamspeak-accounts/{team_speak_server_account}/subscription/cancel', [TeamSpeakAccountController::class, 'cancelSubscription'])->name('teamspeak-accounts.subscription.cancel');
+    Route::post('teamspeak-accounts/{team_speak_server_account}/auto-renew-balance', [TeamSpeakAccountController::class, 'setAutoRenewWithBalance'])
+        ->name('teamspeak-accounts.auto-renew-balance');
+    Route::post('teamspeak-accounts/{team_speak_server_account}/auto-renew-mollie-subscription', [TeamSpeakAccountController::class, 'createMollieSubscription'])
+        ->name('teamspeak-accounts.auto-renew-mollie-subscription');
 
     Route::get('invoices/{invoice}', [CustomerInvoiceController::class, 'showView'])->name('invoices.show');
     Route::post('invoices/{invoice}/pay', [CustomerInvoiceController::class, 'pay'])->name('invoices.pay');

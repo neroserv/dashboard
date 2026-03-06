@@ -104,6 +104,8 @@ class WebspaceAccountController extends Controller
             'customerBalance' => $customerBalance,
             'renewUrl' => route('webspace-accounts.renew', $webspaceAccount),
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
+            'auto_renew_with_balance' => (bool) $webspaceAccount->auto_renew_with_balance,
+            'has_mollie_subscription' => ! empty($webspaceAccount->mollie_subscription_id),
         ]);
     }
 
@@ -212,6 +214,100 @@ class WebspaceAccountController extends Controller
                 ->route('webspace-accounts.show', $webspaceAccount)
                 ->with('error', 'Zahlung konnte nicht gestartet werden. Bitte versuchen Sie es später erneut.');
         }
+    }
+
+    /**
+     * Enable or disable auto-renew with balance for this prepaid webspace account.
+     */
+    public function setAutoRenewWithBalance(Request $request, WebspaceAccount $webspaceAccount): RedirectResponse
+    {
+        $this->authorize('view', $webspaceAccount);
+
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        if (! ($brandFeatures['prepaid_balance'] ?? false)) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Auto Renew mit Guthaben ist für diese Marke nicht verfügbar.');
+        }
+
+        if (! $this->accountCanRenew($webspaceAccount)) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Dieser Webspace kann nicht für Auto Renew mit Guthaben eingerichtet werden.');
+        }
+
+        $enabled = $request->boolean('enabled', true);
+
+        $webspaceAccount->update(['auto_renew_with_balance' => $enabled]);
+
+        $message = $enabled
+            ? 'Auto Renew mit Guthaben wurde aktiviert. Am letzten Tag vor Ablauf wird automatisch verlängert, wenn genug Guthaben vorhanden ist.'
+            : 'Auto Renew mit Guthaben wurde deaktiviert.';
+
+        return redirect()
+            ->route('webspace-accounts.show', $webspaceAccount)
+            ->with('success', $message);
+    }
+
+    /**
+     * Create a Mollie subscription for automatic monthly renewal of this webspace account.
+     */
+    public function createMollieSubscription(Request $request, WebspaceAccount $webspaceAccount): RedirectResponse
+    {
+        $this->authorize('view', $webspaceAccount);
+
+        if (! $this->accountCanRenew($webspaceAccount)) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Dieser Webspace kann nicht für ein Mollie-Abo eingerichtet werden.');
+        }
+
+        $user = $request->user();
+        if (! $user->mollie_customer_id) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Kein Mollie-Kunde verknüpft. Bitte haben Sie mindestens einmal mit Mollie bezahlt.');
+        }
+
+        $plan = $webspaceAccount->hostingPlan;
+        $amount = (float) $plan->price;
+        if ($amount <= 0) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Kein gültiger Preis für dieses Paket.');
+        }
+
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+        $params = [
+            'amount' => [
+                'currency' => $currency,
+                'value' => number_format($amount, 2, '.', ''),
+            ],
+            'interval' => '1 month',
+            'description' => 'Webspace Abo: '.$webspaceAccount->domain,
+        ];
+
+        try {
+            $subscription = app(MollieApiClient::class)->subscriptions->createForId(
+                $user->mollie_customer_id,
+                $params
+            );
+        } catch (MollieApiException $e) {
+            return redirect()
+                ->route('webspace-accounts.show', $webspaceAccount)
+                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+        }
+
+        $webspaceAccount->update([
+            'mollie_subscription_id' => $subscription->id,
+            'renewal_type' => 'auto',
+            'cancel_at_period_end' => false,
+        ]);
+
+        return redirect()
+            ->route('webspace-accounts.show', $webspaceAccount)
+            ->with('success', 'Mollie-Abo wurde eingerichtet. Die Abbuchung erfolgt monatlich automatisch.');
     }
 
     protected function accountCanRenew(WebspaceAccount $account): bool

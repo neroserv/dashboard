@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { Eye, EyeOff, Copy, ExternalLink, Mail, Server, LayoutDashboard, KeyRound, CalendarPlus, Calendar } from 'lucide-vue-next';
+import { Eye, EyeOff, Copy, ExternalLink, Mail, Server, LayoutDashboard, KeyRound, CalendarPlus, Calendar, RefreshCcw } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
+import AutoRenewModal from '@/components/AutoRenewModal.vue';
 import PaymentMethodModal from '@/components/PaymentMethodModal.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Heading, Text } from '@/components/ui/typography';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
+import { autoRenewBalance, autoRenewMollieSubscription } from '@/routes/webspace-accounts';
 import type { BreadcrumbItem } from '@/types';
 
 type WebspaceAccount = {
@@ -54,6 +56,8 @@ type Props = {
     customerBalance?: number;
     renewUrl?: string;
     isSuspendedOrExpired?: boolean;
+    auto_renew_with_balance?: boolean;
+    has_mollie_subscription?: boolean;
 };
 
 const props = withDefaults(defineProps<Props>(), {
@@ -64,10 +68,13 @@ const props = withDefaults(defineProps<Props>(), {
     customerBalance: 0,
     renewUrl: '',
     isSuspendedOrExpired: false,
+    auto_renew_with_balance: false,
+    has_mollie_subscription: false,
 });
 
 const showPassword = ref(false);
 const renewModalOpen = ref(false);
+const autoRenewModalOpen = ref(false);
 
 const renewalPeriodOptions: { months: 1 | 2 | 3; label: string }[] = [
     { months: 1, label: '30 Tage (1 Monat)' },
@@ -78,6 +85,9 @@ const renewalPeriodOptions: { months: 1 | 2 | 3; label: string }[] = [
 const page = usePage();
 const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {});
 const showAboVerwalten = computed(() => !brandFeatures.value?.prepaid_balance);
+const showAutoRenewButton = computed(
+    () => props.canRenew && props.renewUrl && brandFeatures.value?.prepaid_balance === true,
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -194,6 +204,16 @@ function resourcePercent(used: number, limit: number): number {
                             >
                                 <CalendarPlus class="h-4 w-4" />
                                 Verlängern
+                            </Button>
+                        </template>
+                        <template v-if="showAutoRenewButton">
+                            <Button
+                                variant="outline"
+                                class="w-full justify-start gap-2"
+                                @click="autoRenewModalOpen = true"
+                            >
+                                <RefreshCcw class="h-4 w-4" />
+                                Auto Renew
                             </Button>
                         </template>
                         <Link v-if="showAboVerwalten" href="/billing/subscriptions">
@@ -550,6 +570,15 @@ function resourcePercent(used: number, limit: number): number {
             :period-options="renewalPeriodOptions"
             :base-amount-per-month="renewalAmount"
             @update:open="renewModalOpen = $event"
+        />
+        <AutoRenewModal
+            v-if="showAutoRenewButton"
+            :open="autoRenewModalOpen"
+            :balance-url="autoRenewBalance.url(props.webspaceAccount.id)"
+            :mollie-url="autoRenewMollieSubscription.url(props.webspaceAccount.id)"
+            :auto-renew-with-balance="props.auto_renew_with_balance"
+            :has-mollie-subscription="props.has_mollie_subscription"
+            @update:open="autoRenewModalOpen = $event"
         />
     </AppLayout>
 </template>

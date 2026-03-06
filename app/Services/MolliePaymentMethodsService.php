@@ -34,6 +34,10 @@ class MolliePaymentMethodsService
             return $this->fallbackMethods();
         }
 
+        if (app()->environment('testing')) {
+            return $this->fallbackMethods();
+        }
+
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL_SECONDS, function (): array {
             try {
                 // Mollie API GET /v2/methods – methods enabled for your account (SDK: methods->all() / allActive())

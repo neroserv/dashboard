@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\AutoRenewPrepaidWithBalanceJob;
 use App\Jobs\CloseInactiveTicketsJob;
 use App\Jobs\CreateDomainRenewalInvoicesJob;
 use App\Jobs\CreateSiteRenewalInvoicesJob;
@@ -33,3 +34,4 @@ Schedule::job(new CreateSiteRenewalInvoicesJob)->daily();
 Schedule::job(new SendInvoiceOverdueNotificationsJob)->daily();
 Schedule::job(new VoidUnpaidInvoicesAfterGraceJob)->daily();
 Schedule::job(new CloseInactiveTicketsJob(7))->daily();
+Schedule::job(new AutoRenewPrepaidWithBalanceJob)->daily();

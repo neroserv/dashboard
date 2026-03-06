@@ -15,8 +15,10 @@ import {
     Loader2,
     LayoutDashboard,
     ExternalLink,
+    RefreshCcw,
 } from 'lucide-vue-next';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import AutoRenewModal from '@/components/AutoRenewModal.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -41,6 +43,7 @@ import { Heading, Text } from '@/components/ui/typography';
 import { notify } from '@/composables/useNotify';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
+import { autoRenewBalance, autoRenewMollieSubscription } from '@/routes/teamspeak-accounts';
 import type { BreadcrumbItem } from '@/types';
 
 type TeamSpeakServerAccount = {
@@ -87,6 +90,8 @@ type Props = {
     customerBalance?: number;
     renewUrl?: string;
     isSuspendedOrExpired?: boolean;
+    auto_renew_with_balance?: boolean;
+    has_mollie_subscription?: boolean;
 };
 
 const props = withDefaults(defineProps<Props>(), {
@@ -96,12 +101,15 @@ const props = withDefaults(defineProps<Props>(), {
     customerBalance: 0,
     renewUrl: '',
     isSuspendedOrExpired: false,
+    auto_renew_with_balance: false,
+    has_mollie_subscription: false,
 });
 
 const powerLoading = ref<'start' | 'stop' | null>(null);
 const reinstallLoading = ref(false);
 const nameModalOpen = ref(false);
 const renewModalOpen = ref(false);
+const autoRenewModalOpen = ref(false);
 const tokenModalOpen = ref(false);
 const newName = ref(props.teamSpeakServerAccount.name);
 const newTokenDescription = ref('');
@@ -124,6 +132,9 @@ const showAboVerwalten = computed(
 );
 const showRenewButton = computed(
     () => props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+);
+const showAutoRenewButton = computed(
+    () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
 );
 
 const formatDate = (d: string | null) =>
@@ -371,6 +382,16 @@ function deleteBackup(snapshotId: number) {
                             >
                                 <CalendarPlus class="h-4 w-4" />
                                 Verlängern
+                            </Button>
+                        </template>
+                        <template v-if="showAutoRenewButton">
+                            <Button
+                                variant="outline"
+                                class="w-full justify-start gap-2"
+                                @click="autoRenewModalOpen = true"
+                            >
+                                <RefreshCcw class="h-4 w-4" />
+                                Auto Renew
                             </Button>
                         </template>
                         <Link v-if="showAboVerwalten" href="/billing/subscriptions">
@@ -846,6 +867,16 @@ function deleteBackup(snapshotId: number) {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <AutoRenewModal
+            v-if="showAutoRenewButton"
+            :open="autoRenewModalOpen"
+            :balance-url="autoRenewBalance.url(props.teamSpeakServerAccount.id)"
+            :mollie-url="autoRenewMollieSubscription.url(props.teamSpeakServerAccount.id)"
+            :auto-renew-with-balance="props.auto_renew_with_balance"
+            :has-mollie-subscription="props.has_mollie_subscription"
+            @update:open="autoRenewModalOpen = $event"
+        />
 
         <Dialog v-model:open="tokenModalOpen">
             <DialogContent>

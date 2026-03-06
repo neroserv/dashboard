@@ -140,6 +140,8 @@ class GamingAccountController extends Controller
             'customerBalance' => $customerBalance,
             'renewUrl' => route('gaming-accounts.renew', $gameServerAccount),
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
+            'auto_renew_with_balance' => (bool) $gameServerAccount->auto_renew_with_balance,
+            'has_mollie_subscription' => ! empty($gameServerAccount->mollie_subscription_id),
         ]);
     }
 
@@ -402,6 +404,114 @@ class GamingAccountController extends Controller
         return redirect()
             ->route('billing.subscriptions')
             ->with('success', 'Ihr Game-Server-Abo wurde zum Periodenende gekündigt.');
+    }
+
+    /**
+     * Enable or disable auto-renew with balance for this prepaid game server.
+     */
+    public function setAutoRenewWithBalance(Request $request, GameServerAccount $gameServerAccount): RedirectResponse
+    {
+        $redirect = $this->ensureGamingFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        if ($gameServerAccount->user_id !== $request->user()->id) {
+            abort(403, 'Nur der Besitzer kann Auto Renew verwalten.');
+        }
+
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        if (! ($brandFeatures['prepaid_balance'] ?? false)) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Auto Renew mit Guthaben ist für diese Marke nicht verfügbar.');
+        }
+
+        if (! $this->accountCanRenew($gameServerAccount)) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Dieser Game-Server kann nicht für Auto Renew mit Guthaben eingerichtet werden.');
+        }
+
+        $enabled = $request->boolean('enabled', true);
+
+        $gameServerAccount->update(['auto_renew_with_balance' => $enabled]);
+
+        $message = $enabled
+            ? 'Auto Renew mit Guthaben wurde aktiviert. Am letzten Tag vor Ablauf wird automatisch verlängert, wenn genug Guthaben vorhanden ist.'
+            : 'Auto Renew mit Guthaben wurde deaktiviert.';
+
+        return redirect()
+            ->route('gaming-accounts.show', $gameServerAccount)
+            ->with('success', $message);
+    }
+
+    /**
+     * Create a Mollie subscription for automatic monthly renewal of this game server.
+     */
+    public function createMollieSubscription(Request $request, GameServerAccount $gameServerAccount): RedirectResponse
+    {
+        $redirect = $this->ensureGamingFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        if ($gameServerAccount->user_id !== $request->user()->id) {
+            abort(403, 'Nur der Besitzer kann ein Mollie-Abo einrichten.');
+        }
+
+        if (! $this->accountCanRenew($gameServerAccount)) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Dieser Game-Server kann nicht für ein Mollie-Abo eingerichtet werden.');
+        }
+
+        $user = $request->user();
+        if (! $user->mollie_customer_id) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Kein Mollie-Kunde verknüpft. Bitte haben Sie mindestens einmal mit Mollie bezahlt.');
+        }
+
+        $plan = $gameServerAccount->hostingPlan;
+        $amount = (float) $plan->price;
+        if ($amount <= 0) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Kein gültiger Preis für dieses Paket.');
+        }
+
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+        $params = [
+            'amount' => [
+                'currency' => $currency,
+                'value' => number_format($amount, 2, '.', ''),
+            ],
+            'interval' => '1 month',
+            'description' => 'Game-Server Abo: '.$gameServerAccount->name,
+        ];
+
+        try {
+            $subscription = app(MollieApiClient::class)->subscriptions->createForId(
+                $user->mollie_customer_id,
+                $params
+            );
+        } catch (MollieApiException $e) {
+            return redirect()
+                ->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+        }
+
+        $gameServerAccount->update([
+            'mollie_subscription_id' => $subscription->id,
+            'renewal_type' => 'auto',
+            'cancel_at_period_end' => false,
+        ]);
+
+        return redirect()
+            ->route('gaming-accounts.show', $gameServerAccount)
+            ->with('success', 'Mollie-Abo wurde eingerichtet. Die Abbuchung erfolgt monatlich automatisch.');
     }
 
     protected function accountCanRenew(GameServerAccount $account): bool

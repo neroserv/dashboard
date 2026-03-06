@@ -135,6 +135,8 @@ class TeamSpeakAccountController extends Controller
             'customerBalance' => $customerBalance,
             'renewUrl' => route('teamspeak-accounts.renew', $teamSpeakServerAccount),
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
+            'auto_renew_with_balance' => (bool) $teamSpeakServerAccount->auto_renew_with_balance,
+            'has_mollie_subscription' => ! empty($teamSpeakServerAccount->mollie_subscription_id),
         ]);
     }
 
@@ -570,6 +572,108 @@ class TeamSpeakAccountController extends Controller
         return redirect()
             ->route('billing.subscriptions')
             ->with('success', 'Ihr TeamSpeak-Server-Abo wurde zum Periodenende gekündigt.');
+    }
+
+    /**
+     * Enable or disable auto-renew with balance for this prepaid TeamSpeak server.
+     */
+    public function setAutoRenewWithBalance(Request $request, TeamSpeakServerAccount $teamSpeakServerAccount): RedirectResponse
+    {
+        $redirect = $this->ensureTeamSpeakFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+        $this->authorizeAccount($request, $teamSpeakServerAccount);
+
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        if (! ($brandFeatures['prepaid_balance'] ?? false)) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Auto Renew mit Guthaben ist für diese Marke nicht verfügbar.');
+        }
+
+        if (! $this->accountCanRenew($teamSpeakServerAccount)) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Dieser TeamSpeak-Server kann nicht für Auto Renew mit Guthaben eingerichtet werden.');
+        }
+
+        $enabled = $request->boolean('enabled', true);
+
+        $teamSpeakServerAccount->update(['auto_renew_with_balance' => $enabled]);
+
+        $message = $enabled
+            ? 'Auto Renew mit Guthaben wurde aktiviert. Am letzten Tag vor Ablauf wird automatisch verlängert, wenn genug Guthaben vorhanden ist.'
+            : 'Auto Renew mit Guthaben wurde deaktiviert.';
+
+        return redirect()
+            ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+            ->with('success', $message);
+    }
+
+    /**
+     * Create a Mollie subscription for automatic monthly renewal of this TeamSpeak server.
+     */
+    public function createMollieSubscription(Request $request, TeamSpeakServerAccount $teamSpeakServerAccount): RedirectResponse
+    {
+        $redirect = $this->ensureTeamSpeakFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+        $this->authorizeAccount($request, $teamSpeakServerAccount);
+
+        if (! $this->accountCanRenew($teamSpeakServerAccount)) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Dieser TeamSpeak-Server kann nicht für ein Mollie-Abo eingerichtet werden.');
+        }
+
+        $user = $request->user();
+        if (! $user->mollie_customer_id) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Kein Mollie-Kunde verknüpft. Bitte haben Sie mindestens einmal mit Mollie bezahlt.');
+        }
+
+        $plan = $teamSpeakServerAccount->hostingPlan;
+        $amount = (float) $plan->price;
+        if ($amount <= 0) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Kein gültiger Preis für dieses Paket.');
+        }
+
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+        $params = [
+            'amount' => [
+                'currency' => $currency,
+                'value' => number_format($amount, 2, '.', ''),
+            ],
+            'interval' => '1 month',
+            'description' => 'TeamSpeak-Server Abo: '.$teamSpeakServerAccount->name,
+        ];
+
+        try {
+            $subscription = app(MollieApiClient::class)->subscriptions->createForId(
+                $user->mollie_customer_id,
+                $params
+            );
+        } catch (MollieApiException $e) {
+            return redirect()
+                ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+                ->with('error', 'Mollie-Abo konnte nicht erstellt werden: '.$e->getMessage());
+        }
+
+        $teamSpeakServerAccount->update([
+            'mollie_subscription_id' => $subscription->id,
+            'renewal_type' => 'auto',
+            'cancel_at_period_end' => false,
+        ]);
+
+        return redirect()
+            ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
+            ->with('success', 'Mollie-Abo wurde eingerichtet. Die Abbuchung erfolgt monatlich automatisch.');
     }
 
     protected function accountCanRenew(TeamSpeakServerAccount $account): bool

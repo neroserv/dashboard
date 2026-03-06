@@ -27,6 +27,7 @@ class GameServerAccount extends Model
         'cancel_at_period_end',
         'ends_at',
         'renewal_type',
+        'auto_renew_with_balance',
         'option_values',
     ];
 
@@ -39,6 +40,7 @@ class GameServerAccount extends Model
             'current_period_ends_at' => 'datetime',
             'cancel_at_period_end' => 'boolean',
             'ends_at' => 'datetime',
+            'auto_renew_with_balance' => 'boolean',
             'option_values' => 'array',
         ];
     }
