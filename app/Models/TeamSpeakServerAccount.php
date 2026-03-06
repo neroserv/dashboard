@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\HostingPlanOptionSurchargeService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -71,6 +72,25 @@ class TeamSpeakServerAccount extends Model
     public function snapshots(): HasMany
     {
         return $this->hasMany(TeamSpeakSnapshot::class);
+    }
+
+    /**
+     * Effective monthly renewal amount (base price or fallback + surcharge from option_values e.g. slots).
+     */
+    public function getMonthlyRenewalAmount(): float
+    {
+        $plan = $this->hostingPlan;
+        if (! $plan || ! $plan->is_active) {
+            return 0.0;
+        }
+        $base = (float) ($plan->price ?? 0);
+        if ($base <= 0) {
+            $base = (float) config('billing.fallback_monthly_price_teamspeak', 0);
+        }
+        $optionChoices = is_array($this->option_values) ? $this->option_values : [];
+        $surcharge = app(HostingPlanOptionSurchargeService::class)->computeSurcharge($plan, $optionChoices);
+
+        return round($base + $surcharge, 2);
     }
 
     /**

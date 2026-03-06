@@ -114,9 +114,7 @@ class TeamSpeakAccountController extends Controller
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
         $canRenew = $this->accountCanRenew($teamSpeakServerAccount);
-        $renewalAmount = $canRenew && $teamSpeakServerAccount->hostingPlan
-            ? (float) $teamSpeakServerAccount->hostingPlan->price
-            : 0.0;
+        $renewalAmount = $canRenew ? $teamSpeakServerAccount->getMonthlyRenewalAmount() : 0.0;
         $canPayWithBalance = (bool) ($brandFeatures['prepaid_balance'] ?? false);
         $customerBalance = 0.0;
         if ($canPayWithBalance) {
@@ -292,9 +290,8 @@ class TeamSpeakAccountController extends Controller
             'period_months' => ['nullable', 'integer', 'min:1', 'max:12'],
         ]);
 
-        $plan = $teamSpeakServerAccount->hostingPlan;
         $periodMonths = (int) $request->input('period_months', 1);
-        $amount = (float) $plan->price * $periodMonths;
+        $amount = round($teamSpeakServerAccount->getMonthlyRenewalAmount() * $periodMonths, 2);
         $user = $request->user();
         $paymentMethod = $request->input('payment_method', 'mollie');
 
@@ -634,8 +631,11 @@ class TeamSpeakAccountController extends Controller
                 $message .= 'Nur manuell verlängerte Server können umgestellt werden.';
             } else {
                 $plan = $teamSpeakServerAccount->hostingPlan;
-                if (! $plan || ! $plan->is_active || (float) ($plan->price ?? 0) <= 0) {
-                    $message .= 'Das aktuelle Paket hat keinen gültigen Preis.';
+                $monthlyAmount = $teamSpeakServerAccount->getMonthlyRenewalAmount();
+                if (! $plan || ! $plan->is_active) {
+                    $message .= 'Das aktuelle Paket ist nicht verfügbar.';
+                } elseif ($monthlyAmount <= 0) {
+                    $message .= 'Das aktuelle Paket hat keinen gültigen monatlichen Preis (Basispreis oder Paket-Optionen wie Slots). Bitte kontaktieren Sie uns – wir tragen den Preis ein und richten das Abo ein.';
                 } else {
                     $message .= 'Bitte zuerst den Server um mindestens 1 Monat verlängern.';
                 }
@@ -656,12 +656,11 @@ class TeamSpeakAccountController extends Controller
                 ->with('error', 'Mollie-Kunde konnte nicht angelegt werden: '.$e->getMessage());
         }
 
-        $plan = $teamSpeakServerAccount->hostingPlan;
-        $amount = (float) $plan->price;
+        $amount = $teamSpeakServerAccount->getMonthlyRenewalAmount();
         if ($amount <= 0) {
             return redirect()
                 ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
-                ->with('error', 'Kein gültiger Preis für dieses Paket.');
+                ->with('error', 'Kein gültiger Preis für dieses Paket. Bitte im Admin unter Hosting-Pakete einen monatlichen Preis oder Paket-Optionen (z. B. Slots) mit Preis eintragen, oder FALLBACK_MONTHLY_PRICE_TEAMSPEAK in der .env setzen.');
         }
 
         $currency = strtoupper(config('cashier.currency', 'eur'));
@@ -717,6 +716,6 @@ class TeamSpeakAccountController extends Controller
             return false;
         }
 
-        return $plan->price !== null && (float) $plan->price > 0;
+        return $account->getMonthlyRenewalAmount() > 0;
     }
 }

@@ -118,6 +118,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Fallback Monthly Price (Mollie-Abo ohne Paketpreis)
+    |--------------------------------------------------------------------------
+    |
+    | Wenn ein Hosting-Paket (z. B. TeamSpeak) keinen Preis hat, kann hier ein
+    | Fallback in EUR gesetzt werden. Dann kann trotzdem ein Mollie-Abo
+    | eingerichtet werden. 0 = deaktiviert (Fehlermeldung wie bisher).
+    |
+    */
+
+    'fallback_monthly_price_teamspeak' => (float) env('FALLBACK_MONTHLY_PRICE_TEAMSPEAK', 0),
+
+    /*
+    |--------------------------------------------------------------------------
     | Mollie Payment Method Labels (DE)
     |--------------------------------------------------------------------------
     |

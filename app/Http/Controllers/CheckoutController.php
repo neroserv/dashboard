@@ -1006,13 +1006,13 @@ class CheckoutController extends Controller
                 ->with('error', 'Mollie ist nicht konfiguriert.');
         }
 
-        $plan = $account->hostingPlan;
-        if (! $plan || (float) $plan->price <= 0) {
+        $monthlyAmount = $account->getMonthlyRenewalAmount();
+        if ($monthlyAmount <= 0) {
             return redirect()->route('teamspeak-accounts.show', $account)
-                ->with('error', 'Kein gültiger Preis für Verlängerung.');
+                ->with('error', 'Kein gültiger Preis für Verlängerung (Basispreis oder Paket-Optionen fehlen).');
         }
 
-        $amount = (float) $plan->price * $periodMonths;
+        $amount = round($monthlyAmount * $periodMonths, 2);
         $user = $request->user();
         $metadata = [
             'type' => 'teamspeak_renewal',
