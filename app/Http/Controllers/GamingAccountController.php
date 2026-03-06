@@ -531,7 +531,8 @@ class GamingAccountController extends Controller
 
     protected function accountCanRenew(GameServerAccount $account): bool
     {
-        if ($account->renewal_type !== 'manual' || $account->mollie_subscription_id !== null) {
+        $renewalType = $account->renewal_type ?? 'manual';
+        if ($renewalType !== 'manual' || $account->mollie_subscription_id !== null) {
             return false;
         }
 

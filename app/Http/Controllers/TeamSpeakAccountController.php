@@ -627,9 +627,23 @@ class TeamSpeakAccountController extends Controller
         $this->authorizeAccount($request, $teamSpeakServerAccount);
 
         if (! $this->accountCanRenew($teamSpeakServerAccount)) {
+            $message = 'Dieser TeamSpeak-Server kann nicht für ein Mollie-Abo eingerichtet werden. ';
+            if ($teamSpeakServerAccount->mollie_subscription_id) {
+                $message .= 'Es ist bereits ein Abo aktiv.';
+            } elseif (($teamSpeakServerAccount->renewal_type ?? 'manual') !== 'manual') {
+                $message .= 'Nur manuell verlängerte Server können umgestellt werden.';
+            } else {
+                $plan = $teamSpeakServerAccount->hostingPlan;
+                if (! $plan || ! $plan->is_active || (float) ($plan->price ?? 0) <= 0) {
+                    $message .= 'Das aktuelle Paket hat keinen gültigen Preis.';
+                } else {
+                    $message .= 'Bitte zuerst den Server um mindestens 1 Monat verlängern.';
+                }
+            }
+
             return redirect()
                 ->route('teamspeak-accounts.show', $teamSpeakServerAccount)
-                ->with('error', 'Dieser TeamSpeak-Server kann nicht für ein Mollie-Abo eingerichtet werden.');
+                ->with('error', $message);
         }
 
         $user = $request->user();
@@ -693,7 +707,8 @@ class TeamSpeakAccountController extends Controller
 
     protected function accountCanRenew(TeamSpeakServerAccount $account): bool
     {
-        if ($account->renewal_type !== 'manual' || $account->mollie_subscription_id !== null) {
+        $renewalType = $account->renewal_type ?? 'manual';
+        if ($renewalType !== 'manual' || $account->mollie_subscription_id !== null) {
             return false;
         }
 

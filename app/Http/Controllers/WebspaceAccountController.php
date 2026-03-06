@@ -325,7 +325,8 @@ class WebspaceAccountController extends Controller
 
     protected function accountCanRenew(WebspaceAccount $account): bool
     {
-        if ($account->renewal_type !== 'manual' || $account->mollie_subscription_id !== null) {
+        $renewalType = $account->renewal_type ?? 'manual';
+        if ($renewalType !== 'manual' || $account->mollie_subscription_id !== null) {
             return false;
         }
 

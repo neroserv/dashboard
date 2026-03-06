@@ -101,6 +101,7 @@ function submitBalance(enabled: boolean): void {
                     </div>
                     <p class="text-sm text-muted-foreground">
                         Es wird eine Subscription mit Mollie erstellt; das Geld wird monatlich automatisch abgebucht.
+                        Die erste Zahlung verlängert die Laufzeit um 1 Monat, danach erfolgt die Abbuchung automatisch.
                     </p>
                     <div v-if="hasMollieSubscription" class="text-sm text-green-600 dark:text-green-400">
                         Mollie-Abo ist aktiv.

@@ -1172,14 +1172,34 @@ class CheckoutController extends Controller
                 ->with('error', 'Abo konnte nach der Zahlung nicht eingerichtet werden. Bitte kontaktieren Sie uns.');
         }
 
-        $account->update([
+        $from = $account->current_period_ends_at && $account->current_period_ends_at->isFuture()
+            ? $account->current_period_ends_at
+            : now();
+        $newPeriodEnd = $from->copy()->addMonth();
+
+        $updateData = [
             'mollie_subscription_id' => $subscription->id,
             'renewal_type' => 'auto',
             'cancel_at_period_end' => false,
-        ]);
+            'current_period_ends_at' => $newPeriodEnd,
+        ];
+        if (in_array($accountType, ['gaming', 'webspace', 'teamspeak'], true) && in_array('status', $account->getFillable(), true)) {
+            $updateData['status'] = 'active';
+        }
+        $account->update($updateData);
+
+        if ($accountType === 'teamspeak' && $account->hostingServer && $account->virtual_server_id) {
+            try {
+                $client = app(TeamSpeakClient::class);
+                $client->setServer($account->hostingServer);
+                $client->startVirtualServer($account->virtual_server_id);
+            } catch (\Throwable) {
+                // continue
+            }
+        }
 
         return redirect()->route($showRoute, [$account])
-            ->with('success', 'Mollie-Abo wurde eingerichtet. Die Abbuchung erfolgt monatlich automatisch.');
+            ->with('success', 'Mollie-Abo wurde eingerichtet. Die erste Zahlung wurde verbucht, die Laufzeit wurde um 1 Monat verlängert. Die nächste Abbuchung erfolgt automatisch.');
     }
 
     /**
