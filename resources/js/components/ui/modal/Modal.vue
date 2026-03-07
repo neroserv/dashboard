@@ -6,7 +6,7 @@ import { X } from 'lucide-vue-next';
 interface Props {
     modelValue: boolean;
     class?: string;
-    size?: 'sm' | 'md' | 'lg' | 'xl';
+    size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,6 +22,7 @@ const sizeClasses: Record<string, string> = {
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    full: 'w-[95vw] max-w-none h-[90vh] max-h-[90vh] flex flex-col overflow-hidden',
 };
 
 const close = () => {

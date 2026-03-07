@@ -52,7 +52,7 @@ class GamingAccountController extends Controller
 
         $accounts = $request->user()
             ->gameServerAccounts()
-            ->with(['hostingPlan', 'hostingServer'])
+            ->with(['hostingPlan', 'hostingServer', 'gameserverCloudSubscription.gameserverCloudPlan'])
             ->latest()
             ->get();
 
@@ -99,7 +99,7 @@ class GamingAccountController extends Controller
             abort(404);
         }
 
-        $gameServerAccount->load('hostingPlan', 'hostingServer');
+        $gameServerAccount->load('hostingPlan', 'hostingServer', 'gameserverCloudSubscription.gameserverCloudPlan');
 
         $config = $gameServerAccount->hostingServer?->config ?? [];
         $panelUrl = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
@@ -130,6 +130,19 @@ class GamingAccountController extends Controller
 
         $isSuspendedOrExpired = $gameServerAccount->isSuspendedOrExpired();
 
+        $gameserverCloudSubscription = null;
+        $cloudSubscriptionUrl = null;
+        if ($gameServerAccount->isCloudAccount() && $gameServerAccount->gameserverCloudSubscription) {
+            $sub = $gameServerAccount->gameserverCloudSubscription;
+            $gameserverCloudSubscription = [
+                'id' => $sub->id,
+                'current_period_ends_at' => $sub->current_period_ends_at?->toIso8601String(),
+                'cancel_at_period_end' => $sub->cancel_at_period_end,
+                'plan' => ['name' => $sub->gameserverCloudPlan?->name ?? 'Cloud'],
+            ];
+            $cloudSubscriptionUrl = route('gaming.cloud.subscriptions.show', $sub->id);
+        }
+
         return Inertia::render('gaming-accounts/Show', [
             'gameServerAccount' => $gameServerAccount,
             'loginUrl' => $loginUrl,
@@ -143,6 +156,8 @@ class GamingAccountController extends Controller
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
             'auto_renew_with_balance' => (bool) $gameServerAccount->auto_renew_with_balance,
             'has_mollie_subscription' => ! empty($gameServerAccount->mollie_subscription_id),
+            'gameserverCloudSubscription' => $gameserverCloudSubscription,
+            'cloudSubscriptionUrl' => $cloudSubscriptionUrl,
         ]);
     }
 
@@ -167,7 +182,7 @@ class GamingAccountController extends Controller
         }
 
         $action = $request->input('action', '');
-        if (! in_array($action, ['start', 'stop', 'restart'], true)) {
+        if (! in_array($action, ['start', 'stop', 'restart', 'kill'], true)) {
             return redirect()
                 ->route('gaming-accounts.show', $gameServerAccount)
                 ->with('error', 'Ungültige Aktion.');
@@ -217,6 +232,579 @@ class GamingAccountController extends Controller
         }
 
         return response()->json(['serverOverview' => $serverOverview]);
+    }
+
+    /**
+     * Ensure user owns the account and is not suspended. Returns JSON error response or null.
+     */
+    private function ensureAccountOwnerApi(Request $request, GameServerAccount $gameServerAccount): ?JsonResponse
+    {
+        $redirect = $this->ensureGamingFeature($request);
+        if ($redirect !== null) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($gameServerAccount->user_id !== $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Not found'], 404);
+        }
+        if ($gameServerAccount->isSuspendedOrExpired()) {
+            return response()->json(['success' => false, 'message' => 'Server gesperrt oder abgelaufen.'], 403);
+        }
+        $gameServerAccount->load('hostingServer');
+        if (! $gameServerAccount->identifier || ! $gameServerAccount->hostingServer) {
+            return response()->json(['success' => false, 'message' => 'Server nicht bereit.'], 400);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get websocket ticket for console. Only owner.
+     */
+    public function consoleWebsocket(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $ticket = $client->getWebsocketTicket($gameServerAccount);
+
+            return response()->json(['success' => true, 'token' => $ticket['token'], 'socket' => $ticket['socket']]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Send console command. Only owner.
+     */
+    public function consoleCommand(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $command = $request->input('command', '');
+        if (! is_string($command) || trim($command) === '') {
+            return response()->json(['success' => false, 'message' => 'Befehl fehlt.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->sendConsoleCommand($gameServerAccount, $command);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * List files. Only owner.
+     */
+    public function filesList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $directory = $request->input('directory', '/');
+        if (! is_string($directory)) {
+            $directory = '/';
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $files = $client->listFiles($gameServerAccount, $directory);
+
+            return response()->json(['success' => true, 'files' => $files]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Read file contents. Only owner.
+     */
+    public function filesContents(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $path = $request->input('path', $request->input('file', '/'));
+        if (! is_string($path)) {
+            $path = '/';
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $content = $client->getFileContents($gameServerAccount, $path);
+
+            return response()->json(['success' => true, 'content' => $content]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Write file. Only owner.
+     */
+    public function filesWrite(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $path = $request->input('path', '');
+        $content = $request->input('content', '');
+        if (! is_string($path) || $path === '') {
+            return response()->json(['success' => false, 'message' => 'Pfad fehlt.'], 422);
+        }
+        if (! is_string($content)) {
+            $content = '';
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->writeFile($gameServerAccount, $path, $content);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Download file (proxy stream). Only owner.
+     */
+    public function filesDownload(Request $request, GameServerAccount $gameServerAccount): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $path = $request->input('path', $request->input('file', ''));
+        if (! is_string($path) || $path === '') {
+            return response()->json(['success' => false, 'message' => 'Pfad fehlt.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $response = $client->getFileDownloadResponse($gameServerAccount, $path);
+            if (! $response->successful()) {
+                $body = $response->json();
+                $msg = $body['errors'][0]['detail'] ?? $response->reason();
+
+                return response()->json(['success' => false, 'message' => $msg], 502);
+            }
+            $filename = basename($path) ?: 'download';
+            $headers = [
+                'Content-Type' => $response->header('Content-Type') ?? 'application/octet-stream',
+                'Content-Disposition' => 'attachment; filename="'.addslashes($filename).'"',
+            ];
+
+            return response()->streamDownload(
+                fn () => print ($response->body()),
+                $filename,
+                $headers
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Create directory. Only owner.
+     */
+    public function filesCreateFolder(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $root = $request->input('root', '/');
+        $name = $request->input('name', '');
+        if (! is_string($root)) {
+            $root = '/';
+        }
+        if (! is_string($name) || $name === '') {
+            return response()->json(['success' => false, 'message' => 'Ordnername fehlt.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->createFolder($gameServerAccount, $root, $name);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Delete files/directories. Only owner.
+     */
+    public function filesDelete(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $root = $request->input('root', '/');
+        $files = $request->input('files', []);
+        if (! is_string($root)) {
+            $root = '/';
+        }
+        if (! is_array($files)) {
+            return response()->json(['success' => false, 'message' => 'files muss ein Array sein.'], 422);
+        }
+        $files = array_values(array_filter(array_map(fn ($f) => is_string($f) ? $f : null, $files)));
+        if (count($files) === 0) {
+            return response()->json(['success' => false, 'message' => 'Keine Dateien angegeben.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->deleteFiles($gameServerAccount, $root, $files);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Rename files. Only owner.
+     */
+    public function filesRename(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $root = $request->input('root', '/');
+        $files = $request->input('files', []);
+        if (! is_string($root)) {
+            $root = '/';
+        }
+        if (! is_array($files)) {
+            return response()->json(['success' => false, 'message' => 'files muss ein Array von {from, to} sein.'], 422);
+        }
+        $pairs = [];
+        foreach ($files as $item) {
+            if (is_array($item) && isset($item['from'], $item['to']) && is_string($item['from']) && is_string($item['to'])) {
+                $pairs[] = ['from' => $item['from'], 'to' => $item['to']];
+            }
+        }
+        if (count($pairs) === 0) {
+            return response()->json(['success' => false, 'message' => 'Keine gültigen Umbenennungen.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->renameFiles($gameServerAccount, $root, $pairs);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Upload file (proxy to Pterodactyl signed URL). Only owner.
+     */
+    public function filesUpload(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $directory = $request->input('directory', '/');
+        if (! is_string($directory)) {
+            $directory = '/';
+        }
+        $uploadedFile = $request->file('file') ?? $request->file('files');
+        if (! $uploadedFile) {
+            return response()->json(['success' => false, 'message' => 'Keine Datei hochgeladen.'], 422);
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $signedUrl = $client->getUploadUrl($gameServerAccount, $directory);
+
+            $response = \Illuminate\Support\Facades\Http::attach(
+                'files',
+                file_get_contents($uploadedFile->getRealPath()),
+                $uploadedFile->getClientOriginalName()
+            )->post($signedUrl, ['directory' => $directory]);
+
+            if (! $response->successful()) {
+                return response()->json(['success' => false, 'message' => $response->reason()], 502);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * List backups. Only owner.
+     */
+    public function backupsList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $backups = $client->listBackups($gameServerAccount);
+
+            return response()->json(['success' => true, 'backups' => $backups]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Create backup. Only owner.
+     */
+    public function backupsCreate(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $name = $request->input('name', '');
+        $options = [];
+        if (is_string($name) && $name !== '') {
+            $options['name'] = $name;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $backup = $client->createBackup($gameServerAccount, $options);
+
+            return response()->json(['success' => true, 'backup' => $backup]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Get backup download URL (signed). Only owner.
+     */
+    public function backupsDownload(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse|RedirectResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $result = $client->getBackupDownloadUrl($gameServerAccount, $backupUuid);
+            $url = $result['url'] ?? '';
+            if ($url === '') {
+                return response()->json(['success' => false, 'message' => 'Download-URL nicht verfügbar.'], 502);
+            }
+
+            return redirect()->away($url);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Restore backup. Only owner.
+     */
+    public function backupsRestore(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->restoreBackup($gameServerAccount, $backupUuid, true);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Delete backup. Only owner.
+     */
+    public function backupsDelete(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->deleteBackup($gameServerAccount, $backupUuid);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * List schedules. Only owner.
+     */
+    public function schedulesList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $schedules = $client->listSchedules($gameServerAccount);
+
+            return response()->json(['success' => true, 'schedules' => $schedules]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Create schedule. Only owner.
+     */
+    public function schedulesCreate(Request $request, GameServerAccount $gameServerAccount): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $payload = [
+            'name' => $request->input('name', 'Schedule'),
+            'minute' => $request->input('minute', '0'),
+            'hour' => $request->input('hour', '3'),
+            'day_of_month' => $request->input('day_of_month', '*'),
+            'month' => $request->input('month', '*'),
+            'day_of_week' => $request->input('day_of_week', '*'),
+            'is_active' => $request->boolean('is_active', true),
+            'only_when_online' => $request->boolean('only_when_online', false),
+        ];
+        foreach (['name', 'minute', 'hour', 'day_of_month', 'month', 'day_of_week'] as $key) {
+            if (! is_string($payload[$key])) {
+                $payload[$key] = $key === 'name' ? 'Schedule' : ($key === 'minute' ? '0' : ($key === 'hour' ? '3' : '*'));
+            }
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $schedule = $client->createSchedule($gameServerAccount, $payload);
+
+            return response()->json(['success' => true, 'schedule' => $schedule]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Delete schedule. Only owner.
+     */
+    public function schedulesDelete(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->deleteSchedule($gameServerAccount, $schedule);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Execute schedule now. Only owner.
+     */
+    public function schedulesExecute(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->executeSchedule($gameServerAccount, $schedule);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Get a single schedule with tasks. Only owner.
+     */
+    public function schedulesShow(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $scheduleData = $client->getSchedule($gameServerAccount, $schedule);
+
+            return response()->json(['success' => true, 'schedule' => $scheduleData]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Create a task on a schedule. Only owner.
+     * Body: action (command|power|backup), payload (string), time_offset (int), continue_on_failure (bool, optional).
+     */
+    public function scheduleTasksCreate(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        $action = $request->string('action')->toString();
+        if (! in_array($action, ['command', 'power', 'backup'], true)) {
+            return response()->json(['success' => false, 'message' => 'Invalid action.'], 422);
+        }
+        $payload = [
+            'action' => $action,
+            'payload' => $request->string('payload')->toString(),
+            'time_offset' => (int) $request->input('time_offset', 0),
+            'continue_on_failure' => $request->boolean('continue_on_failure', false),
+        ];
+        if ($payload['time_offset'] < 0 || $payload['time_offset'] > 900) {
+            $payload['time_offset'] = max(0, min(900, $payload['time_offset']));
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $task = $client->createScheduleTask($gameServerAccount, $schedule, $payload);
+
+            return response()->json(['success' => true, 'task' => $task]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Delete a schedule task. Only owner.
+     */
+    public function scheduleTasksDelete(Request $request, GameServerAccount $gameServerAccount, int $schedule, int $task): JsonResponse
+    {
+        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        if ($err !== null) {
+            return $err;
+        }
+        try {
+            $client = app(PterodactylClient::class);
+            $client->deleteScheduleTask($gameServerAccount, $schedule, $task);
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
     }
 
     /**

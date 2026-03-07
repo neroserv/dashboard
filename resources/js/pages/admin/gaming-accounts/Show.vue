@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { CreditCard, ExternalLink, Server } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,11 @@ import type { BreadcrumbItem } from '@/types';
 type User = { id: number; name: string; email: string };
 type HostingPlan = { id: number; name: string };
 type HostingServer = { id: number; name: string | null; hostname: string } | null;
+type GameserverCloudSubscription = {
+    id: number;
+    current_period_ends_at: string | null;
+    gameserver_cloud_plan: { id: number; name: string };
+};
 
 type GameServerAccount = {
     id: number;
@@ -25,8 +31,9 @@ type GameServerAccount = {
     option_values?: Record<string, unknown> | null;
     monthly_amount?: number;
     user: User;
-    hosting_plan: HostingPlan;
+    hosting_plan?: HostingPlan | null;
     hosting_server: HostingServer;
+    gameserver_cloud_subscription?: GameserverCloudSubscription | null;
 };
 
 type Props = {
@@ -45,6 +52,20 @@ const breadcrumbs: BreadcrumbItem[] = [
 const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('de-DE', { timeZone: 'UTC' }) : '–';
 
+const isCloudAccount = computed(
+    () => !!props.gameServerAccount.gameserver_cloud_subscription,
+);
+const planLabel = computed(
+    () =>
+        props.gameServerAccount.hosting_plan?.name ??
+        props.gameServerAccount.gameserver_cloud_subscription?.gameserver_cloud_plan?.name ??
+        '–',
+);
+const periodEndDate = computed(
+    () =>
+        props.gameServerAccount.gameserver_cloud_subscription?.current_period_ends_at ??
+        props.gameServerAccount.current_period_ends_at,
+);
 const renewalLabel = props.gameServerAccount.renewal_type === 'auto' ? 'Auto (Mollie-Abo)' : 'Manuell';
 const page = usePage();
 const csrfToken = () => (page.props.csrfToken as string) ?? '';
@@ -108,16 +129,20 @@ const csrfToken = () => (page.props.csrfToken as string) ?? '';
                         </div>
                         <div>
                             <Text class="text-sm font-medium text-muted-foreground">Plan / Server</Text>
-                            <p class="font-medium">{{ gameServerAccount.hosting_plan.name }}</p>
+                            <p class="font-medium">{{ planLabel }}</p>
                             <p class="text-sm text-muted-foreground">{{ gameServerAccount.hosting_server?.name ?? gameServerAccount.hosting_server?.hostname ?? '–' }}</p>
                         </div>
                         <div>
                             <Text class="text-sm font-medium text-muted-foreground">Abo-Ende</Text>
-                            <p class="font-medium">{{ formatDate(gameServerAccount.current_period_ends_at) }}</p>
+                            <p class="font-medium">{{ formatDate(periodEndDate) }}</p>
                         </div>
-                        <div>
+                        <div v-if="!isCloudAccount">
                             <Text class="text-sm font-medium text-muted-foreground">Verlängerung</Text>
                             <p class="font-medium">{{ renewalLabel }}</p>
+                        </div>
+                        <div v-else>
+                            <Text class="text-sm font-medium text-muted-foreground">Typ</Text>
+                            <p class="font-medium">Gameserver Cloud (Abo-Verwaltung beim Kunden)</p>
                         </div>
                         <div v-if="gameServerAccount.monthly_amount != null">
                             <Text class="text-sm font-medium text-muted-foreground">Monatspreis</Text>
@@ -142,7 +167,7 @@ const csrfToken = () => (page.props.csrfToken as string) ?? '';
                 </CardContent>
             </Card>
 
-            <Card v-if="gameServerAccount.mollie_subscription_id">
+            <Card v-if="!isCloudAccount && gameServerAccount.mollie_subscription_id">
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
                         <CreditCard class="h-5 w-5" />
@@ -185,9 +210,12 @@ const csrfToken = () => (page.props.csrfToken as string) ?? '';
                 </CardContent>
             </Card>
 
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <Link href="/admin/gaming-accounts">
-                    <Button variant="outline">Zurück zur Liste</Button>
+                    <Button variant="outline">Game-Server-Accounts</Button>
+                </Link>
+                <Link v-if="isCloudAccount" href="/admin/gameserver-cloud-accounts">
+                    <Button variant="outline">Gameserver-Cloud-Accounts</Button>
                 </Link>
             </div>
         </div>

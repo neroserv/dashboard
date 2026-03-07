@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Brand;
 use App\Models\GameServerAccount;
+use App\Models\GameserverCloudPlan;
+use App\Models\GameserverCloudSubscription;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Models\Invoice;
@@ -51,6 +53,11 @@ class CheckoutController extends Controller
         $teamspeakPayload = $request->session()->get('checkout_teamspeak');
         if ($teamspeakPayload && isset($teamspeakPayload['hosting_plan_id'], $teamspeakPayload['user_id'])) {
             return $this->buildTeamSpeakCheckoutRedirect($request, $teamspeakPayload);
+        }
+
+        $cloudGamingPayload = $request->session()->get('checkout_cloud_gaming');
+        if ($cloudGamingPayload && isset($cloudGamingPayload['gameserver_cloud_plan_id'], $cloudGamingPayload['user_id'])) {
+            return $this->buildCloudGamingCheckoutRedirect($request, $cloudGamingPayload);
         }
 
         $payload = $request->session()->get('checkout_meine_seiten');
@@ -213,6 +220,12 @@ class CheckoutController extends Controller
             }
             if ($type === 'teamspeak_renewal') {
                 return $this->handleTeamSpeakRenewalSuccessFromMollie($request, $user, $metadata);
+            }
+            if ($type === 'gameserver_cloud') {
+                return $this->handleCloudGamingCheckoutSuccessFromMollie($request, $user, $metadata);
+            }
+            if ($type === 'gameserver_cloud_renewal') {
+                return $this->handleCloudGamingRenewalSuccessFromMollie($request, $user, $metadata);
             }
             if ($type === 'webspace_renewal') {
                 return $this->handleWebspaceRenewalSuccessFromMollie($request, $user, $metadata);
@@ -499,6 +512,85 @@ class CheckoutController extends Controller
             report($e);
 
             return redirect()->route('teamspeak.checkout', ['plan' => $plan->id])
+                ->with('error', $this->getCheckoutErrorMessage($e));
+        }
+    }
+
+    /**
+     * Build Mollie Checkout for Gameserver Cloud plan and return redirect.
+     */
+    public function buildCloudGamingCheckoutRedirect(Request $request, array $payload): RedirectResponse|InertiaResponse
+    {
+        if (! $this->isMollieConfigured()) {
+            $request->session()->forget('checkout_cloud_gaming');
+
+            return redirect()->route('gaming.cloud.index')->with('error', 'Mollie ist nicht konfiguriert.');
+        }
+
+        $user = $request->user();
+        $plan = GameserverCloudPlan::find($payload['gameserver_cloud_plan_id'] ?? 0);
+        if (! $plan || ! $plan->is_active) {
+            $request->session()->forget('checkout_cloud_gaming');
+
+            return redirect()->route('gaming.cloud.index')->with('error', 'Cloud-Plan nicht gefunden oder inaktiv.');
+        }
+
+        $periodMonths = max(1, min(12, (int) ($payload['period_months'] ?? 1)));
+        $optionSurcharge = (float) ($payload['option_surcharge'] ?? 0);
+        $monthlyTotal = (float) $plan->price + $optionSurcharge;
+        $amount = round($monthlyTotal * $periodMonths, 2);
+        if ($amount <= 0) {
+            $request->session()->forget('checkout_cloud_gaming');
+
+            return redirect()->route('gaming.cloud.checkout', ['plan' => $plan->id])
+                ->with('error', 'Kein Preis für diesen Plan.');
+        }
+
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+        $metadata = [
+            'type' => 'gameserver_cloud',
+            'gameserver_cloud_plan_id' => (string) $plan->id,
+            'user_id' => (string) $user->id,
+            'period_months' => (string) $periodMonths,
+        ];
+
+        try {
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Gameserver Cloud: '.$plan->name.' ('.$periodMonths.' Monat(e))',
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => $metadata,
+            ];
+            $params['customerId'] = app(MollieCustomerService::class)->ensureCustomer($user);
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
+            $request->session()->forget('checkout_cloud_gaming');
+
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('gaming.cloud.checkout', ['plan' => $plan->id])
+                    ->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
+            }
+            $request->session()->put('mollie_checkout_redirect_url', $checkoutUrl);
+
+            return redirect()->route('checkout.redirect-to-mollie');
+        } catch (\Throwable $e) {
+            $request->session()->forget('checkout_cloud_gaming');
+            Log::error('Checkout Cloud Gaming: Mollie-Fehler', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+            report($e);
+
+            return redirect()->route('gaming.cloud.checkout', ['plan' => $plan->id])
                 ->with('error', $this->getCheckoutErrorMessage($e));
         }
     }
@@ -997,6 +1089,92 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Create GameserverCloudSubscription after successful Mollie payment for cloud plan.
+     */
+    protected function handleCloudGamingCheckoutSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
+    {
+        $planId = (int) ($metadata['gameserver_cloud_plan_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+        $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
+        $periodMonths = max(1, min(12, (int) ($metadata['period_months'] ?? 1)));
+        $periodEnd = now()->addMonths($periodMonths);
+
+        if ($userId !== $user->id || $planId < 1) {
+            Log::debug('Checkout success gameserver cloud: invalid metadata');
+
+            return redirect()->route('gaming.cloud.index')->with('error', 'Ungültige Abo-Daten.');
+        }
+
+        $existing = GameserverCloudSubscription::where('mollie_payment_id', $molliePaymentId)->first();
+        if ($existing) {
+            return redirect()->route('gaming.cloud.subscriptions.show', $existing->id)
+                ->with('success', 'Ihr Cloud-Abo ist aktiv.');
+        }
+
+        $plan = GameserverCloudPlan::find($planId);
+        if (! $plan || ! $plan->is_active) {
+            return redirect()->route('gaming.cloud.index')->with('error', 'Cloud-Plan nicht gefunden.');
+        }
+
+        $subscription = $user->gameserverCloudSubscriptions()->create([
+            'gameserver_cloud_plan_id' => $plan->id,
+            'mollie_payment_id' => $molliePaymentId,
+            'current_period_ends_at' => $periodEnd,
+            'cancel_at_period_end' => false,
+            'status' => 'active',
+        ]);
+
+        Log::debug('Checkout success gameserver cloud: subscription created', ['subscription_id' => $subscription->id]);
+
+        return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+            ->with('success', 'Ihr Gameserver-Cloud-Abo ist aktiv. Sie können jetzt Server aus Ihrem Pool anlegen.');
+    }
+
+    /**
+     * Extend GameserverCloudSubscription after successful Mollie renewal payment.
+     */
+    protected function handleCloudGamingRenewalSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
+    {
+        $subscriptionId = (int) ($metadata['gameserver_cloud_subscription_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+        $periodMonths = max(1, min(12, (int) ($metadata['period_months'] ?? 1)));
+
+        if ($userId !== $user->id || $subscriptionId < 1) {
+            Log::debug('Checkout success gameserver cloud renewal: invalid metadata');
+
+            return redirect()->route('gaming.cloud.subscriptions.index')->with('error', 'Ungültige Zahlungsdaten.');
+        }
+
+        $subscription = GameserverCloudSubscription::find($subscriptionId);
+        if (! $subscription || $subscription->user_id !== $user->id) {
+            return redirect()->route('gaming.cloud.subscriptions.index')->with('error', 'Cloud-Abo nicht gefunden.');
+        }
+
+        $from = $subscription->current_period_ends_at && $subscription->current_period_ends_at->isFuture()
+            ? $subscription->current_period_ends_at
+            : now();
+        $subscription->update([
+            'current_period_ends_at' => $from->copy()->addMonths($periodMonths),
+            'status' => 'active',
+        ]);
+
+        foreach ($subscription->gameServerAccounts()->where('status', 'suspended')->get() as $account) {
+            if ($account->hostingServer && $account->pterodactyl_server_id) {
+                try {
+                    $client = app(PterodactylClient::class);
+                    $client->unsuspendServer($account);
+                } catch (\Throwable) {
+                    // continue
+                }
+            }
+            $account->update(['status' => 'active']);
+        }
+
+        return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+            ->with('success', 'Ihr Cloud-Abo wurde verlängert.');
+    }
+
+    /**
      * Build Mollie payment for TeamSpeak server renewal. Called from TeamSpeakAccountController.
      */
     public function buildTeamSpeakRenewRedirect(Request $request, TeamSpeakServerAccount $account, int $periodMonths): RedirectResponse|InertiaResponse
@@ -1097,6 +1275,71 @@ class CheckoutController extends Controller
 
         return redirect()->route('teamspeak-accounts.show', $account)
             ->with('success', 'Der TeamSpeak-Server wurde erfolgreich verlängert.');
+    }
+
+    /**
+     * Build Mollie payment for Gameserver Cloud subscription renewal.
+     */
+    public function buildCloudGamingRenewRedirect(Request $request, GameserverCloudSubscription $subscription, int $periodMonths): RedirectResponse|InertiaResponse
+    {
+        if ($subscription->user_id !== $request->user()->id) {
+            abort(404);
+        }
+
+        if (! $this->isMollieConfigured()) {
+            return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+                ->with('error', 'Mollie ist nicht konfiguriert.');
+        }
+
+        $plan = $subscription->gameserverCloudPlan;
+        $amount = round((float) $plan->price * $periodMonths, 2);
+        if ($amount <= 0) {
+            return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+                ->with('error', 'Kein gültiger Preis für Verlängerung.');
+        }
+
+        $user = $request->user();
+        $metadata = [
+            'type' => 'gameserver_cloud_renewal',
+            'gameserver_cloud_subscription_id' => (string) $subscription->id,
+            'user_id' => (string) $user->id,
+            'period_months' => (string) $periodMonths,
+        ];
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+
+        try {
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Gameserver Cloud Verlängerung: '.$plan->name.' ('.$periodMonths.' Monat(e))',
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => $metadata,
+            ];
+            $params['customerId'] = app(MollieCustomerService::class)->ensureCustomer($user);
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+                    ->with('error', 'Mollie Checkout lieferte keine gültige URL.');
+            }
+            $request->session()->put('mollie_checkout_redirect_url', $checkoutUrl);
+
+            return redirect()->route('checkout.redirect-to-mollie');
+        } catch (\Throwable $e) {
+            Log::error('Cloud gaming renew Mollie error', ['message' => $e->getMessage()]);
+            report($e);
+
+            return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+                ->with('error', $this->getCheckoutErrorMessage($e));
+        }
     }
 
     /**
@@ -1524,6 +1767,41 @@ class CheckoutController extends Controller
             return redirect()->route('teamspeak-accounts.show', $account->id)
                 ->with('error', 'Der TeamSpeak-Server konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
+    }
+
+    /**
+     * Create GameserverCloudSubscription after payment with balance.
+     */
+    public function processCloudGamingBalanceCheckout(Request $request, \App\Models\User $user, array $payload): RedirectResponse
+    {
+        $planId = (int) ($payload['gameserver_cloud_plan_id'] ?? 0);
+        $userId = (int) ($payload['user_id'] ?? 0);
+        $periodMonths = max(1, min(12, (int) ($payload['period_months'] ?? 1)));
+        $periodEnd = now()->addMonths($periodMonths);
+
+        if ($userId !== $user->id || $planId < 1) {
+            Log::debug('Cloud gaming balance checkout: invalid payload');
+
+            return redirect()->route('gaming.cloud.index')->with('error', 'Ungültige Bestelldaten.');
+        }
+
+        $plan = GameserverCloudPlan::find($planId);
+        if (! $plan || ! $plan->is_active) {
+            return redirect()->route('gaming.cloud.index')->with('error', 'Cloud-Plan nicht gefunden.');
+        }
+
+        $subscription = $user->gameserverCloudSubscriptions()->create([
+            'gameserver_cloud_plan_id' => $plan->id,
+            'mollie_payment_id' => null,
+            'current_period_ends_at' => $periodEnd,
+            'cancel_at_period_end' => false,
+            'status' => 'active',
+        ]);
+
+        Log::debug('Cloud gaming balance checkout: subscription created', ['subscription_id' => $subscription->id]);
+
+        return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+            ->with('success', 'Ihr Gameserver-Cloud-Abo ist aktiv. Sie können jetzt Server aus Ihrem Pool anlegen.');
     }
 
     /**

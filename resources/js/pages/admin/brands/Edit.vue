@@ -89,6 +89,7 @@ const form = useForm({
     feature_domains_shop: props.brand.features?.domains_shop ?? true,
     feature_ai_tokens: props.brand.features?.ai_tokens ?? true,
     feature_gaming: props.brand.features?.gaming ?? false,
+    feature_gameserver_cloud: props.brand.features?.gameserver_cloud ?? false,
     feature_teamspeak: props.brand.features?.teamspeak ?? false,
     feature_prepaid_balance: props.brand.features?.prepaid_balance ?? false,
     feature_balance_topup: props.brand.features?.balance_topup ?? false,
@@ -121,6 +122,7 @@ const submit = () => {
             domains_shop: data.feature_domains_shop,
             ai_tokens: data.feature_ai_tokens,
             gaming: data.feature_gaming,
+            gameserver_cloud: data.feature_gameserver_cloud,
             teamspeak: data.feature_teamspeak,
             prepaid_balance: data.feature_prepaid_balance,
             balance_topup: data.feature_balance_topup,
@@ -263,6 +265,10 @@ const submit = () => {
                         <div class="flex items-center gap-2">
                             <Checkbox id="feat_gaming" v-model="form.feature_gaming" />
                             <Label for="feat_gaming">Gaming (Game-Server / Pterodactyl)</Label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Checkbox id="feat_gameserver_cloud" v-model="form.feature_gameserver_cloud" />
+                            <Label for="feat_gameserver_cloud">Gameserver Cloud</Label>
                         </div>
                         <div class="flex items-center gap-2">
                             <Checkbox id="feat_teamspeak" v-model="form.feature_teamspeak" />

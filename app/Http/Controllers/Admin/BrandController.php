@@ -42,6 +42,7 @@ class BrandController extends Controller
             'features.domains_shop' => ['boolean'],
             'features.ai_tokens' => ['boolean'],
             'features.gaming' => ['boolean'],
+            'features.gameserver_cloud' => ['boolean'],
             'features.teamspeak' => ['boolean'],
             'features.prepaid_balance' => ['boolean'],
             'features.balance_topup' => ['boolean'],

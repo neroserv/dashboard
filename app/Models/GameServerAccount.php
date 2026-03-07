@@ -14,6 +14,7 @@ class GameServerAccount extends Model
     protected $fillable = [
         'user_id',
         'hosting_plan_id',
+        'gameserver_cloud_subscription_id',
         'hosting_server_id',
         'product_id',
         'name',
@@ -31,6 +32,7 @@ class GameServerAccount extends Model
         'auto_renew_with_balance',
         'option_values',
         'custom_monthly_price',
+        'allocation',
     ];
 
     /**
@@ -44,6 +46,7 @@ class GameServerAccount extends Model
             'ends_at' => 'datetime',
             'auto_renew_with_balance' => 'boolean',
             'option_values' => 'array',
+            'allocation' => 'array',
         ];
     }
 
@@ -67,11 +70,28 @@ class GameServerAccount extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function gameserverCloudSubscription(): BelongsTo
+    {
+        return $this->belongsTo(GameserverCloudSubscription::class);
+    }
+
+    /**
+     * Whether this account is part of a Gameserver Cloud subscription (not a classic HostingPlan).
+     */
+    public function isCloudAccount(): bool
+    {
+        return $this->gameserver_cloud_subscription_id !== null;
+    }
+
     /**
      * Effective monthly renewal amount (custom price, or plan price + option surcharge).
+     * Returns 0 for cloud accounts (subscription is billed separately).
      */
     public function getMonthlyRenewalAmount(): float
     {
+        if ($this->isCloudAccount()) {
+            return 0.0;
+        }
         $custom = (float) ($this->custom_monthly_price ?? 0);
         if ($custom > 0) {
             return round($custom, 2);
@@ -89,11 +109,20 @@ class GameServerAccount extends Model
 
     /**
      * True if the account is suspended or period has ended (no control, only renew).
+     * For cloud accounts, uses the subscription's status and period.
      */
     public function isSuspendedOrExpired(): bool
     {
         if ($this->status === 'suspended') {
             return true;
+        }
+        if ($this->isCloudAccount()) {
+            $sub = $this->gameserverCloudSubscription;
+            if ($sub) {
+                return $sub->isSuspendedOrExpired();
+            }
+
+            return false;
         }
 
         return $this->current_period_ends_at !== null && $this->current_period_ends_at->isPast();

@@ -245,9 +245,13 @@ class PterodactylClient implements ControlPanelContract
             'Authorization' => 'Bearer '.$apiKey,
             'Accept' => 'application/json',
         ])->timeout(15);
-        $response = $method === 'POST' || $method === 'PATCH' || $method === 'PUT'
-            ? $request->withBody(json_encode($body), 'application/json')->{strtolower($method)}($url)
-            : $request->get($url);
+        if ($method === 'DELETE') {
+            $response = $request->delete($url);
+        } elseif ($method === 'POST' || $method === 'PATCH' || $method === 'PUT') {
+            $response = $request->withBody(json_encode($body), 'application/json')->{strtolower($method)}($url);
+        } else {
+            $response = $request->get($url);
+        }
         if (! $response->successful()) {
             $resBody = $response->json();
             $msg = $resBody['errors'][0]['detail'] ?? $resBody['errors'][0]['code'] ?? $response->reason();
@@ -256,6 +260,469 @@ class PterodactylClient implements ControlPanelContract
         }
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Client API request that may return 204 No Content. Returns null on 204.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>|null
+     */
+    protected function clientApiRequestAllow204(string $path, string $method = 'GET', array $body = []): ?array
+    {
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = (string) ($config['client_api_key'] ?? $config['api_key'] ?? $this->server?->api_token ?? '');
+        if ($baseUri === '' || $apiKey === '') {
+            throw new Exception('Pterodactyl: base_uri and (client_api_key or api_key) must be set for client API');
+        }
+        $url = $baseUri.$path;
+        $request = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => 'application/json',
+        ])->timeout(30);
+        if ($method === 'DELETE') {
+            $response = $request->delete($url);
+        } elseif ($method === 'POST' || $method === 'PATCH' || $method === 'PUT') {
+            $response = $request->withBody(json_encode($body), 'application/json')->{strtolower($method)}($url);
+        } else {
+            $response = $request->get($url);
+        }
+        if (! $response->successful()) {
+            $resBody = $response->json();
+            $msg = $resBody['errors'][0]['detail'] ?? $resBody['errors'][0]['code'] ?? $response->reason();
+
+            throw new Exception('Pterodactyl Client API: '.$msg);
+        }
+        if ($response->status() === 204) {
+            return null;
+        }
+
+        return $response->json() ?? [];
+    }
+
+    /**
+     * Get websocket ticket for console. Returns ['token' => string, 'socket' => string].
+     *
+     * @return array{token: string, socket: string}
+     */
+    public function getWebsocketTicket(GameServerAccount $account): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/websocket');
+        $attrs = $data['data'] ?? $data['attributes'] ?? $data;
+
+        return [
+            'token' => (string) ($attrs['token'] ?? ''),
+            'socket' => (string) ($attrs['socket'] ?? ''),
+        ];
+    }
+
+    /**
+     * Send console command via Client API.
+     */
+    public function sendConsoleCommand(GameServerAccount $account, string $command): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204('/api/client/servers/'.$account->identifier.'/command', 'POST', ['command' => $command]);
+    }
+
+    /**
+     * List files in a directory. Returns list of file objects (attributes: name, is_file, size, modified_at, etc.).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listFiles(GameServerAccount $account, string $directory = '/'): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $path = '/api/client/servers/'.$account->identifier.'/files/list';
+        $query = http_build_query(['directory' => $directory]);
+        $data = $this->clientApiRequest($path.($query ? '?'.$query : ''));
+
+        $list = [];
+        foreach ($data['data'] ?? [] as $item) {
+            $list[] = $item['attributes'] ?? $item;
+        }
+
+        return $list;
+    }
+
+    /**
+     * Read file contents as text. For binary files consider download endpoint.
+     */
+    public function getFileContents(GameServerAccount $account, string $filePath): string
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = (string) ($config['client_api_key'] ?? $config['api_key'] ?? $this->server?->api_token ?? '');
+        $url = $baseUri.'/api/client/servers/'.$account->identifier.'/files/contents?file='.rawurlencode($filePath);
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => 'application/json',
+        ])->timeout(15)->get($url);
+        if (! $response->successful()) {
+            $resBody = $response->json();
+            $msg = $resBody['errors'][0]['detail'] ?? $response->reason();
+
+            throw new Exception('Pterodactyl Client API: '.$msg);
+        }
+
+        return $response->body();
+    }
+
+    /**
+     * Get raw HTTP response for file download (controller can stream to user).
+     */
+    public function getFileDownloadResponse(GameServerAccount $account, string $filePath): \Illuminate\Http\Client\Response
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = (string) ($config['client_api_key'] ?? $config['api_key'] ?? $this->server?->api_token ?? '');
+        $url = $baseUri.'/api/client/servers/'.$account->identifier.'/files/download?file='.rawurlencode($filePath);
+
+        return Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => '*/*',
+        ])->timeout(60)->get($url);
+    }
+
+    /**
+     * Write file contents (text). Content-Type is text/plain.
+     */
+    public function writeFile(GameServerAccount $account, string $filePath, string $content): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $config = $this->server?->config ?? [];
+        $baseUri = rtrim((string) ($config['base_uri'] ?? $config['host'] ?? ''), '/');
+        $apiKey = (string) ($config['client_api_key'] ?? $config['api_key'] ?? $this->server?->api_token ?? '');
+        $url = $baseUri.'/api/client/servers/'.$account->identifier.'/files/write?file='.rawurlencode($filePath);
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$apiKey,
+            'Accept' => 'application/json',
+            'Content-Type' => 'text/plain',
+        ])->timeout(15)->withBody($content, 'text/plain')->post($url);
+        if (! $response->successful()) {
+            $resBody = $response->json();
+            $msg = $resBody['errors'][0]['detail'] ?? $response->reason();
+
+            throw new Exception('Pterodactyl Client API: '.$msg);
+        }
+    }
+
+    /**
+     * Create a directory. root = parent path (e.g. "/"), name = new folder name.
+     */
+    public function createFolder(GameServerAccount $account, string $root, string $name): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/files/create-folder', 'POST', [
+            'root' => $root,
+            'name' => $name,
+        ]);
+    }
+
+    /**
+     * Delete files or directories. root = parent path, files = array of names.
+     *
+     * @param  array<int, string>  $files
+     */
+    public function deleteFiles(GameServerAccount $account, string $root, array $files): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/files/delete', 'POST', [
+            'root' => $root,
+            'files' => $files,
+        ]);
+    }
+
+    /**
+     * Rename/move files. root = parent path, files = array of [from => string, to => string].
+     *
+     * @param  array<int, array{from: string, to: string}>  $files
+     */
+    public function renameFiles(GameServerAccount $account, string $root, array $files): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/files/rename', 'PUT', [
+            'root' => $root,
+            'files' => $files,
+        ]);
+    }
+
+    /**
+     * Get signed upload URL for a directory. Returns the URL string to POST files to.
+     */
+    public function getUploadUrl(GameServerAccount $account, string $directory = '/'): string
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $path = '/api/client/servers/'.$account->identifier.'/files/upload';
+        $query = http_build_query(['directory' => $directory]);
+        $data = $this->clientApiRequest($path.($query ? '?'.$query : ''));
+
+        return (string) (($data['attributes'] ?? $data)['url'] ?? '');
+    }
+
+    /**
+     * Get backup list. Returns array of backup attributes (uuid, name, bytes, created_at, is_successful, etc.).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listBackups(GameServerAccount $account): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/backups');
+        $list = [];
+        foreach ($data['data'] ?? [] as $item) {
+            $list[] = $item['attributes'] ?? $item;
+        }
+
+        return $list;
+    }
+
+    /**
+     * Create backup. Returns backup attributes.
+     *
+     * @param  array{name?: string, ignored?: string, is_locked?: bool}  $options
+     * @return array<string, mixed>
+     */
+    public function createBackup(GameServerAccount $account, array $options = []): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/backups', 'POST', $options);
+
+        return $data['attributes'] ?? $data;
+    }
+
+    /**
+     * Get backup download URL (signed). Returns ['url' => string].
+     *
+     * @return array{url: string}
+     */
+    public function getBackupDownloadUrl(GameServerAccount $account, string $backupUuid): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/backups/'.$backupUuid.'/download');
+
+        return ['url' => (string) (($data['attributes'] ?? $data)['url'] ?? '')];
+    }
+
+    /**
+     * Delete backup.
+     */
+    public function deleteBackup(GameServerAccount $account, string $backupUuid): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204('/api/client/servers/'.$account->identifier.'/backups/'.$backupUuid, 'DELETE');
+    }
+
+    /**
+     * Restore backup.
+     */
+    public function restoreBackup(GameServerAccount $account, string $backupUuid, bool $truncate = true): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204(
+            '/api/client/servers/'.$account->identifier.'/backups/'.$backupUuid.'/restore',
+            'POST',
+            ['truncate' => $truncate]
+        );
+    }
+
+    /**
+     * List schedules. Returns array of schedule attributes (id, name, cron, is_active, next_run_at, etc.).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listSchedules(GameServerAccount $account): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/schedules');
+        $list = [];
+        foreach ($data['data'] ?? [] as $item) {
+            $list[] = $item['attributes'] ?? $item;
+        }
+
+        return $list;
+    }
+
+    /**
+     * Create schedule. Cron: minute, hour, day_of_month, month, day_of_week.
+     *
+     * @param  array{name: string, minute: string, hour: string, day_of_month: string, month: string, day_of_week: string, is_active?: bool, only_when_online?: bool}  $payload
+     * @return array<string, mixed>
+     */
+    public function createSchedule(GameServerAccount $account, array $payload): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/schedules', 'POST', $payload);
+
+        return $data['attributes'] ?? $data;
+    }
+
+    /**
+     * Update schedule (PATCH). Partial payload allowed.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function updateSchedule(GameServerAccount $account, int $scheduleId, array $payload): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204('/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId, 'POST', $payload);
+    }
+
+    /**
+     * Delete schedule.
+     */
+    public function deleteSchedule(GameServerAccount $account, int $scheduleId): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204('/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId, 'DELETE');
+    }
+
+    /**
+     * Execute schedule now.
+     */
+    public function executeSchedule(GameServerAccount $account, int $scheduleId): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204('/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId.'/execute', 'POST');
+    }
+
+    /**
+     * Get a single schedule with its tasks.
+     *
+     * @return array<string, mixed> schedule attributes including relationships.tasks
+     */
+    public function getSchedule(GameServerAccount $account, int $scheduleId): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId);
+
+        return $data['attributes'] ?? $data;
+    }
+
+    /**
+     * Create a task on a schedule. Payload: action (command|power|backup), payload (string), time_offset (int), continue_on_failure (bool).
+     *
+     * @param  array{action: string, payload: string, time_offset: int, continue_on_failure?: bool}  $payload
+     * @return array<string, mixed> task attributes
+     */
+    public function createScheduleTask(GameServerAccount $account, int $scheduleId, array $payload): array
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $data = $this->clientApiRequest(
+            '/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId.'/tasks',
+            'POST',
+            $payload
+        );
+
+        return $data['attributes'] ?? $data;
+    }
+
+    /**
+     * Delete a schedule task.
+     */
+    public function deleteScheduleTask(GameServerAccount $account, int $scheduleId, int $taskId): void
+    {
+        $server = $account->hostingServer;
+        if (! $server || ! $account->identifier) {
+            throw new Exception('Pterodactyl: server or identifier missing');
+        }
+        $this->setServer($server);
+        $this->clientApiRequestAllow204(
+            '/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId.'/tasks/'.$taskId,
+            'DELETE'
+        );
     }
 
     /**
@@ -328,6 +795,9 @@ class PterodactylClient implements ControlPanelContract
                 }
             }
 
+            $nestId = (int) ($attrs['nest'] ?? $attrs['nest_id'] ?? 0);
+            $eggId = (int) ($attrs['egg'] ?? $attrs['egg_id'] ?? 0);
+
             return [
                 'name' => (string) ($attrs['name'] ?? $account->name),
                 'status' => $status,
@@ -337,6 +807,8 @@ class PterodactylClient implements ControlPanelContract
                 'can_power' => $canPower,
                 'is_installing' => ($attrs['status'] ?? null) === 'installing',
                 'suspended' => (bool) ($attrs['suspended'] ?? false),
+                'nest_id' => $nestId > 0 ? $nestId : null,
+                'egg_id' => $eggId > 0 ? $eggId : null,
             ];
         } catch (\Throwable $e) {
             Log::debug('Pterodactyl getServerOverview failed', ['account_id' => $account->id, 'error' => $e->getMessage()]);

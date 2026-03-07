@@ -11,12 +11,18 @@ import type { BreadcrumbItem } from '@/types';
 
 type HostingPlan = { id: number; name: string };
 
+type GameserverCloudSubscription = {
+    current_period_ends_at: string | null;
+    gameserver_cloud_plan: { name: string };
+};
+
 type GameServerAccount = {
     id: number;
     name: string;
     status: string;
     current_period_ends_at: string | null;
-    hosting_plan: HostingPlan;
+    hosting_plan: HostingPlan | null;
+    gameserver_cloud_subscription?: GameserverCloudSubscription | null;
 };
 
 type ServerOverview = {
@@ -42,6 +48,14 @@ const formatDate = (d: string | null) =>
 
 function getOverview(acc: GameServerAccount): ServerOverview | null {
     return props.serverOverviews[String(acc.id)] ?? null;
+}
+
+function planLabel(acc: GameServerAccount): string {
+    return acc.hosting_plan?.name ?? acc.gameserver_cloud_subscription?.gameserver_cloud_plan?.name ?? '–';
+}
+
+function periodEnd(acc: GameServerAccount): string | null {
+    return acc.gameserver_cloud_subscription?.current_period_ends_at ?? acc.current_period_ends_at ?? null;
 }
 
 function displayStatus(overview: ServerOverview | null, fallbackStatus: string): string {
@@ -116,7 +130,7 @@ function statusVariant(overview: ServerOverview | null, fallbackStatus: string):
                                         <CardTitle class="truncate text-base">{{ acc.name }}</CardTitle>
                                         <div class="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                                             <Package class="h-3.5 w-3.5 shrink-0" />
-                                            <span class="truncate">{{ acc.hosting_plan.name }}</span>
+                                            <span class="truncate">{{ planLabel(acc) }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -140,7 +154,7 @@ function statusVariant(overview: ServerOverview | null, fallbackStatus: string):
                             </div>
                             <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Calendar class="h-3.5 w-3.5 shrink-0" />
-                                <span>Läuft bis: {{ formatDate(acc.current_period_ends_at) }}</span>
+                                <span>Läuft bis: {{ formatDate(periodEnd(acc)) }}</span>
                             </div>
                             <div class="flex justify-end pt-1">
                                 <Button variant="ghost" size="sm" class="text-primary" as="span">

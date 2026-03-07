@@ -4,10 +4,12 @@ namespace App\Jobs;
 
 use App\Models\CronDailyStats;
 use App\Models\GameServerAccount;
+use App\Models\GameserverCloudSubscription;
 use App\Models\Setting;
 use App\Models\SiteSubscription;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\WebspaceAccount;
+use App\Notifications\GameserverCloudSubscriptionDeletedAfterGraceNotification;
 use App\Notifications\GameServerDeletedAfterGraceNotification;
 use App\Notifications\GameServerSuspendedNotification;
 use App\Notifications\SiteDeletedAfterGraceNotification;
@@ -46,6 +48,7 @@ class ProcessExpiredSubscriptions implements ShouldQueue
         $this->processSiteSubscriptions($now, $gracePeriodDays, $graceCutoff);
         $this->processWebspaceAccounts($now, $graceCutoff);
         $this->processGameServerAccounts($now, $graceCutoff);
+        $this->processGameserverCloudSubscriptions($now, $graceCutoff);
         $this->processTeamSpeakServerAccounts($now, $graceCutoff);
     }
 
@@ -175,6 +178,7 @@ class ProcessExpiredSubscriptions implements ShouldQueue
     {
         $toSuspend = GameServerAccount::query()
             ->with('user', 'hostingServer')
+            ->whereNotNull('hosting_plan_id')
             ->where('status', 'active')
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $now)
@@ -209,6 +213,7 @@ class ProcessExpiredSubscriptions implements ShouldQueue
 
         $toTerminate = GameServerAccount::query()
             ->with('user', 'hostingServer')
+            ->whereNotNull('hosting_plan_id')
             ->where('status', 'suspended')
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $graceCutoff->format('Y-m-d H:i:s'))
@@ -238,6 +243,85 @@ class ProcessExpiredSubscriptions implements ShouldQueue
             }
             $account->delete();
             $user?->notify(new GameServerDeletedAfterGraceNotification($name));
+        }
+
+        if ($toTerminate->isNotEmpty()) {
+            CronDailyStats::incrementMetric('services_terminated', $toTerminate->count());
+        }
+    }
+
+    protected function processGameserverCloudSubscriptions(Carbon $now, Carbon $graceCutoff): void
+    {
+        $toSuspend = GameserverCloudSubscription::query()
+            ->with(['user', 'gameserverCloudPlan', 'gameServerAccounts.hostingServer'])
+            ->where('status', 'active')
+            ->whereNotNull('current_period_ends_at')
+            ->where('current_period_ends_at', '<', $now)
+            ->get();
+
+        if ($toSuspend->isNotEmpty()) {
+            Log::info('ProcessExpiredSubscriptions: gameserver cloud subscriptions to suspend', [
+                'count' => $toSuspend->count(),
+                'ids' => $toSuspend->pluck('id')->all(),
+            ]);
+        }
+
+        foreach ($toSuspend as $subscription) {
+            foreach ($subscription->gameServerAccounts as $account) {
+                if ($account->hostingServer && $account->pterodactyl_server_id) {
+                    try {
+                        $client = app(PterodactylClient::class);
+                        $client->suspendServer($account);
+                    } catch (\Throwable $e) {
+                        Log::warning('ProcessExpiredSubscriptions: Gameserver cloud account Pterodactyl suspend failed', [
+                            'game_server_account_id' => $account->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+                $account->update(['status' => 'suspended']);
+                $account->user?->notify(new GameServerSuspendedNotification($account));
+            }
+            $subscription->update(['status' => 'suspended']);
+        }
+
+        if ($toSuspend->isNotEmpty()) {
+            CronDailyStats::incrementMetric('services_suspended', $toSuspend->count());
+        }
+
+        $toTerminate = GameserverCloudSubscription::query()
+            ->with(['user', 'gameserverCloudPlan', 'gameServerAccounts.hostingServer'])
+            ->where('status', 'suspended')
+            ->whereNotNull('current_period_ends_at')
+            ->where('current_period_ends_at', '<', $graceCutoff->format('Y-m-d H:i:s'))
+            ->get();
+
+        if ($toTerminate->isNotEmpty()) {
+            Log::info('ProcessExpiredSubscriptions: gameserver cloud subscriptions to terminate (after grace)', [
+                'count' => $toTerminate->count(),
+                'ids' => $toTerminate->pluck('id')->all(),
+                'grace_cutoff' => $graceCutoff->toIso8601String(),
+            ]);
+        }
+
+        foreach ($toTerminate as $subscription) {
+            $user = $subscription->user;
+            foreach ($subscription->gameServerAccounts as $account) {
+                if ($account->hostingServer && $account->pterodactyl_server_id) {
+                    try {
+                        $client = app(PterodactylClient::class);
+                        $client->deleteServer($account);
+                    } catch (\Throwable $e) {
+                        Log::warning('ProcessExpiredSubscriptions: Gameserver cloud account Pterodactyl delete failed', [
+                            'game_server_account_id' => $account->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+                $account->delete();
+            }
+            $subscription->update(['status' => 'cancelled']);
+            $user?->notify(new GameserverCloudSubscriptionDeletedAfterGraceNotification($subscription));
         }
 
         if ($toTerminate->isNotEmpty()) {

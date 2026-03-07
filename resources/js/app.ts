@@ -1,11 +1,18 @@
 import { createInertiaApp } from '@inertiajs/vue3';
 import * as Sentry from '@sentry/vue';
+import { loader as monacoLoader } from '@guolao/vue-monaco-editor';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 import '../css/app.css';
 import AppRoot from './components/AppRoot.vue';
 import { initializeTheme } from './composables/useAppearance';
+
+monacoLoader.config({
+    paths: {
+        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.54.0/min/vs',
+    },
+});
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 

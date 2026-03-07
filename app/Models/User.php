@@ -169,6 +169,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Gameserver Cloud subscriptions owned by this user.
+     *
+     * @return HasMany<GameserverCloudSubscription>
+     */
+    public function gameserverCloudSubscriptions(): HasMany
+    {
+        return $this->hasMany(GameserverCloudSubscription::class);
+    }
+
+    /**
      * Sites this user can edit as a collaborator.
      *
      * @return BelongsToMany<Site>

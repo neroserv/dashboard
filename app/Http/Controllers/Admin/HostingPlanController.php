@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreHostingPlanRequest;
 use App\Http\Requests\Admin\UpdateHostingPlanRequest;
 use App\Models\Brand;
+use App\Models\GameserverCloudPlan;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Services\ControlPanels\PterodactylClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -155,16 +157,55 @@ class HostingPlanController extends Controller
     {
         $this->authorize('viewAny', HostingPlan::class);
 
-        $query = HostingPlan::query()->with('brand')->withCount(['webspaceAccounts', 'gameServerAccounts']);
         $currentBrand = $this->currentBrand($request);
-        if ($currentBrand !== null) {
-            $query->where('brand_id', $currentBrand->id);
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false];
+
+        $baseQuery = fn () => HostingPlan::query()
+            ->with('brand', 'hostingServer')
+            ->withCount(['webspaceAccounts', 'gameServerAccounts'])
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->orderBy('sort_order')
+            ->orderBy('name');
+
+        $hostingPlans = $baseQuery()->where('panel_type', 'plesk')->paginate(15)->withQueryString();
+
+        $hostingPlansPterodactyl = [
+            'data' => [],
+            'links' => [],
+        ];
+        if ($brandFeatures['gaming'] ?? false) {
+            $hostingPlansPterodactyl = $baseQuery()->where('panel_type', 'pterodactyl')->paginate(15, ['*'], 'pterodactyl_page')->withQueryString();
         }
-        $plans = $query->orderBy('sort_order')->orderBy('name')->paginate(15)->withQueryString();
+
+        $hostingPlansTeamSpeak = [
+            'data' => [],
+            'links' => [],
+        ];
+        if ($brandFeatures['teamspeak'] ?? false) {
+            $hostingPlansTeamSpeak = $baseQuery()->where('panel_type', 'teamspeak')->paginate(15, ['*'], 'teamspeak_page')->withQueryString();
+        }
+
+        $gameserverCloudPlans = [
+            'data' => [],
+            'links' => [],
+        ];
+        if (($brandFeatures['gameserver_cloud'] ?? false) && Gate::allows('viewAny', GameserverCloudPlan::class)) {
+            $cloudQuery = GameserverCloudPlan::query()
+                ->with('hostingServer')
+                ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+                ->orderBy('sort_order')
+                ->orderBy('name');
+            $gameserverCloudPlans = $cloudQuery->paginate(15, ['*'], 'cloud_page')->withQueryString();
+        }
 
         return Inertia::render('admin/hosting-plans/Index', [
-            'hostingPlans' => $plans,
-            'brandFeatures' => $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false],
+            'hostingPlans' => $hostingPlans,
+            'hostingPlansPterodactyl' => $hostingPlansPterodactyl,
+            'hostingPlansTeamSpeak' => $hostingPlansTeamSpeak,
+            'gameserverCloudPlans' => $gameserverCloudPlans,
+            'brandHasGaming' => (bool) ($brandFeatures['gaming'] ?? false),
+            'brandHasTeamSpeak' => (bool) ($brandFeatures['teamspeak'] ?? false),
+            'brandHasGameserverCloud' => (bool) ($brandFeatures['gameserver_cloud'] ?? false),
         ]);
     }
 

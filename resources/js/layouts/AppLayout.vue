@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import {
+    Cloud,
     Globe,
     FileText,
     Package,
@@ -155,14 +156,24 @@ const sidebarItems = computed<NavItem[]>(() => {
                   },
               ]
             : []),
-        ...(brandFeatures.value.gaming === true
+        ...(brandFeatures.value.gaming === true || brandFeatures.value.gameserver_cloud === true
             ? [
                   {
                       title: 'Gameserver',
                       icon: HardDrive,
                       children: [
-                          { title: 'Gameserver bestellen', href: '/gaming/checkout', icon: Package },
-                          { title: 'Deine Gameserver', href: '/gaming-accounts', icon: HardDrive },
+                          ...(brandFeatures.value.gaming === true
+                              ? [
+                                    { title: 'Gameserver bestellen', href: '/gaming/checkout', icon: Package },
+                                    { title: 'Deine Gameserver', href: '/gaming-accounts', icon: HardDrive },
+                                ]
+                              : []),
+                          ...(brandFeatures.value.gameserver_cloud === true
+                              ? [
+                                    { title: 'Gameserver Cloud', href: '/gaming/cloud', icon: Cloud },
+                                    { title: 'Meine Cloud-Abos', href: '/gaming/cloud/subscriptions', icon: HardDrive },
+                                ]
+                              : []),
                       ],
                   },
               ]

@@ -13,22 +13,7 @@ class HostingPlanOptionSurchargeService
      */
     public function computeSurcharge(HostingPlan $plan, array $optionChoices): float
     {
-        $planOptions = $plan->config['plan_options'] ?? null;
-        if (! is_array($planOptions)) {
-            return 0.0;
-        }
-
-        $total = 0.0;
-        foreach ($planOptions as $opt) {
-            $id = $opt['id'] ?? null;
-            if ($id === null || ! array_key_exists($id, $optionChoices)) {
-                continue;
-            }
-            $value = $optionChoices[$id];
-            $total += $this->surchargeForOption($opt, $value);
-        }
-
-        return round($total, 2);
+        return $this->computeSurchargeFromConfig($plan->config ?? [], $optionChoices);
     }
 
     /**
@@ -80,14 +65,15 @@ class HostingPlanOptionSurchargeService
     }
 
     /**
-     * Validate option_choices: only allow keys that exist in plan_options; return sanitized array.
+     * Validate option_choices from a config array (e.g. GameserverCloudPlan or HostingPlan config).
      *
+     * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $optionChoices
      * @return array<string, mixed>
      */
-    public function validateOptionChoices(HostingPlan $plan, array $optionChoices): array
+    public function validateOptionChoicesFromConfig(array $config, array $optionChoices): array
     {
-        $planOptions = $plan->config['plan_options'] ?? null;
+        $planOptions = $config['plan_options'] ?? null;
         if (! is_array($planOptions)) {
             return [];
         }
@@ -106,5 +92,41 @@ class HostingPlanOptionSurchargeService
         }
 
         return $out;
+    }
+
+    /**
+     * Compute total surcharge from config and option_choices.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $optionChoices
+     */
+    public function computeSurchargeFromConfig(array $config, array $optionChoices): float
+    {
+        $planOptions = $config['plan_options'] ?? null;
+        if (! is_array($planOptions)) {
+            return 0.0;
+        }
+        $total = 0.0;
+        foreach ($planOptions as $opt) {
+            $id = $opt['id'] ?? null;
+            if ($id === null || ! array_key_exists($id, $optionChoices)) {
+                continue;
+            }
+            $value = $optionChoices[$id];
+            $total += $this->surchargeForOption($opt, $value);
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * Validate option_choices: only allow keys that exist in plan_options; return sanitized array.
+     *
+     * @param  array<string, mixed>  $optionChoices
+     * @return array<string, mixed>
+     */
+    public function validateOptionChoices(HostingPlan $plan, array $optionChoices): array
+    {
+        return $this->validateOptionChoicesFromConfig($plan->config ?? [], $optionChoices);
     }
 }

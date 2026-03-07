@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\Brand;
 use App\Models\CustomerBalance;
+use App\Models\GameserverCloudPlan;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Services\BalancePaymentService;
@@ -312,5 +313,191 @@ class GamingController extends Controller
         $request->session()->put('checkout_gaming', $payload);
 
         return app(CheckoutController::class)->buildGamingCheckoutRedirect($request, $payload);
+    }
+
+    protected function ensureGameserverCloudFeature(Request $request): ?RedirectResponse
+    {
+        $brand = $request->attributes->get('current_brand');
+        $features = $brand?->getFeaturesArray() ?? [];
+        if (! ($features['gameserver_cloud'] ?? false)) {
+            return redirect()->route('dashboard')->with('error', 'Gameserver Cloud wird für diese Marke nicht angeboten.');
+        }
+
+        return null;
+    }
+
+    /**
+     * List active Gameserver Cloud plans for the current brand.
+     */
+    public function cloudIndex(Request $request): Response|RedirectResponse
+    {
+        $redirect = $this->ensureGameserverCloudFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        $brand = $request->attributes->get('current_brand');
+        $brandId = $brand?->id;
+
+        $plans = GameserverCloudPlan::query()
+            ->where('is_active', true)
+            ->when($brandId !== null, fn ($q) => $q->where('brand_id', $brandId))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('gaming/cloud/Index', [
+            'gameserverCloudPlans' => $plans->map(fn (GameserverCloudPlan $p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => (string) $p->price,
+                'config' => $p->config ?? [],
+            ]),
+        ]);
+    }
+
+    /**
+     * Checkout form for one Gameserver Cloud plan (period selection).
+     */
+    public function cloudCheckout(Request $request): Response|RedirectResponse
+    {
+        $redirect = $this->ensureGameserverCloudFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        $brand = $request->attributes->get('current_brand');
+        $brandId = $brand?->id;
+        $planId = $request->route('plan') ? (int) $request->route('plan') : null;
+        $plan = $planId ? GameserverCloudPlan::query()
+            ->where('is_active', true)
+            ->when($brandId !== null, fn ($q) => $q->where('brand_id', $brandId))
+            ->find($planId) : null;
+        if ($planId && ! $plan) {
+            return redirect()->route('gaming.cloud.index')->with('error', 'Plan nicht gefunden.');
+        }
+
+        $plans = GameserverCloudPlan::query()
+            ->where('is_active', true)
+            ->when($brandId !== null, fn ($q) => $q->where('brand_id', $brandId))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $config = is_array($plan?->config) ? $plan->config : [];
+        if (! isset($config['plan_options']) || ! is_array($config['plan_options'])) {
+            $config['plan_options'] = [];
+        }
+        $selectedPlanForFrontend = $plan ? [
+            'id' => $plan->id,
+            'name' => $plan->name,
+            'price' => (string) $plan->price,
+            'config' => $config,
+        ] : null;
+
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        $payload = [
+            'gameserverCloudPlans' => $plans->map(fn (GameserverCloudPlan $p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => (string) $p->price,
+                'config' => $p->config ?? [],
+            ]),
+            'selectedPlan' => $selectedPlanForFrontend,
+            'tosUrl' => config('billing.tos_url', '#'),
+            'privacyUrl' => config('billing.privacy_url', '#'),
+        ];
+        if ($brandFeatures['prepaid_balance'] ?? false) {
+            $customerBalance = CustomerBalance::where('user_id', $request->user()->id)->first();
+            $payload['canPayWithBalance'] = true;
+            $payload['customerBalance'] = $customerBalance ? (float) $customerBalance->balance : 0.0;
+            $payload['amountRequired'] = $plan ? (float) $plan->price : 0.0;
+        }
+
+        return Inertia::render('gaming/cloud/Checkout', $payload);
+    }
+
+    /**
+     * Store cloud checkout session or process balance payment, then redirect.
+     */
+    public function storeCloudCheckout(Request $request): RedirectResponse
+    {
+        $redirect = $this->ensureGameserverCloudFeature($request);
+        if ($redirect !== null) {
+            return $redirect;
+        }
+
+        $validated = $request->validate([
+            'gameserver_cloud_plan_id' => ['required', 'exists:gameserver_cloud_plans,id'],
+            'option_choices' => ['nullable', 'array'],
+            'option_choices.*' => ['nullable'],
+            'payment_method' => ['nullable', 'string', 'in:mollie,balance'],
+            'period_months' => ['required', 'integer', 'in:1,3,6,12'],
+            'accept_tos' => ['required', 'accepted'],
+            'accept_early_execution' => ['required', 'accepted'],
+        ], [
+            'accept_tos.accepted' => 'Bitte bestätigen Sie die AGB und Datenschutzerklärung.',
+            'accept_early_execution.accepted' => 'Bitte bestätigen Sie den Widerrufsverzicht.',
+        ]);
+
+        $plan = GameserverCloudPlan::find($validated['gameserver_cloud_plan_id']);
+        if (! $plan || ! $plan->is_active) {
+            return redirect()->route('gaming.cloud.index')->with('error', 'Plan nicht verfügbar.');
+        }
+
+        $brand = $request->attributes->get('current_brand');
+        if ($brand !== null && $plan->brand_id !== $brand->id) {
+            return redirect()->route('gaming.cloud.index')->with('error', 'Plan nicht verfügbar.');
+        }
+
+        $optionSurchargeService = app(HostingPlanOptionSurchargeService::class);
+        $config = is_array($plan->config) ? $plan->config : [];
+        $optionChoices = $optionSurchargeService->validateOptionChoicesFromConfig($config, $validated['option_choices'] ?? []);
+        $optionSurcharge = $optionSurchargeService->computeSurchargeFromConfig($config, $optionChoices);
+
+        $periodMonths = (int) $validated['period_months'];
+        $basePrice = (float) $plan->price;
+        $monthlyTotal = $basePrice + $optionSurcharge;
+        $totalAmount = round($monthlyTotal * $periodMonths, 2);
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        $paymentMethod = $validated['payment_method'] ?? 'mollie';
+
+        if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
+            $user = $request->user();
+            if ($totalAmount > 0) {
+                try {
+                    app(BalancePaymentService::class)->pay($user, $totalAmount, 'gameserver_cloud', 'Gameserver Cloud: '.$plan->name, [
+                        'description' => 'Gameserver Cloud '.$plan->name.' – '.$periodMonths.' Monat(e)',
+                    ]);
+                } catch (InsufficientBalanceException $e) {
+                    return redirect()->route('gaming.cloud.checkout', ['plan' => $plan->id])
+                        ->with('error', $e->getMessage());
+                }
+            }
+
+            $payload = [
+                'gameserver_cloud_plan_id' => $plan->id,
+                'user_id' => $user->id,
+                'period_months' => $periodMonths,
+                'option_choices' => $optionChoices,
+                'option_surcharge' => $optionSurcharge,
+            ];
+            $request->session()->forget('checkout_cloud_gaming');
+
+            return app(CheckoutController::class)->processCloudGamingBalanceCheckout($request, $user, $payload);
+        }
+
+        $payload = [
+            'gameserver_cloud_plan_id' => $plan->id,
+            'user_id' => $request->user()->id,
+            'period_months' => $periodMonths,
+            'option_choices' => $optionChoices,
+            'option_surcharge' => $optionSurcharge,
+        ];
+        $request->session()->put('checkout_cloud_gaming', $payload);
+
+        return app(CheckoutController::class)->buildCloudGamingCheckoutRedirect($request, $payload);
     }
 }

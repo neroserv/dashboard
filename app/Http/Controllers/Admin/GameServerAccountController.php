@@ -56,16 +56,56 @@ class GameServerAccountController extends Controller
         ]);
     }
 
+    public function cloudIndex(Request $request): Response
+    {
+        $this->authorize('viewAny', GameServerAccount::class);
+
+        $currentBrand = $this->currentBrand($request);
+        $features = $currentBrand?->getFeaturesArray() ?? [];
+        if (! ($features['gameserver_cloud'] ?? false)) {
+            return Inertia::render('admin/gameserver-cloud-accounts/Index', [
+                'gameServerAccounts' => [
+                    'data' => [],
+                    'links' => [],
+                ],
+                'brandHasGameserverCloud' => false,
+            ]);
+        }
+
+        $query = GameServerAccount::query()
+            ->with(['user', 'hostingServer', 'gameserverCloudSubscription.gameserverCloudPlan'])
+            ->whereNotNull('gameserver_cloud_subscription_id')
+            ->whereHas('gameserverCloudSubscription.gameserverCloudPlan', fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->latest();
+
+        $accounts = $query->paginate(15)->withQueryString();
+
+        return Inertia::render('admin/gameserver-cloud-accounts/Index', [
+            'gameServerAccounts' => $accounts,
+            'brandHasGameserverCloud' => true,
+        ]);
+    }
+
     public function show(Request $request, GameServerAccount $gameServerAccount): Response
     {
         $this->authorize('view', $gameServerAccount);
 
         $currentBrand = $this->currentBrand($request);
-        if ($currentBrand !== null && $gameServerAccount->hostingPlan->brand_id !== $currentBrand->id) {
-            abort(404);
+        $isCloud = $gameServerAccount->gameserver_cloud_subscription_id !== null;
+        if ($currentBrand !== null) {
+            if ($isCloud) {
+                $sub = $gameServerAccount->gameserverCloudSubscription;
+                if (! $sub || ! $sub->gameserverCloudPlan || $sub->gameserverCloudPlan->brand_id !== $currentBrand->id) {
+                    abort(404);
+                }
+            } else {
+                if (! $gameServerAccount->hostingPlan || $gameServerAccount->hostingPlan->brand_id !== $currentBrand->id) {
+                    abort(404);
+                }
+            }
         }
 
-        $gameServerAccount->load(['user', 'hostingPlan', 'hostingServer', 'product']);
+        $gameServerAccount->load(['user', 'hostingPlan', 'hostingServer', 'product', 'gameserverCloudSubscription.gameserverCloudPlan']);
 
         $panelUrl = $gameServerAccount->hostingServer?->config['base_uri'] ?? $gameServerAccount->hostingServer?->config['host'] ?? '';
         $loginUrl = $panelUrl && $gameServerAccount->identifier
@@ -87,6 +127,10 @@ class GameServerAccountController extends Controller
     public function cancelSubscription(Request $request, GameServerAccount $gameServerAccount): RedirectResponse
     {
         $this->authorize('update', $gameServerAccount);
+
+        if ($gameServerAccount->isCloudAccount()) {
+            return redirect()->back()->with('error', 'Cloud-Server werden über das Cloud-Abo verwaltet.');
+        }
 
         $currentBrand = $this->currentBrand($request);
         if ($currentBrand !== null && $gameServerAccount->hostingPlan->brand_id !== $currentBrand->id) {
@@ -121,9 +165,14 @@ class GameServerAccountController extends Controller
             ->with('success', 'Game-Server-Abo wurde zum Periodenende gekündigt.');
     }
 
-    public function edit(Request $request, GameServerAccount $gameServerAccount): Response
+    public function edit(Request $request, GameServerAccount $gameServerAccount): Response|RedirectResponse
     {
         $this->authorize('update', $gameServerAccount);
+
+        if ($gameServerAccount->isCloudAccount()) {
+            return redirect()->route('admin.gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Cloud-Server werden über das Cloud-Abo bearbeitet.');
+        }
 
         $currentBrand = $this->currentBrand($request);
         if ($currentBrand !== null && $gameServerAccount->hostingPlan->brand_id !== $currentBrand->id) {
@@ -140,6 +189,11 @@ class GameServerAccountController extends Controller
 
     public function update(UpdateGameServerAccountRequest $request, GameServerAccount $gameServerAccount): RedirectResponse
     {
+        if ($gameServerAccount->isCloudAccount()) {
+            return redirect()->route('admin.gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Cloud-Server werden über das Cloud-Abo bearbeitet.');
+        }
+
         $currentBrand = $this->currentBrand($request);
         if ($currentBrand !== null && $gameServerAccount->hostingPlan->brand_id !== $currentBrand->id) {
             abort(404);

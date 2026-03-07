@@ -6,32 +6,45 @@ import {
     KeyRound,
     Pencil,
     LayoutDashboard,
-    Server,
+    Terminal,
+    FolderOpen,
+    Archive,
+    Calendar,
     Power,
     PowerOff,
-    RotateCw,
+    RotateCcw,
     Loader2,
-    CalendarPlus,
-    Calendar,
-    RefreshCcw,
+    Cpu,
+    HardDrive,
+    MemoryStick,
+    Network,
 } from 'lucide-vue-next';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import AutoRenewModal from '@/components/AutoRenewModal.vue';
 import PaymentMethodModal from '@/components/PaymentMethodModal.vue';
+import GamingAccountSidebar from '@/components/gaming-accounts/GamingAccountSidebar.vue';
+import GamingAccountOverviewTab from '@/components/gaming-accounts/GamingAccountOverviewTab.vue';
+import GamingAccountAccessTab from '@/components/gaming-accounts/GamingAccountAccessTab.vue';
+import GamingAccountPasswordTab from '@/components/gaming-accounts/GamingAccountPasswordTab.vue';
+import GamingAccountRenameTab from '@/components/gaming-accounts/GamingAccountRenameTab.vue';
+import GamingAccountConsoleTab from '@/components/gaming-accounts/GamingAccountConsoleTab.vue';
+import GamingAccountFilesTab from '@/components/gaming-accounts/GamingAccountFilesTab.vue';
+import GamingAccountBackupsTab from '@/components/gaming-accounts/GamingAccountBackupsTab.vue';
+import GamingAccountSchedulesTab from '@/components/gaming-accounts/GamingAccountSchedulesTab.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Heading, Text } from '@/components/ui/typography';
+import { Text } from '@/components/ui/typography';
 import { notify } from '@/composables/useNotify';
+import {
+    copyToClipboard as copyToClipboardUtil,
+    formatBytes,
+    formatCpu,
+    displayStatus,
+    statusVariant,
+} from '@/composables/useGamingAccountFormatters';
+import type { ServerOverview } from '@/composables/useGamingAccountFormatters';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import gamingAccounts, { autoRenewBalance, autoRenewMollieSubscription } from '@/routes/gaming-accounts';
@@ -44,24 +57,14 @@ type GameServerAccount = {
     identifier: string | null;
     current_period_ends_at: string | null;
     cancel_at_period_end: boolean;
-    hosting_plan: { name: string };
+    hosting_plan?: { name: string };
 };
 
-type ServerOverview = {
-    name: string;
-    status: string;
-    allocation: string;
-    limits: { memory: number; disk: number; cpu: number; swap?: number; io?: number };
-    usage: {
-        memory_bytes: number;
-        disk_bytes: number;
-        cpu_absolute: number;
-        network_rx_bytes: number;
-        network_tx_bytes: number;
-    };
-    can_power: boolean;
-    is_installing?: boolean;
-    suspended?: boolean;
+type GameserverCloudSubscription = {
+    id: number;
+    current_period_ends_at: string | null;
+    cancel_at_period_end?: boolean;
+    plan: { name: string };
 };
 
 type Props = {
@@ -77,6 +80,8 @@ type Props = {
     isSuspendedOrExpired?: boolean;
     auto_renew_with_balance?: boolean;
     has_mollie_subscription?: boolean;
+    gameserverCloudSubscription?: GameserverCloudSubscription | null;
+    cloudSubscriptionUrl?: string | null;
 };
 
 const props = withDefaults(defineProps<Props>(), {
@@ -88,6 +93,8 @@ const props = withDefaults(defineProps<Props>(), {
     isSuspendedOrExpired: false,
     auto_renew_with_balance: false,
     has_mollie_subscription: false,
+    gameserverCloudSubscription: null,
+    cloudSubscriptionUrl: null,
 });
 
 const powerLoading = ref<string | null>(null);
@@ -104,13 +111,36 @@ const renewalPeriodOptions: { months: 1 | 3 | 6 | 12; label: string }[] = [
 
 const displayOverview = computed(() => liveOverview.value ?? props.serverOverview ?? null);
 
+const isCloudAccount = computed(() => !!props.gameserverCloudSubscription);
+const planLabel = computed(() =>
+    isCloudAccount.value && props.gameserverCloudSubscription
+        ? props.gameserverCloudSubscription.plan.name
+        : props.gameServerAccount.hosting_plan?.name ?? '',
+);
+const periodEnd = computed(() =>
+    isCloudAccount.value && props.gameserverCloudSubscription
+        ? props.gameserverCloudSubscription.current_period_ends_at
+        : props.gameServerAccount.current_period_ends_at,
+);
+const cancelAtPeriodEnd = computed(
+    () =>
+        (isCloudAccount.value && props.gameserverCloudSubscription?.cancel_at_period_end) ||
+        props.gameServerAccount.cancel_at_period_end,
+);
+
 const page = usePage();
 const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {});
 const showAboVerwalten = computed(
-    () => !brandFeatures.value?.prepaid_balance && !props.canRenew,
+    () =>
+        !isCloudAccount.value &&
+        !brandFeatures.value?.prepaid_balance &&
+        !props.canRenew,
 );
 const showRenewButton = computed(
-    () => props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+    () =>
+        !isCloudAccount.value &&
+        !!props.renewUrl &&
+        (props.canRenew || brandFeatures.value?.prepaid_balance === true),
 );
 const showAutoRenewButton = computed(
     () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
@@ -148,48 +178,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.gameServerAccount.name, href: '#' },
 ];
 
-const formatDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('de-DE', { timeZone: 'UTC' }) : '–';
-
 function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(2)} GB`;
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1) return `${mb.toFixed(2)} MB`;
-    const kb = bytes / 1024;
-    return `${kb.toFixed(1)} KB`;
-}
-
-function formatCpu(cpu: number): string {
-    if (cpu === 0) return '∞';
-    return `${Number(cpu).toFixed(1)}%`;
-}
-
-function displayStatus(overview: ServerOverview | null): string {
-    if (overview?.suspended) return 'Gesperrt';
-    if (overview?.is_installing) return 'Installation';
-    if (overview?.status) {
-        const s = overview.status.toLowerCase();
-        if (s === 'running' || s === 'started') return 'Online';
-        if (s === 'stopped' || s === 'offline') return 'Offline';
-        if (s === 'stopping') return 'Wird gestoppt …';
-        if (s === 'starting') return 'Wird gestartet …';
-        return overview.status;
-    }
-    return props.gameServerAccount.status;
-}
-
-function statusVariant(overview: ServerOverview | null): 'success' | 'default' | 'error' {
-    if (overview?.suspended) return 'error';
-    const s = overview?.status?.toLowerCase() ?? props.gameServerAccount.status?.toLowerCase();
-    if (s === 'running' || s === 'started') return 'success';
-    if (s === 'stopping' || s === 'starting') return 'default';
-    return 'default';
+    copyToClipboardUtil(text);
+    notify.success('In die Zwischenablage kopiert.');
 }
 
 watch(
@@ -207,16 +198,15 @@ watch(
     { immediate: true },
 );
 
-function sendPower(action: 'start' | 'stop' | 'restart') {
+function sendPower(action: 'start' | 'stop' | 'restart' | 'kill') {
     powerLoading.value = action;
-    // Optimistisch Status setzen, damit nicht weiter „Online“ angezeigt wird
     const previousOverview = liveOverview.value ?? props.serverOverview;
-    if (previousOverview && (action === 'stop' || action === 'restart')) {
+    if (previousOverview && (action === 'stop' || action === 'restart' || action === 'kill')) {
         liveOverview.value = { ...previousOverview, status: 'stopping' };
     } else if (previousOverview && action === 'start') {
         liveOverview.value = { ...previousOverview, status: 'starting' };
     }
-    router.post(`/gaming-accounts/${props.gameServerAccount.id}/power`, { action }, {
+    router.post(gamingAccounts.power.url(props.gameServerAccount.id), { action }, {
         preserveScroll: true,
         onSuccess: () => {
             notify.success('Befehl gesendet.');
@@ -240,84 +230,26 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
         <Head :title="gameServerAccount.name" />
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
-            <!-- Sidebar (wie Domains) -->
             <div class="lg:col-span-1">
-                <Card class="rounded-lg p-4">
-                    <div class="border-b pb-3 text-center">
-                        <div class="mb-3 flex items-center justify-between">
-                            <Badge :variant="statusVariant(displayOverview)" class="gap-1">
-                                <span
-                                    v-if="statusVariant(displayOverview) === 'success'"
-                                    class="relative flex h-1.5 w-1.5"
-                                >
-                                    <span
-                                        class="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75"
-                                    />
-                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
-                                </span>
-                                {{ displayStatus(displayOverview) }}
-                            </Badge>
-                        </div>
-                        <div class="flex justify-center text-muted-foreground">
-                            <Server class="h-12 w-12" />
-                        </div>
-                        <Heading level="h5" class="mt-2">Game Server</Heading>
-                        <Text class="mt-0.5 text-sm" muted>{{ gameServerAccount.name }}</Text>
-                        <Text class="mt-0.5 text-xs" muted>{{ gameServerAccount.hosting_plan.name }}</Text>
-                        <div class="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-center">
-                            <div class="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                                <Calendar class="h-3.5 w-3.5 shrink-0" />
-                                <span>Läuft bis</span>
-                            </div>
-                            <div class="mt-0.5 text-sm font-semibold">{{ formatDate(gameServerAccount.current_period_ends_at) }}</div>
-                            <div v-if="gameServerAccount.cancel_at_period_end" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                                Kündigung zum Periodenende
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-4 flex flex-col gap-3">
-                        <template v-if="isSuspendedOrExpired">
-                            <Button class="w-full justify-start gap-2" disabled>
-                                <ExternalLink class="h-4 w-4" />
-                                Gesperrt – bitte verlängern
-                            </Button>
-                        </template>
-                        <Link v-else-if="loginUrl" :href="loginUrl" target="_blank" rel="noopener noreferrer">
-                            <Button class="w-full justify-start gap-2">
-                                <ExternalLink class="h-4 w-4" />
-                                Zum Pterodactyl-Panel
-                            </Button>
-                        </Link>
-                        <template v-if="showRenewButton">
-                            <Button
-                                variant="default"
-                                class="w-full justify-start gap-2"
-                                @click="renewModalOpen = true"
-                            >
-                                <CalendarPlus class="h-4 w-4" />
-                                Verlängern
-                            </Button>
-                        </template>
-                        <template v-if="showAutoRenewButton">
-                            <Button
-                                variant="outline"
-                                class="w-full justify-start gap-2"
-                                @click="autoRenewModalOpen = true"
-                            >
-                                <RefreshCcw class="h-4 w-4" />
-                                Auto Renew
-                            </Button>
-                        </template>
-                        <Link v-if="showAboVerwalten" href="/billing/subscriptions">
-                            <Button variant="outline" class="w-full justify-start gap-2">
-                                Abo verwalten
-                            </Button>
-                        </Link>
-                    </div>
-                </Card>
+                <GamingAccountSidebar
+                    :game-server-account="gameServerAccount"
+                    :plan-label="planLabel"
+                    :period-end="periodEnd"
+                    :login-url="loginUrl"
+                    :display-overview="displayOverview"
+                    :is-suspended-or-expired="isSuspendedOrExpired"
+                    :show-renew-button="showRenewButton"
+                    :show-auto-renew-button="showAutoRenewButton"
+                    :show-abo-verwalten="showAboVerwalten"
+                    :is-cloud-account="isCloudAccount"
+                    :cloud-subscription-url="cloudSubscriptionUrl"
+                    :cancel-at-period-end="cancelAtPeriodEnd"
+                    @renew-click="renewModalOpen = true"
+                    @auto-renew-click="autoRenewModalOpen = true"
+                />
             </div>
 
-            <!-- Hauptbereich: Tabs -->
+            <!-- Hauptbereich: Header, Stats, Tabs -->
             <div class="lg:col-span-3">
                 <Card
                     v-if="!loginUrl && gameServerAccount.status === 'pending'"
@@ -332,8 +264,220 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                     </CardContent>
                 </Card>
 
-                <Tabs default-tab="overview" class="w-full">
+                <!-- Header Card -->
+                <Card class="mb-4">
+                    <CardContent class="pt-6">
+                        <div class="flex flex-wrap items-center gap-4">
+                            <div class="flex min-w-0 flex-1 items-center gap-3">
+                                <div
+                                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15"
+                                >
+                                    <Power class="h-5 w-5 text-primary" />
+                                </div>
+                                <div class="min-w-0">
+                                    <h2 class="truncate font-semibold">
+                                        {{ displayOverview?.name ?? gameServerAccount.name }}
+                                    </h2>
+                                    <p class="text-sm text-muted-foreground">{{ planLabel || 'Game Server' }}</p>
+                                    <Badge
+                                        :variant="statusVariant(displayOverview, gameServerAccount.status)"
+                                        class="mt-1"
+                                    >
+                                        {{ displayStatus(displayOverview, gameServerAccount.status) }}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div
+                                v-if="displayOverview?.allocation"
+                                class="flex flex-1 min-w-[200px] flex-col items-center justify-center text-center"
+                            >
+                                <p class="text-xs text-muted-foreground">Server-Adresse</p>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <code class="rounded bg-muted px-2 py-1 text-sm">
+                                        {{ displayOverview.allocation }}
+                                    </code>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-8 w-8 shrink-0"
+                                        @click="copyToClipboard(displayOverview!.allocation!)"
+                                    >
+                                        <Copy class="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <div class="inline-flex overflow-hidden rounded-lg border">
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        class="rounded-none border-0"
+                                        :disabled="!!powerLoading"
+                                        @click="sendPower('start')"
+                                    >
+                                        <Loader2
+                                            v-if="powerLoading === 'start'"
+                                            class="mr-1 h-4 w-4 animate-spin"
+                                        />
+                                        <Power v-else class="mr-1 h-4 w-4" />
+                                        Start
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        class="rounded-none border-l"
+                                        :disabled="!!powerLoading"
+                                        @click="sendPower('restart')"
+                                    >
+                                        <Loader2
+                                            v-if="powerLoading === 'restart'"
+                                            class="mr-1 h-4 w-4 animate-spin"
+                                        />
+                                        <RotateCcw v-else class="mr-1 h-4 w-4" />
+                                        Restart
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        class="rounded-none border-l"
+                                        :disabled="!!powerLoading"
+                                        @click="sendPower('stop')"
+                                    >
+                                        <Loader2
+                                            v-if="powerLoading === 'stop'"
+                                            class="mr-1 h-4 w-4 animate-spin"
+                                        />
+                                        <PowerOff v-else class="mr-1 h-4 w-4" />
+                                        Stop
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        class="rounded-none border-l"
+                                        :disabled="!!powerLoading"
+                                        @click="sendPower('kill')"
+                                    >
+                                        <Loader2
+                                            v-if="powerLoading === 'kill'"
+                                            class="mr-1 h-4 w-4 animate-spin"
+                                        />
+                                        Kill
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <!-- Stats Grid -->
+                <div
+                    v-if="displayOverview"
+                    class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                >
+                    <Card>
+                        <CardContent class="pt-4">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs text-muted-foreground">CPU</p>
+                                    <p class="text-lg font-semibold">
+                                        {{ formatCpu(displayOverview.usage?.cpu_absolute ?? 0) }}
+                                    </p>
+                                </div>
+                                <div
+                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15"
+                                >
+                                    <Cpu class="h-4 w-4 text-primary" />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent class="pt-4">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs text-muted-foreground">Memory</p>
+                                    <p class="text-lg font-semibold">
+                                        {{ formatBytes(displayOverview.usage?.memory_bytes ?? 0) }}
+                                        <span
+                                            v-if="displayOverview.limits?.memory"
+                                            class="text-muted-foreground"
+                                        >
+                                            / {{ displayOverview.limits.memory }} MB
+                                        </span>
+                                    </p>
+                                </div>
+                                <div
+                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15"
+                                >
+                                    <MemoryStick class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent class="pt-4">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs text-muted-foreground">Disk</p>
+                                    <p class="text-lg font-semibold">
+                                        {{ formatBytes(displayOverview.usage?.disk_bytes ?? 0) }}
+                                        <span
+                                            v-if="displayOverview.limits?.disk"
+                                            class="text-muted-foreground"
+                                        >
+                                            / {{ (displayOverview.limits.disk / 1024).toFixed(1) }} GB
+                                        </span>
+                                    </p>
+                                </div>
+                                <div
+                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15"
+                                >
+                                    <HardDrive class="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent class="pt-4">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs text-muted-foreground">Network</p>
+                                    <p class="text-sm font-semibold">
+                                        <span class="text-emerald-600 dark:text-emerald-400">↓</span>
+                                        {{ formatBytes(displayOverview.usage?.network_rx_bytes ?? 0) }}
+                                        <span class="text-muted-foreground">/</span>
+                                        <span class="text-sky-600 dark:text-sky-400">↑</span>
+                                        {{ formatBytes(displayOverview.usage?.network_tx_bytes ?? 0) }}
+                                    </p>
+                                </div>
+                                <div
+                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15"
+                                >
+                                    <Network class="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Tabs default-tab="console" class="w-full">
                     <TabsList class="mb-4 flex h-auto flex-wrap justify-start gap-1 rounded-lg bg-white p-1 dark:bg-muted/50">
+                        <TabsTrigger value="console" class="gap-2 px-3 py-2">
+                            <Terminal class="h-4 w-4" />
+                            Konsole
+                        </TabsTrigger>
+                        <TabsTrigger value="files" class="gap-2 px-3 py-2">
+                            <FolderOpen class="h-4 w-4" />
+                            Dateien
+                        </TabsTrigger>
+                        <TabsTrigger value="backups" class="gap-2 px-3 py-2">
+                            <Archive class="h-4 w-4" />
+                            Backups
+                        </TabsTrigger>
+                        <TabsTrigger value="schedules" class="gap-2 px-3 py-2">
+                            <Calendar class="h-4 w-4" />
+                            Schedules
+                        </TabsTrigger>
                         <TabsTrigger value="overview" class="gap-2 px-3 py-2">
                             <LayoutDashboard class="h-4 w-4" />
                             <span class="hidden sm:inline">Übersicht</span>
@@ -352,351 +496,59 @@ function sendPower(action: 'start' | 'stop' | 'restart') {
                         </TabsTrigger>
                     </TabsList>
 
+                    <TabsContent value="console" class="mt-0">
+                        <GamingAccountConsoleTab :game-server-account-id="gameServerAccount.id" />
+                    </TabsContent>
+
+                    <TabsContent value="files" class="mt-0">
+                        <GamingAccountFilesTab :game-server-account-id="gameServerAccount.id" />
+                    </TabsContent>
+
+                    <TabsContent value="backups" class="mt-0">
+                        <GamingAccountBackupsTab :game-server-account-id="gameServerAccount.id" />
+                    </TabsContent>
+
+                    <TabsContent value="schedules" class="mt-0">
+                        <GamingAccountSchedulesTab :game-server-account-id="gameServerAccount.id" />
+                    </TabsContent>
+
                     <TabsContent value="overview" class="mt-0">
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <!-- Informationen (wie Domain-Übersicht) -->
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Informationen</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <Table>
-                                        <TableBody>
-                                            <TableRow>
-                                                <TableHead class="w-36 font-medium">Server-Name</TableHead>
-                                                <TableCell>{{ displayOverview?.name ?? gameServerAccount.name }}</TableCell>
-                                            </TableRow>
-                                            <TableRow>
-                                                <TableHead class="font-medium">IP & Port</TableHead>
-                                                <TableCell class="font-mono text-sm">
-                                                    {{ displayOverview?.allocation ?? '—' }}
-                                                </TableCell>
-                                            </TableRow>
-                                            <TableRow>
-                                                <TableHead class="font-medium">Status</TableHead>
-                                                <TableCell>
-                                                    <Badge :variant="statusVariant(displayOverview)">
-                                                        {{ displayStatus(displayOverview) }}
-                                                    </Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                            <TableRow v-if="gameServerAccount.identifier">
-                                                <TableHead class="font-medium">Identifier</TableHead>
-                                                <TableCell class="flex items-center gap-1">
-                                                    <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">{{
-                                                        gameServerAccount.identifier
-                                                    }}</code>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        class="h-7 w-7"
-                                                        title="Kopieren"
-                                                        @click="copyToClipboard(gameServerAccount.identifier!)"
-                                                    >
-                                                        <Copy class="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                            </Card>
-
-                            <!-- Power & Abo -->
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Steuerung & Abo</CardTitle>
-                                    <CardDescription v-if="displayOverview?.can_power">
-                                        Start, Stop und Neustart des Game-Servers.
-                                    </CardDescription>
-                                    <CardDescription v-else>
-                                        Power-Steuerung im Panel oder Client-API nicht verfügbar.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent class="space-y-4">
-                                    <div
-                                        v-if="isSuspendedOrExpired"
-                                        class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
-                                    >
-                                        Der Server ist gesperrt oder abgelaufen. Bitte verlängern Sie, um die Steuerung wieder zu nutzen.
-                                    </div>
-                                    <div v-else-if="displayOverview?.can_power" class="flex flex-wrap gap-2">
-                                        <Button
-                                            size="sm"
-                                            class="bg-green-600 hover:bg-green-700"
-                                            :disabled="!!powerLoading"
-                                            @click="sendPower('start')"
-                                        >
-                                            <Loader2
-                                                v-if="powerLoading === 'start'"
-                                                class="mr-2 h-4 w-4 animate-spin"
-                                            />
-                                            <Power v-else class="mr-2 h-4 w-4" />
-                                            Start
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            class="border-orange-600 bg-orange-600 text-white hover:bg-orange-700 hover:border-orange-700 dark:border-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 dark:hover:border-orange-700"
-                                            :disabled="!!powerLoading"
-                                            @click="sendPower('restart')"
-                                        >
-                                            <Loader2
-                                                v-if="powerLoading === 'restart'"
-                                                class="mr-2 h-4 w-4 animate-spin"
-                                            />
-                                            <RotateCw v-else class="mr-2 h-4 w-4" />
-                                            Neustart
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            :disabled="!!powerLoading"
-                                            @click="sendPower('stop')"
-                                        >
-                                            <Loader2
-                                                v-if="powerLoading === 'stop'"
-                                                class="mr-2 h-4 w-4 animate-spin"
-                                            />
-                                            <PowerOff v-else class="mr-2 h-4 w-4" />
-                                            Stop
-                                        </Button>
-                                    </div>
-                                    <!-- Abo-Infos nur bei Abo (nicht bei Prepaid/Verlängerung) -->
-                                    <dl v-if="!canRenew" class="grid gap-2 text-sm">
-                                        <div class="flex justify-between py-2 border-b">
-                                            <dt class="text-muted-foreground">Nächste Verlängerung</dt>
-                                            <dd>{{ formatDate(gameServerAccount.current_period_ends_at) }}</dd>
-                                        </div>
-                                        <div class="flex justify-between py-2">
-                                            <span class="text-muted-foreground">Kündigung zum Periodenende</span>
-                                            <Badge v-if="gameServerAccount.cancel_at_period_end" variant="default">
-                                                Ja
-                                            </Badge>
-                                            <span v-else>Nein</span>
-                                        </div>
-                                    </dl>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        <!-- Ressourcen (CPU, RAM, Disk) – Live-Aktualisierung alle 3 s -->
-                        <Card class="mt-4">
-                            <CardHeader>
-                                <CardTitle>Ressourcen</CardTitle>
-                                <CardDescription>
-                                    Nutzung von CPU, Arbeitsspeicher und Festplatte (Live-Aktualisierung).
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div
-                                    v-if="displayOverview"
-                                    class="grid grid-cols-1 gap-4 sm:grid-cols-3"
-                                >
-                                    <div class="rounded-lg border bg-muted/30 p-4">
-                                        <p class="text-xs text-muted-foreground">CPU</p>
-                                        <p class="text-xl font-semibold">
-                                            {{ formatCpu(displayOverview.usage.cpu_absolute) }}
-                                            <span class="text-sm font-normal text-muted-foreground">
-                                                / {{ formatCpu(displayOverview.limits.cpu) }}
-                                            </span>
-                                        </p>
-                                    </div>
-                                    <div class="rounded-lg border bg-muted/30 p-4">
-                                        <p class="text-xs text-muted-foreground">RAM</p>
-                                        <p class="text-xl font-semibold">
-                                            {{ formatBytes(displayOverview.usage.memory_bytes) }}
-                                            <span class="text-sm font-normal text-muted-foreground">
-                                                / {{ formatBytes(displayOverview.limits.memory * 1024 * 1024) }}
-                                            </span>
-                                        </p>
-                                    </div>
-                                    <div class="rounded-lg border bg-muted/30 p-4">
-                                        <p class="text-xs text-muted-foreground">Disk</p>
-                                        <p class="text-xl font-semibold">
-                                            {{ formatBytes(displayOverview.usage.disk_bytes) }}
-                                            <span class="text-sm font-normal text-muted-foreground">
-                                                / {{ formatBytes(displayOverview.limits.disk * 1024 * 1024) }}
-                                            </span>
-                                        </p>
-                                    </div>
-                                </div>
-                                <p v-else class="text-sm text-muted-foreground">
-                                    Live-Daten werden vom Panel geladen. Seite neu laden oder im Panel prüfen.
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <!-- Netzwerk (Inbound / Outbound) – Live-Aktualisierung -->
-                        <Card class="mt-4">
-                            <CardHeader>
-                                <CardTitle>Netzwerk</CardTitle>
-                                <CardDescription>
-                                    Inbound- und Outbound-Datenverbrauch (Live-Aktualisierung).
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div
-                                    v-if="displayOverview"
-                                    class="grid grid-cols-1 gap-4 sm:grid-cols-2"
-                                >
-                                    <div class="rounded-lg border bg-muted/30 p-4">
-                                        <p class="text-xs text-muted-foreground">Inbound</p>
-                                        <p class="text-lg font-semibold">
-                                            {{ formatBytes(displayOverview.usage.network_rx_bytes) }}
-                                        </p>
-                                    </div>
-                                    <div class="rounded-lg border bg-muted/30 p-4">
-                                        <p class="text-xs text-muted-foreground">Outbound</p>
-                                        <p class="text-lg font-semibold">
-                                            {{ formatBytes(displayOverview.usage.network_tx_bytes) }}
-                                        </p>
-                                    </div>
-                                </div>
-                                <p v-else class="text-sm text-muted-foreground">
-                                    Live-Daten werden vom Panel geladen. Seite neu laden oder im Panel prüfen.
-                                </p>
-                            </CardContent>
-                        </Card>
+                        <GamingAccountOverviewTab
+                            :game-server-account="gameServerAccount"
+                            :display-overview="displayOverview"
+                            :is-suspended-or-expired="isSuspendedOrExpired"
+                            :can-renew="canRenew"
+                            :power-loading="powerLoading"
+                            :period-end="periodEnd"
+                            :cancel-at-period-end="cancelAtPeriodEnd"
+                            @send-power="sendPower"
+                            @copy-to-clipboard="copyToClipboard"
+                        />
                     </TabsContent>
 
                     <TabsContent value="access" class="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Zugangsdaten</CardTitle>
-                                <CardDescription>
-                                    Server-Name, Identifier und E-Mail für die Anmeldung im Pterodactyl-Panel.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent class="space-y-4">
-                                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <div class="space-y-2">
-                                        <label class="text-sm font-medium">Server-Name</label>
-                                        <div class="flex gap-2">
-                                            <Input
-                                                :model-value="gameServerAccount.name"
-                                                readonly
-                                                class="font-mono bg-muted"
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                title="Kopieren"
-                                                @click="copyToClipboard(gameServerAccount.name)"
-                                            >
-                                                <Copy class="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div class="space-y-2">
-                                        <label class="text-sm font-medium">Server-ID (Identifier)</label>
-                                        <div class="flex gap-2">
-                                            <Input
-                                                :model-value="gameServerAccount.identifier ?? '—'"
-                                                readonly
-                                                class="font-mono bg-muted"
-                                            />
-                                            <Button
-                                                v-if="gameServerAccount.identifier"
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                title="Kopieren"
-                                                @click="copyToClipboard(gameServerAccount.identifier)"
-                                            >
-                                                <Copy class="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="space-y-2">
-                                    <label class="text-sm font-medium">E-Mail-Adresse</label>
-                                    <div class="flex gap-2">
-                                        <Input :model-value="userEmail" readonly class="font-mono bg-muted" />
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            title="Kopieren"
-                                            @click="copyToClipboard(userEmail)"
-                                        >
-                                            <Copy class="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div class="pt-2">
-                                    <a
-                                        v-if="loginUrl && !isSuspendedOrExpired"
-                                        :href="loginUrl"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="inline-flex items-center justify-center w-full rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground no-underline transition-colors hover:bg-primary/90"
-                                    >
-                                        <ExternalLink class="mr-2 h-4 w-4" />
-                                        Im Panel anmelden
-                                    </a>
-                                    <p v-else-if="isSuspendedOrExpired" class="text-sm text-muted-foreground">
-                                        Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <GamingAccountAccessTab
+                            :game-server-account="gameServerAccount"
+                            :user-email="userEmail"
+                            :login-url="loginUrl"
+                            :is-suspended-or-expired="isSuspendedOrExpired"
+                            @copy-to-clipboard="copyToClipboard"
+                        />
                     </TabsContent>
 
                     <TabsContent value="password" class="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Passwort</CardTitle>
-                                <CardDescription>
-                                    Ihr Panel-Passwort wurde bei der Einrichtung gesetzt. Sie können es im
-                                    Pterodactyl-Panel unter „Zugangsdaten“ oder „Passwort“ anzeigen und ändern.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Link v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener noreferrer">
-                                    <Button>
-                                        <ExternalLink class="mr-2 h-4 w-4" />
-                                        Panel öffnen (Passwort verwalten)
-                                    </Button>
-                                </Link>
-                                <Text v-else-if="isSuspendedOrExpired" class="text-muted-foreground">
-                                    Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
-                                </Text>
-                                <Text v-else class="text-muted-foreground">
-                                    Sobald der Server aktiv ist, können Sie sich im Panel anmelden und dort das
-                                    Passwort verwalten.
-                                </Text>
-                            </CardContent>
-                        </Card>
+                        <GamingAccountPasswordTab
+                            :login-url="loginUrl"
+                            :is-suspended-or-expired="isSuspendedOrExpired"
+                        />
                     </TabsContent>
 
                     <TabsContent value="rename" class="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Server umbenennen</CardTitle>
-                                <CardDescription>
-                                    Den Anzeigenamen Ihres Servers können Sie im Pterodactyl-Panel unter Einstellungen
-                                    ändern. Die Änderung gilt im Panel und hier in der Übersicht.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div class="mb-4 space-y-2">
-                                    <label class="text-sm font-medium">Aktueller Name</label>
-                                    <Input :model-value="gameServerAccount.name" readonly class="bg-muted" />
-                                </div>
-                                <Link v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener noreferrer">
-                                    <Button variant="outline">
-                                        <Pencil class="mr-2 h-4 w-4" />
-                                        Im Panel umbenennen
-                                    </Button>
-                                </Link>
-                                <Text v-else-if="isSuspendedOrExpired" class="text-muted-foreground">
-                                    Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.
-                                </Text>
-                            </CardContent>
-                        </Card>
+                        <GamingAccountRenameTab
+                            :game-server-account="gameServerAccount"
+                            :login-url="loginUrl"
+                            :is-suspended-or-expired="isSuspendedOrExpired"
+                        />
                     </TabsContent>
                 </Tabs>
             </div>
