@@ -13,6 +13,7 @@ import {
     Settings,
     PackageCheck,
     GitBranch,
+    Upload,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import { MainLayout } from '@/components/layout';
@@ -108,12 +109,13 @@ const sidebarItems = computed<NavItem[]>(() => {
             ],
         });
     }
-    if (hasPermissionOrView('admin.settings') || hasPermissionOrView('admin.jobs-monitor') || hasPermissionOrView('admin.cron-statistics') || hasPermissionOrView('admin.customers') || hasPermissionOrView('admin.groups') || hasPermissionOrView('admin.permissions') || hasPermissionOrView('admin.legacy-migration')) {
+    if (hasPermissionOrView('admin.settings') || hasPermissionOrView('admin.jobs-monitor') || hasPermissionOrView('admin.cron-statistics') || hasPermissionOrView('admin.customers') || hasPermissionOrView('admin.groups') || hasPermissionOrView('admin.permissions') || hasPermissionOrView('admin.legacy-migration') || hasPermissionOrView('admin.update')) {
         const system: NavItem[] = [];
         system.push({ title: 'API', href: '/admin/api', icon: Settings });
         if (hasPermissionOrView('admin.settings')) system.push({ title: 'Einstellungen', href: '/admin/settings', icon: Settings });
         if (hasPermissionOrView('admin.jobs-monitor')) system.push({ title: 'Jobs-Monitor', href: '/admin/jobs-monitor', icon: Settings });
         if (hasPermissionOrView('admin.cron-statistics')) system.push({ title: 'Cron / Worker-Statistik', href: '/admin/cron-statistics', icon: Settings });
+        if (hasPermissionOrView('admin.update')) system.push({ title: 'Panel-Update', href: '/admin/update', icon: Upload });
         if (hasPermissionOrView('admin.customers')) system.push({ title: 'Kunden', href: adminCustomersIndex().url, icon: Users });
         if (hasPermissionOrView('admin.groups')) system.push({ title: 'Gruppen', href: '/admin/groups', icon: Users });
         if (hasPermissionOrView('admin.permissions')) system.push({ title: 'Berechtigungen', href: '/admin/permissions', icon: Settings });

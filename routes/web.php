@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\JobsMonitorController;
 use App\Http\Controllers\Admin\LegacyMigrationController;
+use App\Http\Controllers\Admin\PanelUpdateController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\PterodactylEggController;
@@ -376,6 +377,8 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('api/docs', [ApiOverviewController::class, 'docs'])->name('api.docs');
     Route::get('settings', [SystemSettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
+    Route::get('update', [PanelUpdateController::class, 'index'])->name('update.index');
+    Route::post('update/run', [PanelUpdateController::class, 'run'])->name('update.run');
     Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
     Route::get('brands/{brand}/edit', [BrandController::class, 'edit'])->name('brands.edit');
     Route::put('brands/{brand}', [BrandController::class, 'update'])->name('brands.update');

@@ -119,6 +119,8 @@ class PermissionSeeder extends Seeder
             ['key' => 'admin.permissions.delete', 'name' => 'Berechtigungen löschen', 'label' => 'Berechtigungen löschen', 'category' => 'System'],
             ['key' => 'admin.legacy-migration', 'name' => 'Legacy-Migration', 'label' => 'Legacy-Migration', 'category' => 'System'],
             ['key' => 'admin.legacy-migration.view', 'name' => 'Legacy-Migration ansehen', 'label' => 'Legacy-Migration nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.update', 'name' => 'Panel-Update (voll)', 'label' => 'Panel-Update ausführen', 'category' => 'System'],
+            ['key' => 'admin.update.view', 'name' => 'Panel-Update ansehen', 'label' => 'Panel-Update nur ansehen', 'category' => 'System'],
         ];
 
         foreach ($permissions as $attrs) {
