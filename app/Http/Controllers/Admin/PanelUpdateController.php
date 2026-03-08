@@ -33,7 +33,8 @@ class PanelUpdateController extends Controller
                 $github = $updateService->fetchFromGitHub();
                 if ($github !== null) {
                     $remoteCommit = $github['remote_commit'];
-                    $updateAvailable = $github['behind_by'] > 0;
+                    $updateAvailable = $github['behind_by'] > 0
+                        || ($currentCommit !== '' && $remoteCommit !== null && $remoteCommit !== $currentCommit);
                     $recentCommits = $updateService->getRecentCommitsFromGitHub(15);
                 } else {
                     $remoteCommit = $updateService->getRemoteCommit();
@@ -85,8 +86,9 @@ class PanelUpdateController extends Controller
 
         try {
             $github = $updateService->fetchFromGitHub();
+            $currentCommit = $updateService->getCurrentCommit();
             $updateAvailable = $github !== null
-                ? $github['behind_by'] > 0
+                ? ($github['behind_by'] > 0 || ($currentCommit !== '' && $github['remote_commit'] !== null && $github['remote_commit'] !== $currentCommit))
                 : $updateService->isUpdateAvailable();
             if (! $updateAvailable) {
                 $lock->release();
