@@ -83,7 +83,7 @@ class WebspaceController extends Controller
         $validated = $request->validate([
             'hosting_plan_id' => ['required', 'exists:hosting_plans,id'],
             'domain' => ['required', 'string', 'max:253', 'regex:/^([a-z0-9]([a-z0-9\-]*[a-z0-9])?\.)+[a-z]{2,}$/i'],
-            'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
+            'payment_method' => ['nullable', 'string', 'in:mollie,balance'],
             'period_months' => ['required', 'integer', 'in:1,3,6'],
             'accept_tos' => ['required', 'accepted'],
             'accept_early_execution' => ['required', 'accepted'],
@@ -104,7 +104,7 @@ class WebspaceController extends Controller
 
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
-        $paymentMethod = $validated['payment_method'] ?? 'stripe';
+        $paymentMethod = $validated['payment_method'] ?? 'mollie';
 
         if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
             $user = $request->user();

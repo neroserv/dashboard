@@ -159,6 +159,49 @@ test('renew with balance returns error when insufficient balance', function () u
     $response->assertSessionHas('error');
 });
 
+test('renew with mollie redirects to checkout flow', function () use ($billingProfile) {
+    Brand::query()->update(['is_default' => false]);
+    $brand = Brand::create([
+        'key' => 'test-gaming-mollie',
+        'name' => 'Test Gaming Mollie',
+        'domains' => null,
+        'is_default' => true,
+        'features' => ['gaming' => true],
+    ]);
+
+    $user = User::factory()->create(array_merge(['brand_id' => $brand->id], $billingProfile));
+
+    $plan = HostingPlan::create([
+        'brand_id' => $brand->id,
+        'name' => 'Test Game Plan',
+        'plesk_package_name' => null,
+        'panel_type' => 'pterodactyl',
+        'price' => 10.00,
+        'is_active' => true,
+    ]);
+
+    $account = GameServerAccount::create([
+        'user_id' => $user->id,
+        'hosting_plan_id' => $plan->id,
+        'hosting_server_id' => null,
+        'name' => 'Test Server',
+        'status' => 'active',
+        'stripe_subscription_id' => null,
+        'renewal_type' => 'manual',
+        'current_period_ends_at' => now()->addDays(5),
+    ]);
+
+    $this->actingAs($user);
+
+    $response = $this->post(route('gaming-accounts.renew', $account), [
+        'payment_method' => 'mollie',
+        'period_months' => 1,
+    ]);
+
+    $response->assertRedirect();
+    $response->assertSessionHasNoErrors();
+});
+
 test('renew requires account to belong to user', function () use ($billingProfile) {
     Brand::query()->update(['is_default' => false]);
     $brand = Brand::create([

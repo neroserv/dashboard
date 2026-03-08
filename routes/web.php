@@ -398,6 +398,10 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('webspace-accounts/{webspace_account}', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'show'])->name('webspace-accounts.show');
     Route::get('gaming-accounts', [GameServerAccountController::class, 'index'])->name('gaming-accounts.index');
     Route::get('gameserver-cloud-accounts', [GameServerAccountController::class, 'cloudIndex'])->name('gameserver-cloud-accounts.index');
+    Route::get('gameserver-cloud-accounts/{subscription}', [GameServerAccountController::class, 'cloudShow'])->name('gameserver-cloud-accounts.show');
+    Route::put('gameserver-cloud-accounts/{subscription}', [GameServerAccountController::class, 'cloudUpdate'])->name('gameserver-cloud-accounts.update');
+    Route::put('gameserver-cloud-accounts/{subscription}/period-and-status', [GameServerAccountController::class, 'cloudUpdatePeriodAndStatus'])->name('gameserver-cloud-accounts.period-and-status.update');
+    Route::put('gameserver-cloud-accounts/{subscription}/servers/{game_server_account}/resources', [GameServerAccountController::class, 'cloudUpdateServerResources'])->name('gameserver-cloud-accounts.servers.resources.update');
     Route::get('subdomains', [SubdomainsController::class, 'index'])->name('subdomains.index');
     Route::delete('subdomains/{recordId}', [SubdomainsController::class, 'destroy'])->name('subdomains.destroy');
     Route::post('gaming-accounts/{game_server_account}/subscription/cancel', [GameServerAccountController::class, 'cancelSubscription'])->name('gaming-accounts.subscription.cancel');

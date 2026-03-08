@@ -18,27 +18,34 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
-type User = { id: number; name: string; email: string };
-type HostingServer = { id: number; name: string | null; hostname: string } | null;
-type GameserverCloudPlan = { id: number; name: string };
-type GameserverCloudSubscription = {
-    current_period_ends_at: string | null;
-    gameserver_cloud_plan: GameserverCloudPlan;
-};
-
-type GameServerAccount = {
+type User = { id: number; name: string; email: string } | null;
+type GameserverCloudPlan = {
     id: number;
     name: string;
-    identifier: string | null;
-    status: string;
+    config: Record<string, number>;
+};
+
+type Subscription = {
+    id: number;
     user: User;
-    hosting_server: HostingServer;
-    gameserver_cloud_subscription: GameserverCloudSubscription;
+    gameserver_cloud_plan: GameserverCloudPlan;
+    status: string;
+    current_period_ends_at: string | null;
+    used_cpu: number;
+    used_memory_mb: number;
+    used_disk_mb: number;
+    remaining_cpu: number;
+    remaining_memory_mb: number;
+    remaining_disk_mb: number;
+    max_cpu: number;
+    max_memory_mb: number;
+    max_disk_gb: number;
+    servers_count: number;
 };
 
 type Props = {
-    gameServerAccounts: {
-        data: GameServerAccount[];
+    subscriptions: {
+        data: Subscription[];
         links: { url: string | null; label: string; active: boolean }[];
     };
     brandHasGameserverCloud: boolean;
@@ -58,11 +65,13 @@ const handlePagination = (url: string) => {
 const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('de-DE', { timeZone: 'UTC' }) : '–';
 
-const planName = (acc: GameServerAccount) =>
-    acc.gameserver_cloud_subscription?.gameserver_cloud_plan?.name ?? '–';
-
-const periodEnd = (acc: GameServerAccount) =>
-    acc.gameserver_cloud_subscription?.current_period_ends_at ?? null;
+function usageLabel(sub: Subscription): string {
+    const parts: string[] = [];
+    parts.push(`${sub.used_cpu} % CPU`);
+    parts.push(`${Math.round(sub.used_memory_mb / 1024)} GB RAM`);
+    parts.push(`${Math.round(sub.used_disk_mb / 1024)} GB Disk`);
+    return parts.join(' · ');
+}
 </script>
 
 <template>
@@ -73,7 +82,7 @@ const periodEnd = (acc: GameServerAccount) =>
             <div>
                 <Heading level="h1">Gameserver-Cloud-Accounts</Heading>
                 <Text class="mt-2" muted>
-                    Game-Server, die aus einem Gameserver-Cloud-Abo angelegt wurden
+                    Gemietete Clouds (Abos) mit zugehörigen Game-Servern
                 </Text>
             </div>
 
@@ -85,66 +94,62 @@ const periodEnd = (acc: GameServerAccount) =>
 
             <Card v-else>
                 <CardHeader>
-                    <CardTitle>Alle Cloud-Accounts</CardTitle>
-                    <CardDescription>Kunde, Server-Name, Cloud-Plan, Status, Abo-Ende</CardDescription>
+                    <CardTitle>Alle Cloud-Abos</CardTitle>
+                    <CardDescription>
+                        Kunde, Cloud-Plan, Status, Abo-Ende, Verbrauch, Anzahl Server
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Kunde</TableHead>
-                                <TableHead>Server-Name</TableHead>
-                                <TableHead>Identifier</TableHead>
                                 <TableHead>Cloud-Plan</TableHead>
-                                <TableHead>Server</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Abo-Ende</TableHead>
+                                <TableHead>Verbrauch</TableHead>
+                                <TableHead>Server</TableHead>
                                 <TableHead class="text-right">Aktionen</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <TableRow
-                                v-for="acc in props.gameServerAccounts.data"
-                                :key="acc.id"
+                                v-for="sub in props.subscriptions.data"
+                                :key="sub.id"
                             >
                                 <TableCell>
-                                    <div class="font-medium">{{ acc.user.name }}</div>
-                                    <div class="text-sm text-muted-foreground">
-                                        {{ acc.user.email }}
-                                    </div>
-                                </TableCell>
-                                <TableCell>{{ acc.name }}</TableCell>
-                                <TableCell>
-                                    <code
-                                        v-if="acc.identifier"
-                                        class="rounded bg-gray-100 px-2 py-1 text-sm dark:bg-gray-800"
+                                    <div v-if="sub.user" class="font-medium">{{ sub.user.name }}</div>
+                                    <div
+                                        v-if="sub.user"
+                                        class="text-sm text-muted-foreground"
                                     >
-                                        {{ acc.identifier }}
-                                    </code>
+                                        {{ sub.user.email }}
+                                    </div>
                                     <span v-else class="text-muted-foreground">–</span>
                                 </TableCell>
-                                <TableCell>{{ planName(acc) }}</TableCell>
+                                <TableCell>{{ sub.gameserver_cloud_plan?.name ?? '–' }}</TableCell>
                                 <TableCell>
-                                    {{ acc.hosting_server?.name ?? acc.hosting_server?.hostname ?? '–' }}
+                                    <Badge variant="secondary">{{ sub.status }}</Badge>
                                 </TableCell>
-                                <TableCell>
-                                    <Badge variant="secondary">{{ acc.status }}</Badge>
+                                <TableCell>{{ formatDate(sub.current_period_ends_at) }}</TableCell>
+                                <TableCell class="text-sm text-muted-foreground">
+                                    {{ usageLabel(sub) }}
                                 </TableCell>
-                                <TableCell>{{ formatDate(periodEnd(acc)) }}</TableCell>
+                                <TableCell>{{ sub.servers_count }}</TableCell>
                                 <TableCell class="text-right">
-                                    <Link :href="`/admin/gaming-accounts/${acc.id}`">
+                                    <Link :href="`/admin/gameserver-cloud-accounts/${sub.id}`">
                                         <Button variant="ghost" size="sm">
                                             <Eye class="h-4 w-4" />
                                         </Button>
                                     </Link>
                                 </TableCell>
                             </TableRow>
-                            <TableRow v-if="props.gameServerAccounts.data.length === 0">
+                            <TableRow v-if="props.subscriptions.data.length === 0">
                                 <TableCell
-                                    colspan="8"
+                                    colspan="7"
                                     class="text-center text-gray-500 dark:text-gray-400"
                                 >
-                                    Keine Gameserver-Cloud-Accounts vorhanden
+                                    Keine Gameserver-Cloud-Abos vorhanden
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -155,13 +160,13 @@ const periodEnd = (acc: GameServerAccount) =>
             <div
                 v-if="
                     brandHasGameserverCloud &&
-                    props.gameServerAccounts.links &&
-                    props.gameServerAccounts.links.length > 3
+                    props.subscriptions.links &&
+                    props.subscriptions.links.length > 3
                 "
                 class="flex justify-center"
             >
                 <Pagination
-                    :links="props.gameServerAccounts.links"
+                    :links="props.subscriptions.links"
                     @navigate="handlePagination"
                 />
             </div>

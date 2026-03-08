@@ -246,7 +246,7 @@ class GamingController extends Controller
         $validated = $request->validate([
             'hosting_plan_id' => ['required', 'exists:hosting_plans,id'],
             'server_name' => ['nullable', 'string', 'max:255'],
-            'payment_method' => ['nullable', 'string', 'in:stripe,balance'],
+            'payment_method' => ['nullable', 'string', 'in:mollie,balance'],
             'option_choices' => ['nullable', 'array'],
             'option_choices.*' => ['nullable'],
             'period_months' => ['required', 'integer', 'in:1,3,6'],
@@ -276,7 +276,7 @@ class GamingController extends Controller
 
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
-        $paymentMethod = $validated['payment_method'] ?? 'stripe';
+        $paymentMethod = $validated['payment_method'] ?? 'mollie';
 
         if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
             $user = $request->user();

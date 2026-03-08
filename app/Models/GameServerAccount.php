@@ -33,6 +33,7 @@ class GameServerAccount extends Model
         'option_values',
         'custom_monthly_price',
         'allocation',
+        'allocation_manually_set',
     ];
 
     /**
@@ -47,6 +48,7 @@ class GameServerAccount extends Model
             'auto_renew_with_balance' => 'boolean',
             'option_values' => 'array',
             'allocation' => 'array',
+            'allocation_manually_set' => 'boolean',
         ];
     }
 

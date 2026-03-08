@@ -17,19 +17,12 @@ use App\Services\ControlPanels\PterodactylClient;
 use App\Services\GameServerQueryService;
 use App\Services\MollieCustomerService;
 use App\Services\SkrimeApiService;
-use App\Services\SyncHostingPlanStripePriceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Inertia\Response;
-use Laravel\Cashier\Checkout;
 use Mollie\Api\Exceptions\ApiException as MollieApiException;
 use Mollie\Api\MollieApiClient;
-use RuntimeException;
-use Stripe\Checkout\Session as StripeSession;
-use Stripe\Exception\InvalidRequestException;
-use Stripe\StripeClient;
 
 class GamingAccountController extends Controller
 {
@@ -1315,83 +1308,7 @@ class GamingAccountController extends Controller
                 ->with('success', 'Der Game-Server wurde erfolgreich verlängert.');
         }
 
-        $priceId = $plan->stripe_price_id;
-        if (! $priceId) {
-            try {
-                $priceId = app(SyncHostingPlanStripePriceService::class)->ensurePriceId($plan);
-            } catch (RuntimeException $e) {
-                return redirect()
-                    ->route('gaming-accounts.show', $gameServerAccount)
-                    ->with('error', $e->getMessage());
-            }
-        }
-        if (! $priceId) {
-            return redirect()
-                ->route('gaming-accounts.show', $gameServerAccount)
-                ->with('error', 'Kein Stripe-Preis für dieses Paket. Bitte im Admin unter Hosting-Pläne einen Preis angeben.');
-        }
-
-        $metadata = [
-            'type' => 'game_server_renewal',
-            'game_server_account_id' => (string) $gameServerAccount->id,
-            'user_id' => (string) $user->id,
-            'period_months' => (string) $periodMonths,
-        ];
-
-        try {
-            if ($periodMonths === 1) {
-                $checkout = Checkout::customer($user)
-                    ->allowPromotionCodes()
-                    ->create($priceId, [
-                        'mode' => StripeSession::MODE_PAYMENT,
-                        'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                        'cancel_url' => route('gaming-accounts.show', $gameServerAccount),
-                        'metadata' => $metadata,
-                    ]);
-
-                return Inertia::location($checkout->redirect()->getTargetUrl());
-            }
-
-            $stripe = new StripeClient(config('cashier.secret'));
-            $pricePerMonthCents = (int) round((float) $plan->price * 100);
-            $params = [
-                'mode' => StripeSession::MODE_PAYMENT,
-                'success_url' => route('checkout.success').'?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('gaming-accounts.show', $gameServerAccount),
-                'metadata' => $metadata,
-                'line_items' => [
-                    [
-                        'price_data' => [
-                            'currency' => config('cashier.currency', 'eur'),
-                            'unit_amount' => $pricePerMonthCents,
-                            'product_data' => [
-                                'name' => 'Game-Server Verlängerung',
-                                'description' => $periodMonths.' Monat(e) – '.$gameServerAccount->name,
-                            ],
-                        ],
-                        'quantity' => $periodMonths,
-                    ],
-                ],
-            ];
-            if ($user->mollie_customer_id) {
-                $params['customer'] = $user->mollie_customer_id;
-            } else {
-                $params['customer_email'] = $user->email;
-            }
-            $session = $stripe->checkout->sessions->create($params);
-            $url = $session->url ?? null;
-            if (! $url || ! str_starts_with($url, 'https://')) {
-                return redirect()
-                    ->route('gaming-accounts.show', $gameServerAccount)
-                    ->with('error', 'Stripe Checkout konnte nicht erstellt werden.');
-            }
-
-            return Inertia::location($url);
-        } catch (InvalidRequestException $e) {
-            return redirect()
-                ->route('gaming-accounts.show', $gameServerAccount)
-                ->with('error', $e->getMessage());
-        }
+        return app(CheckoutController::class)->buildGamingRenewRedirect($request, $gameServerAccount, $periodMonths);
     }
 
     /**

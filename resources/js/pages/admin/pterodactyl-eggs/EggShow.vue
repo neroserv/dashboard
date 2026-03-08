@@ -35,6 +35,9 @@ type Variable = {
 type Config = {
     variable_defaults: Record<string, string>;
     required_env_variables: string[];
+    optional_env_variables?: string[];
+    variable_titles?: Record<string, string>;
+    variable_descriptions?: Record<string, string>;
     subdomain_srv_protocol: string;
     subdomain_protocol_type: string;
     gameq_type: string;
@@ -81,22 +84,59 @@ for (const v of props.variables) {
     }
 }
 const variableDefaults = ref<Record<string, string>>(initialDefaults);
+const titlesInit: Record<string, string> = {};
+const descriptionsInit: Record<string, string> = {};
+for (const v of props.variables) {
+    titlesInit[v.env_variable] = props.config.variable_titles?.[v.env_variable] ?? '';
+    descriptionsInit[v.env_variable] = props.config.variable_descriptions?.[v.env_variable] ?? '';
+}
+const variableTitles = ref<Record<string, string>>(titlesInit);
+const variableDescriptions = ref<Record<string, string>>(descriptionsInit);
 const requiredEnvVariables = ref<Set<string>>(new Set(props.config.required_env_variables));
+const optionalEnvVariables = ref<Set<string>>(new Set(props.config.optional_env_variables ?? []));
 const subdomainSrvProtocol = ref(props.config.subdomain_srv_protocol);
 const subdomainProtocolType = ref(props.config.subdomain_protocol_type);
 const gameqType = ref(props.config.gameq_type);
 
-const toggleRequired = (envVar: string) => {
-    const set = new Set(requiredEnvVariables.value);
-    if (set.has(envVar)) {
-        set.delete(envVar);
-    } else {
-        set.add(envVar);
-    }
-    requiredEnvVariables.value = set;
-};
+type VariableBehavior = 'service_prefill' | 'user_required' | 'user_optional';
+function getInitialBehavior(envVar: string): VariableBehavior {
+    if (props.config.required_env_variables.includes(envVar)) return 'user_required';
+    if ((props.config.optional_env_variables ?? []).includes(envVar)) return 'user_optional';
+    return 'service_prefill';
+}
 
-const isRequired = (envVar: string) => requiredEnvVariables.value.has(envVar);
+const variableBehavior = ref<Record<string, VariableBehavior>>(
+    Object.fromEntries(props.variables.map((v) => [v.env_variable, getInitialBehavior(v.env_variable)]))
+);
+
+function setVariableBehavior(envVar: string, behavior: VariableBehavior) {
+    variableBehavior.value = { ...variableBehavior.value, [envVar]: behavior };
+    const reqSet = new Set(requiredEnvVariables.value);
+    const optSet = new Set(optionalEnvVariables.value);
+    reqSet.delete(envVar);
+    optSet.delete(envVar);
+    if (behavior === 'user_required') reqSet.add(envVar);
+    else if (behavior === 'user_optional') optSet.add(envVar);
+    requiredEnvVariables.value = reqSet;
+    optionalEnvVariables.value = optSet;
+}
+
+const isRequired = (envVar: string) => variableBehavior.value[envVar] === 'user_required';
+const isOptional = (envVar: string) => variableBehavior.value[envVar] === 'user_optional';
+
+function isBooleanVariable(rules: string): boolean {
+    return rules.toLowerCase().includes('boolean');
+}
+
+function isBooleanDefault(val: string | undefined): boolean {
+    if (val === undefined || val === null) return false;
+    const s = String(val).toLowerCase().trim();
+    return s === '1' || s === 'true' || s === 'yes';
+}
+
+function setBooleanDefault(envVar: string, checked: boolean): void {
+    variableDefaults.value[envVar] = checked ? '1' : '0';
+}
 </script>
 
 <template>
@@ -134,7 +174,7 @@ const isRequired = (envVar: string) => requiredEnvVariables.value.has(envVar);
                     </div>
                     <div v-if="egg.startup" class="rounded bg-muted/50 p-3">
                         <span class="text-xs text-muted-foreground">Startup</span>
-                        <pre class="mt-1 overflow-x-auto text-sm">{{ egg.startup }}</pre>
+                        <pre class="mt-1 max-w-full whitespace-pre-wrap break-words text-sm">{{ egg.startup }}</pre>
                     </div>
                 </CardContent>
             </Card>
@@ -151,7 +191,9 @@ const isRequired = (envVar: string) => requiredEnvVariables.value.has(envVar);
                     <CardHeader>
                         <CardTitle>Service-Variablen</CardTitle>
                         <CardDescription>
-                            Default-Werte werden im Kundenformular vorausgefüllt. „Vom User ausfüllen“ = Pflichtfeld beim Server-Erstellen.
+                            <strong>Durch Service vorbefüllen:</strong> Wert von uns setzen, User sieht das Feld nicht. –
+                            <strong>Vom User ausfüllen (Pflichtfeld):</strong> Kunde muss es beim Server-Erstellen ausfüllen. –
+                            <strong>Vom User ausfüllen (Optional):</strong> Kunde kann es ausfüllen, ist aber nicht verpflichtet.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -166,8 +208,10 @@ const isRequired = (envVar: string) => requiredEnvVariables.value.has(envVar);
                                 <thead>
                                     <tr class="border-b border-gray-200 dark:border-gray-700">
                                         <th class="pb-2 pr-4 text-left font-medium">Variable / Env</th>
-                                        <th class="pb-2 pr-4 text-left font-medium">Default / Prefill</th>
-                                        <th class="pb-2 pr-4 text-left font-medium">Vom User ausfüllen</th>
+                                        <th class="pb-2 pr-4 text-left font-medium">Titel (für User)</th>
+                                        <th class="pb-2 pr-4 text-left font-medium">Beschreibung (für User)</th>
+                                        <th class="pb-2 pr-4 text-left font-medium">Default / Prefill (Service-Wert)</th>
+                                        <th class="pb-2 pr-4 text-left font-medium">Verhalten</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -183,27 +227,101 @@ const isRequired = (envVar: string) => requiredEnvVariables.value.has(envVar);
                                         </td>
                                         <td class="py-3 pr-4">
                                             <Input
-                                                v-if="v.user_editable"
+                                                :name="`config[variable_titles][${v.env_variable}]`"
+                                                v-model="variableTitles[v.env_variable]"
+                                                type="text"
+                                                :placeholder="v.name"
+                                                class="max-w-[180px]"
+                                            />
+                                        </td>
+                                        <td class="py-3 pr-4">
+                                            <textarea
+                                                :name="`config[variable_descriptions][${v.env_variable}]`"
+                                                v-model="variableDescriptions[v.env_variable]"
+                                                rows="2"
+                                                placeholder="Optionale Beschreibung für den User"
+                                                class="flex min-h-[60px] w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            />
+                                        </td>
+                                        <td class="py-3 pr-4">
+                                            <template v-if="isBooleanVariable(v.rules)">
+                                                <input
+                                                    type="hidden"
+                                                    :name="`config[variable_defaults][${v.env_variable}]`"
+                                                    :value="variableDefaults[v.env_variable] ?? '0'"
+                                                />
+                                                <label class="flex cursor-pointer items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        :checked="isBooleanDefault(variableDefaults[v.env_variable])"
+                                                        class="h-4 w-4 rounded border-input"
+                                                        @change="
+                                                            setBooleanDefault(
+                                                                v.env_variable,
+                                                                (($event.target as HTMLInputElement).checked)
+                                                            )
+                                                        "
+                                                    />
+                                                    <span class="text-sm">An</span>
+                                                </label>
+                                            </template>
+                                            <Input
+                                                v-else
                                                 :name="`config[variable_defaults][${v.env_variable}]`"
                                                 v-model="variableDefaults[v.env_variable]"
                                                 type="text"
                                                 :placeholder="v.default_value"
                                                 class="max-w-xs"
                                             />
-                                            <span v-else class="text-muted-foreground">–</span>
                                         </td>
                                         <td class="py-3">
-                                            <label class="flex cursor-pointer items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    :name="`config[required_env_variables][]`"
-                                                    :value="v.env_variable"
-                                                    :checked="isRequired(v.env_variable)"
-                                                    @change="toggleRequired(v.env_variable)"
-                                                    class="rounded border-input"
-                                                />
-                                                <span class="text-sm">Pflichtfeld</span>
-                                            </label>
+                                            <div class="flex flex-col gap-2">
+                                                <label class="flex cursor-pointer items-center gap-2">
+                                                    <input
+                                                        type="radio"
+                                                        :name="`behavior_${v.env_variable}`"
+                                                        value="service_prefill"
+                                                        :checked="variableBehavior[v.env_variable] === 'service_prefill'"
+                                                        class="rounded-full border-input"
+                                                        @change="setVariableBehavior(v.env_variable, 'service_prefill')"
+                                                    />
+                                                    <span class="text-sm">Durch Service vorbefüllen</span>
+                                                </label>
+                                                <label class="flex cursor-pointer items-center gap-2">
+                                                    <input
+                                                        type="radio"
+                                                        :name="`behavior_${v.env_variable}`"
+                                                        value="user_required"
+                                                        :checked="variableBehavior[v.env_variable] === 'user_required'"
+                                                        class="rounded-full border-input"
+                                                        @change="setVariableBehavior(v.env_variable, 'user_required')"
+                                                    />
+                                                    <span class="text-sm">Vom User ausfüllen (Pflichtfeld)</span>
+                                                </label>
+                                                <label class="flex cursor-pointer items-center gap-2">
+                                                    <input
+                                                        type="radio"
+                                                        :name="`behavior_${v.env_variable}`"
+                                                        value="user_optional"
+                                                        :checked="variableBehavior[v.env_variable] === 'user_optional'"
+                                                        class="rounded-full border-input"
+                                                        @change="setVariableBehavior(v.env_variable, 'user_optional')"
+                                                    />
+                                                    <span class="text-sm">Vom User ausfüllen (Optional)</span>
+                                                </label>
+                                            </div>
+                                            <input
+                                                v-if="variableBehavior[v.env_variable] === 'user_required'"
+                                                type="hidden"
+                                                :name="`config[required_env_variables][]`"
+                                                :value="v.env_variable"
+                                            />
+                                            <input
+                                                v-if="variableBehavior[v.env_variable] === 'user_optional'"
+                                                type="hidden"
+                                                :name="`config[optional_env_variables][]`"
+                                                :value="v.env_variable"
+                                            />
                                         </td>
                                     </tr>
                                 </tbody>

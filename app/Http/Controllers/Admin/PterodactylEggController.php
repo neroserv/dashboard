@@ -160,6 +160,9 @@ class PterodactylEggController extends Controller
         $config = $eggConfig?->config ?? [];
         $variableDefaults = $config['variable_defaults'] ?? [];
         $requiredEnvVariables = $config['required_env_variables'] ?? [];
+        $optionalEnvVariables = $config['optional_env_variables'] ?? [];
+        $variableTitles = $config['variable_titles'] ?? [];
+        $variableDescriptions = $config['variable_descriptions'] ?? [];
         $gameqType = (string) ($config['gameq_type'] ?? '');
 
         $nestName = 'Nest '.$nest;
@@ -189,6 +192,9 @@ class PterodactylEggController extends Controller
             'config' => [
                 'variable_defaults' => $variableDefaults,
                 'required_env_variables' => $requiredEnvVariables,
+                'optional_env_variables' => $optionalEnvVariables,
+                'variable_titles' => $variableTitles,
+                'variable_descriptions' => $variableDescriptions,
                 'subdomain_srv_protocol' => (string) ($config['subdomain_srv_protocol'] ?? ''),
                 'subdomain_protocol_type' => (string) ($config['subdomain_protocol_type'] ?? 'none'),
                 'gameq_type' => $gameqType,
@@ -208,6 +214,9 @@ class PterodactylEggController extends Controller
         $config = $request->validated('config') ?? [];
         $config['variable_defaults'] = $config['variable_defaults'] ?? [];
         $config['required_env_variables'] = $config['required_env_variables'] ?? [];
+        $config['optional_env_variables'] = $config['optional_env_variables'] ?? [];
+        $config['variable_titles'] = $config['variable_titles'] ?? [];
+        $config['variable_descriptions'] = $config['variable_descriptions'] ?? [];
         $config['subdomain_srv_protocol'] = $config['subdomain_srv_protocol'] ?? '';
         $config['subdomain_protocol_type'] = $config['subdomain_protocol_type'] ?? 'none';
         $config['gameq_type'] = $config['gameq_type'] ?? '';

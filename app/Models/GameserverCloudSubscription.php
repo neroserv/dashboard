@@ -14,6 +14,11 @@ class GameserverCloudSubscription extends Model
     protected $fillable = [
         'user_id',
         'gameserver_cloud_plan_id',
+        'plan_display_user_defined',
+        'custom_max_cpu',
+        'custom_max_memory_mb',
+        'custom_max_disk_gb',
+        'custom_price',
         'mollie_subscription_id',
         'mollie_payment_id',
         'current_period_ends_at',
@@ -30,6 +35,8 @@ class GameserverCloudSubscription extends Model
     {
         return [
             'current_period_ends_at' => 'datetime',
+            'plan_display_user_defined' => 'boolean',
+            'custom_price' => 'decimal:2',
             'cancel_at_period_end' => 'boolean',
             'ends_at' => 'datetime',
             'auto_renew_with_balance' => 'boolean',
@@ -90,29 +97,60 @@ class GameserverCloudSubscription extends Model
         });
     }
 
+    public function getEffectiveMaxCpu(): int
+    {
+        if ($this->plan_display_user_defined && $this->custom_max_cpu !== null) {
+            return (int) $this->custom_max_cpu;
+        }
+        $config = $this->gameserverCloudPlan?->config ?? [];
+
+        return (int) ($config['max_cpu'] ?? 0);
+    }
+
+    public function getEffectiveMaxMemoryMb(): int
+    {
+        if ($this->plan_display_user_defined && $this->custom_max_memory_mb !== null) {
+            return (int) $this->custom_max_memory_mb;
+        }
+        $config = $this->gameserverCloudPlan?->config ?? [];
+
+        return (int) ($config['max_memory_mb'] ?? 0);
+    }
+
+    public function getEffectiveMaxDiskMb(): int
+    {
+        if ($this->plan_display_user_defined && $this->custom_max_disk_gb !== null) {
+            return (int) $this->custom_max_disk_gb * 1024;
+        }
+        $config = $this->gameserverCloudPlan?->config ?? [];
+        $maxGb = (int) ($config['max_disk_gb'] ?? 0);
+
+        return $maxGb * 1024;
+    }
+
     public function getRemainingCpu(): int
     {
-        $config = $this->gameserverCloudPlan->config ?? [];
-        $max = (int) ($config['max_cpu'] ?? 0);
-
-        return max(0, $max - $this->getUsedCpu());
+        return max(0, $this->getEffectiveMaxCpu() - $this->getUsedCpu());
     }
 
     public function getRemainingMemoryMb(): int
     {
-        $config = $this->gameserverCloudPlan->config ?? [];
-        $max = (int) ($config['max_memory_mb'] ?? 0);
-
-        return max(0, $max - $this->getUsedMemoryMb());
+        return max(0, $this->getEffectiveMaxMemoryMb() - $this->getUsedMemoryMb());
     }
 
     public function getRemainingDiskMb(): int
     {
-        $config = $this->gameserverCloudPlan->config ?? [];
-        $maxGb = (int) ($config['max_disk_gb'] ?? 0);
-        $maxMb = $maxGb * 1024;
+        return max(0, $this->getEffectiveMaxDiskMb() - $this->getUsedDiskMb());
+    }
 
-        return max(0, $maxMb - $this->getUsedDiskMb());
+    public function getDisplayPrice(): ?float
+    {
+        if ($this->plan_display_user_defined && $this->custom_price !== null) {
+            return (float) $this->custom_price;
+        }
+        $plan = $this->gameserverCloudPlan;
+
+        return $plan !== null ? (float) $plan->price : null;
     }
 
     public function isSuspendedOrExpired(): bool

@@ -67,7 +67,7 @@ const molliePaymentMethods = computed(
         ],
 );
 
-const paymentMethod = ref<'stripe' | 'balance'>('stripe');
+const paymentMethod = ref<'mollie' | 'balance'>('mollie');
 const selectedPlanId = ref<string>(String(props.selectedPlan?.id ?? ''));
 const optionChoices = ref<Record<string, string | number>>({});
 
@@ -440,7 +440,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         <p class="text-sm font-medium">Zahlungsart</p>
                                         <label class="flex cursor-pointer flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                             <div class="flex items-center gap-2">
-                                                <input v-model="paymentMethod" type="radio" name="payment_method" value="stripe" class="h-4 w-4 border-input text-primary" />
+                                                <input v-model="paymentMethod" type="radio" name="payment_method" value="mollie" class="h-4 w-4 border-input text-primary" />
                                                 <span class="text-sm font-medium">Karte, PayPal, SEPA, …</span>
                                             </div>
                                             <div class="flex flex-wrap gap-2 pl-6">

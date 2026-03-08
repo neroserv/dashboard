@@ -155,7 +155,7 @@ class GameserverCloudSubscriptionController extends Controller
                 'plan' => [
                     'id' => $plan->id,
                     'name' => $plan->name,
-                    'price' => (string) $plan->price,
+                    'price' => (string) ($subscription->getDisplayPrice() ?? $plan->price),
                     'config' => $config,
                 ],
                 'nests' => $nests,
@@ -225,6 +225,9 @@ class GameserverCloudSubscriptionController extends Controller
         $config = $eggConfig?->config ?? [];
         $variableDefaults = $config['variable_defaults'] ?? [];
         $requiredEnvVariables = array_flip($config['required_env_variables'] ?? []);
+        $optionalEnvVariables = array_flip($config['optional_env_variables'] ?? []);
+        $variableTitles = $config['variable_titles'] ?? [];
+        $variableDescriptions = $config['variable_descriptions'] ?? [];
 
         $variablesData = $eggData['attributes']['relationships']['variables']['data']
             ?? $eggData['relationships']['variables']['data']
@@ -237,15 +240,26 @@ class GameserverCloudSubscriptionController extends Controller
                 continue;
             }
             $defaultValue = $variableDefaults[$envVar] ?? $va['default_value'] ?? '';
+            $pterodactylName = (string) ($va['name'] ?? '');
+            $rules = (string) ($va['rules'] ?? '');
+            $isBoolean = str_contains(strtolower($rules), 'boolean');
             $variables[] = [
                 'id' => (int) ($va['id'] ?? 0),
-                'name' => (string) ($va['name'] ?? ''),
+                'name' => $pterodactylName,
                 'env_variable' => $envVar,
                 'default_value' => $defaultValue,
-                'rules' => (string) ($va['rules'] ?? ''),
+                'rules' => $rules,
+                'is_boolean' => $isBoolean,
                 'user_viewable' => (bool) ($va['user_viewable'] ?? true),
                 'user_editable' => (bool) ($va['user_editable'] ?? true),
                 'required_from_user' => isset($requiredEnvVariables[$envVar]),
+                'optional_from_user' => isset($optionalEnvVariables[$envVar]),
+                'display_title' => isset($variableTitles[$envVar]) && trim((string) $variableTitles[$envVar]) !== ''
+                    ? trim((string) $variableTitles[$envVar])
+                    : $pterodactylName,
+                'display_description' => isset($variableDescriptions[$envVar]) && trim((string) $variableDescriptions[$envVar]) !== ''
+                    ? trim((string) $variableDescriptions[$envVar])
+                    : '',
             ];
         }
 
@@ -335,6 +349,7 @@ class GameserverCloudSubscriptionController extends Controller
             ->where('egg_id', $eggId)
             ->first();
         $eggConfigData = $eggConfig?->config ?? [];
+        $variableDefaults = $eggConfigData['variable_defaults'] ?? [];
         $requiredEnvVars = $eggConfigData['required_env_variables'] ?? [];
         if (is_array($requiredEnvVars) && count($requiredEnvVars) > 0) {
             foreach ($requiredEnvVars as $key) {
@@ -352,6 +367,8 @@ class GameserverCloudSubscriptionController extends Controller
                 }
             }
         }
+
+        $environment = array_merge(is_array($variableDefaults) ? $variableDefaults : [], $environment);
 
         $customSubdomain = $request->input('custom_subdomain') ? trim((string) $request->input('custom_subdomain')) : null;
         $srvProtocol = (string) ($eggConfigData['subdomain_srv_protocol'] ?? '');
@@ -644,7 +661,8 @@ class GameserverCloudSubscriptionController extends Controller
 
         $periodMonths = (int) $validated['period_months'];
         $plan = $subscription->gameserverCloudPlan;
-        $amount = round((float) $plan->price * $periodMonths, 2);
+        $pricePerMonth = $subscription->getDisplayPrice() ?? (float) $plan->price;
+        $amount = round($pricePerMonth * $periodMonths, 2);
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
         $paymentMethod = $validated['payment_method'] ?? 'mollie';

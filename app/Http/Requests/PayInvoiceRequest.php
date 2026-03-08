@@ -17,7 +17,7 @@ class PayInvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'payment_method' => ['required', 'string', 'in:stripe,balance'],
+            'payment_method' => ['required', 'string', 'in:mollie,balance'],
         ];
     }
 }

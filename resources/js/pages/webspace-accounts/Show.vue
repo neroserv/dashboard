@@ -199,9 +199,10 @@ function resourcePercent(used: number, limit: number): number {
                         </a>
                         <template v-if="canRenew && renewUrl">
                             <Button
+                                type="button"
                                 variant="default"
                                 class="w-full justify-start gap-2"
-                                @click="renewModalOpen = true"
+                                @click.prevent="renewModalOpen = true"
                             >
                                 <CalendarPlus class="h-4 w-4" />
                                 Verlängern
@@ -561,7 +562,7 @@ function resourcePercent(used: number, limit: number): number {
 
         <PaymentMethodModal
             v-if="canRenew && renewUrl"
-            :open="renewModalOpen"
+            v-model:open="renewModalOpen"
             :amount="renewalAmount"
             title="Verlängerung bezahlen"
             description="Webspace verlängern."
@@ -570,7 +571,6 @@ function resourcePercent(used: number, limit: number): number {
             :submit-url="renewUrl"
             :period-options="renewalPeriodOptions"
             :base-amount-per-month="renewalAmount"
-            @update:open="renewModalOpen = $event"
         />
         <AutoRenewModal
             v-if="showAutoRenewButton"

@@ -1278,6 +1278,70 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Build Mollie payment for single game server (prepaid) renewal.
+     */
+    public function buildGamingRenewRedirect(Request $request, GameServerAccount $gameServerAccount, int $periodMonths): RedirectResponse|InertiaResponse
+    {
+        if ($gameServerAccount->user_id !== $request->user()->id) {
+            abort(404);
+        }
+
+        if (! $this->isMollieConfigured()) {
+            return redirect()->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Mollie ist nicht konfiguriert.');
+        }
+
+        $amount = round($gameServerAccount->getMonthlyRenewalAmount() * $periodMonths, 2);
+        if ($amount <= 0) {
+            return redirect()->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', 'Kein gültiger Preis für Verlängerung.');
+        }
+
+        $user = $request->user();
+        $metadata = [
+            'type' => 'game_server_renewal',
+            'game_server_account_id' => (string) $gameServerAccount->id,
+            'user_id' => (string) $user->id,
+            'period_months' => (string) $periodMonths,
+        ];
+        $currency = strtoupper(config('cashier.currency', 'eur'));
+
+        try {
+            $mollie = app(MollieApiClient::class);
+            $params = [
+                'amount' => [
+                    'currency' => $currency,
+                    'value' => number_format($amount, 2, '.', ''),
+                ],
+                'description' => 'Game-Server Verlängerung: '.$gameServerAccount->name.' ('.$periodMonths.' Monat(e))',
+                'redirectUrl' => route('checkout.success'),
+                'metadata' => $metadata,
+            ];
+            $params['customerId'] = app(MollieCustomerService::class)->ensureCustomer($user);
+            $webhookUrl = MollieWebhookUrl::get();
+            if ($webhookUrl !== null) {
+                $params['webhookUrl'] = $webhookUrl;
+            }
+            $payment = $mollie->payments->create($params);
+            $request->session()->put('pending_mollie_payment_id', $payment->id);
+            $checkoutUrl = $payment->getCheckoutUrl();
+            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
+                return redirect()->route('gaming-accounts.show', $gameServerAccount)
+                    ->with('error', 'Mollie Checkout lieferte keine gültige URL.');
+            }
+            $request->session()->put('mollie_checkout_redirect_url', $checkoutUrl);
+
+            return redirect()->route('checkout.redirect-to-mollie');
+        } catch (\Throwable $e) {
+            Log::error('Gaming renew Mollie error', ['message' => $e->getMessage()]);
+            report($e);
+
+            return redirect()->route('gaming-accounts.show', $gameServerAccount)
+                ->with('error', $this->getCheckoutErrorMessage($e));
+        }
+    }
+
+    /**
      * Build Mollie payment for Gameserver Cloud subscription renewal.
      */
     public function buildCloudGamingRenewRedirect(Request $request, GameserverCloudSubscription $subscription, int $periodMonths): RedirectResponse|InertiaResponse

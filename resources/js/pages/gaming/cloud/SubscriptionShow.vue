@@ -151,8 +151,22 @@ type EggVariable = {
     user_viewable: boolean;
     user_editable: boolean;
     required_from_user: boolean;
+    optional_from_user?: boolean;
+    display_title?: string;
+    display_description?: string;
+    is_boolean?: boolean;
 };
 const eggVariables = ref<EggVariable[]>([]);
+
+function isBooleanEnvValue(val: string | undefined): boolean {
+    if (val === undefined || val === null) return false;
+    const s = String(val).toLowerCase().trim();
+    return s === '1' || s === 'true' || s === 'yes';
+}
+
+function setBooleanEnv(envVar: string, checked: boolean): void {
+    createServer.value.environment[envVar] = checked ? '1' : '0';
+}
 const eggVariablesLoading = ref(false);
 
 function eggVariablesUrl() {
@@ -177,7 +191,11 @@ async function fetchEggVariables() {
         eggVariables.value = vars;
         const env = { ...createServer.value.environment };
         for (const v of vars) {
-            if (v.env_variable && (env[v.env_variable] === undefined || env[v.env_variable] === '')) {
+            if (!v.env_variable) continue;
+            if (env[v.env_variable] !== undefined && env[v.env_variable] !== '') continue;
+            if (v.is_boolean) {
+                env[v.env_variable] = isBooleanEnvValue(v.default_value) ? '1' : '0';
+            } else {
                 env[v.env_variable] = v.default_value ?? '';
             }
         }
@@ -423,17 +441,15 @@ function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart')
                                 Zurück
                             </Button>
                         </Link>
-                        <a
+                        <Button
                             v-if="subscription.status === 'active'"
-                            href="#renew"
-                            class="inline-flex"
-                            @click.prevent="document.getElementById('renew')?.scrollIntoView({ behavior: 'smooth' })"
+                            size="sm"
+                            class="gap-1.5"
+                            @click="renewModalOpen = true"
                         >
-                            <Button size="sm" class="gap-1.5">
-                                <RefreshCw class="h-4 w-4" />
-                                Verlängern
-                            </Button>
-                        </a>
+                            <RefreshCw class="h-4 w-4" />
+                            Verlängern
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
@@ -594,23 +610,70 @@ function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart')
                                         <Gamepad2 class="h-4 w-4" />
                                         Egg-Einstellungen
                                     </h6>
-                                    <div class="grid gap-4 sm:grid-cols-2">
+                                    <p
+                                        v-if="
+                                            eggVariables.filter(
+                                                (x) => x.required_from_user || x.optional_from_user
+                                            ).length === 0
+                                        "
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        Alle Variablen werden durch uns vorbefüllt – keine Angaben nötig.
+                                    </p>
+                                    <div
+                                        v-else
+                                        class="grid gap-4 sm:grid-cols-2"
+                                    >
                                         <div
-                                            v-for="v in eggVariables.filter((x) => x.user_editable)"
+                                            v-for="v in eggVariables.filter(
+                                                (x) => x.required_from_user || x.optional_from_user
+                                            )"
                                             :key="v.id"
                                             class="space-y-2"
                                         >
                                             <Label :for="`env_${v.env_variable}`">
-                                                {{ v.name }}
+                                                {{ v.display_title ?? v.name }}
                                                 <Badge
                                                     v-if="v.required_from_user"
-                                                    variant="destructive"
-                                                    class="ml-1 text-xs"
+                                                    variant="error"
+                                                    size="sm"
+                                                    class="ml-1"
                                                 >
                                                     Erforderlich
                                                 </Badge>
+                                                <Badge
+                                                    v-else-if="v.optional_from_user"
+                                                    variant="secondary"
+                                                    class="ml-1 text-xs"
+                                                >
+                                                    Optional
+                                                </Badge>
                                             </Label>
+                                            <p
+                                                v-if="v.display_description"
+                                                class="mb-1 text-xs text-muted-foreground"
+                                            >
+                                                {{ v.display_description }}
+                                            </p>
+                                            <template v-if="v.is_boolean">
+                                                <label class="flex cursor-pointer items-center gap-2">
+                                                    <input
+                                                        :id="`env_${v.env_variable}`"
+                                                        type="checkbox"
+                                                        :checked="isBooleanEnvValue(createServer.environment[v.env_variable])"
+                                                        class="h-4 w-4 rounded border-input"
+                                                        @change="
+                                                            setBooleanEnv(
+                                                                v.env_variable,
+                                                                (($event.target as HTMLInputElement).checked)
+                                                            )
+                                                        "
+                                                    />
+                                                    <span class="text-sm">Aktivieren</span>
+                                                </label>
+                                            </template>
                                             <Input
+                                                v-else
                                                 :id="`env_${v.env_variable}`"
                                                 v-model="createServer.environment[v.env_variable]"
                                                 :placeholder="v.default_value"
@@ -717,7 +780,7 @@ function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart')
                                     <div class="space-y-2">
                                         <Label for="fivem_license">
                                             CFX.re License Key
-                                            <Badge variant="destructive" class="ml-1 text-xs">Erforderlich</Badge>
+                                            <Badge variant="error" size="sm" class="ml-1">Erforderlich</Badge>
                                         </Label>
                                         <Input
                                             id="fivem_license"
@@ -1083,7 +1146,18 @@ function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart')
                             </div>
                             <Button
                                 v-if="subscription.status === 'active'"
+                                variant="default"
+                                type="button"
+                                class="w-full justify-start gap-2"
+                                @click="renewModalOpen = true"
+                            >
+                                <RefreshCw class="h-4 w-4" />
+                                Verlängern
+                            </Button>
+                            <Button
+                                v-if="subscription.status === 'active'"
                                 variant="outline"
+                                type="button"
                                 class="w-full justify-start gap-2"
                                 @click="autoRenewModalOpen = true"
                             >

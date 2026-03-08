@@ -52,7 +52,7 @@ const molliePaymentMethods = computed(
         ],
 );
 
-const paymentMethod = ref<'stripe' | 'balance'>('stripe');
+const paymentMethod = ref<'mollie' | 'balance'>('mollie');
 const submitting = ref(false);
 const selectedPeriodMonths = ref(1);
 
@@ -107,7 +107,7 @@ watch(
     (isOpen) => {
         if (isOpen) {
             selectedPeriodMonths.value = props.periodOptions?.[0]?.months ?? 1;
-            paymentMethod.value = props.canPayWithBalance && canSubmitBalance.value ? 'balance' : 'stripe';
+            paymentMethod.value = props.canPayWithBalance && canSubmitBalance.value ? 'balance' : 'mollie';
         }
     },
 );
@@ -147,14 +147,14 @@ watch(
                 <div class="space-y-3">
                     <label
                         class="flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                        :class="paymentMethod === 'stripe' && 'border-primary bg-primary/5 ring-1 ring-primary'"
+                        :class="paymentMethod === 'mollie' && 'border-primary bg-primary/5 ring-1 ring-primary'"
                     >
                         <div class="flex items-center gap-2">
                             <input
                                 v-model="paymentMethod"
                                 type="radio"
                                 name="payment_method_modal"
-                                value="stripe"
+                                value="mollie"
                                 class="h-4 w-4"
                             />
                             <span class="text-sm font-medium">Karte, PayPal, SEPA, …</span>
