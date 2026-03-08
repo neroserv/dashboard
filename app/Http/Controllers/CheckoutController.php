@@ -159,7 +159,7 @@ class CheckoutController extends Controller
      */
     public function redirectToStripe(Request $request): RedirectResponse|Response|InertiaResponse
     {
-        $url = $request->session()->pull('stripe_checkout_redirect_url') ?? $request->session()->pull('mollie_checkout_redirect_url');
+        $url = $request->session()->pull('mollie_checkout_redirect_url');
         if (! $url || ! str_starts_with($url, 'https://')) {
             return redirect()->route('webspace.index')->with('error', 'Weiterleitung zur Zahlung fehlgeschlagen. Bitte versuchen Sie es erneut.');
         }

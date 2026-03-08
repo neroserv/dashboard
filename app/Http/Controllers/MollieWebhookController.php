@@ -10,9 +10,11 @@ use App\Models\TeamSpeakServerAccount;
 use App\Models\User;
 use App\Models\WebspaceAccount;
 use App\Notifications\InvoiceCreatedNotification;
+use App\Services\AiTokenService;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
@@ -25,7 +27,8 @@ class MollieWebhookController extends CashierWebhookController
     public function __construct(
         \Laravel\Cashier\Mollie\Contracts\GetMolliePayment $getMolliePayment,
         protected InvoicePdfService $invoicePdfService,
-        protected InvoiceEInvoiceService $invoiceEInvoiceService
+        protected InvoiceEInvoiceService $invoiceEInvoiceService,
+        protected AiTokenService $aiTokenService
     ) {
         parent::__construct($getMolliePayment);
     }
@@ -45,6 +48,7 @@ class MollieWebhookController extends CashierWebhookController
         }
 
         $metadataArray = $payment->metadata !== null ? (is_array($payment->metadata) ? $payment->metadata : (array) $payment->metadata) : [];
+        Cache::put('mollie_last_webhook_at', now()->toIso8601String(), now()->addDays(30));
         Log::info('Mollie webhook: payment received', [
             'id' => $payment->id,
             'status' => $payment->status,
@@ -55,7 +59,9 @@ class MollieWebhookController extends CashierWebhookController
             if ($this->handlePrepaidSubscriptionPayment($payment)) {
                 return new Response(null, 200);
             }
-            $handled = $this->handleBalanceTopUp($payment) || $this->handleInvoicePayment($payment);
+            $handled = $this->handleBalanceTopUp($payment)
+                || $this->handleAiTokenPayment($payment)
+                || $this->handleInvoicePayment($payment);
             if ($handled) {
                 return new Response(null, 200);
             }
@@ -315,6 +321,100 @@ class MollieWebhookController extends CashierWebhookController
         }
 
         Log::info('Mollie webhook: invoice payment processed', ['invoice_id' => $invoice->id, 'payment_id' => $payment->id]);
+
+        return true;
+    }
+
+    /**
+     * Process AI token purchase (metadata type = ai_tokens). Returns true if handled.
+     */
+    protected function handleAiTokenPayment(Payment $payment): bool
+    {
+        $metadata = $payment->metadata;
+        $meta = $metadata !== null ? (is_array($metadata) ? $metadata : (array) $metadata) : [];
+        if (($meta['type'] ?? null) !== 'ai_tokens') {
+            return false;
+        }
+
+        $userId = $meta['user_id'] ?? null;
+        $tokenAmount = isset($meta['token_amount']) ? (int) $meta['token_amount'] : 0;
+        if (! $userId || $tokenAmount <= 0) {
+            Log::warning('Mollie webhook ai_tokens: missing user_id or token_amount', [
+                'payment_id' => $payment->id,
+                'metadata' => $meta,
+            ]);
+
+            return true;
+        }
+
+        if (Invoice::where('mollie_payment_id', $payment->id)->exists()) {
+            Log::debug('Mollie webhook ai_tokens: already processed', ['payment_id' => $payment->id]);
+
+            return true;
+        }
+
+        $user = User::find($userId);
+        if (! $user) {
+            Log::warning('Mollie webhook ai_tokens: user not found', ['user_id' => $userId, 'payment_id' => $payment->id]);
+
+            return true;
+        }
+
+        $amountEur = (float) ($payment->amount->value ?? 0);
+
+        $invoice = DB::transaction(function () use ($payment, $user, $tokenAmount, $amountEur) {
+            $year = date('Y');
+            $nextSeq = (int) Invoice::whereYear('invoice_date', $year)->max('id') + 1;
+            $number = 'INV-'.$year.'-'.str_pad((string) $nextSeq, 5, '0', STR_PAD_LEFT);
+
+            $invoice = Invoice::create([
+                'user_id' => $user->id,
+                'site_subscription_id' => null,
+                'mollie_payment_id' => $payment->id,
+                'number' => $number,
+                'type' => 'ai_tokens',
+                'amount' => $amountEur,
+                'tax' => 0,
+                'status' => 'paid',
+                'billing_period_start' => null,
+                'billing_period_end' => null,
+                'invoice_date' => now(),
+                'metadata' => ['mollie_payment_id' => $payment->id],
+            ]);
+
+            $this->aiTokenService->addFromPurchase($user, $tokenAmount, 'AI-Token-Paket gekauft (Mollie)');
+
+            return $invoice;
+        });
+
+        try {
+            $pdfPath = $this->invoicePdfService->generate($invoice);
+            if ($pdfPath) {
+                $invoice->update(['pdf_path' => $pdfPath]);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+        try {
+            $xmlPath = $this->invoiceEInvoiceService->generate($invoice);
+            if ($xmlPath) {
+                $invoice->update(['invoice_xml_path' => $xmlPath]);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+        try {
+            $invoice->user->notify(new InvoiceCreatedNotification($invoice));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        Log::info('Mollie webhook: AI token purchase processed', [
+            'user_id' => $user->id,
+            'token_amount' => $tokenAmount,
+            'invoice_id' => $invoice->id,
+            'payment_id' => $payment->id,
+        ]);
 
         return true;
     }

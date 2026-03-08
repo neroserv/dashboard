@@ -9,7 +9,7 @@ defineProps<{
 
 <template>
     <CardHeader class="py-3">
-        <CardTitle class="text-sm font-medium">Stripe Webhook</CardTitle>
+        <CardTitle class="text-sm font-medium">Mollie Webhook</CardTitle>
         <CardDescription>Letzter empfangener Webhook</CardDescription>
     </CardHeader>
     <CardContent class="pt-0">

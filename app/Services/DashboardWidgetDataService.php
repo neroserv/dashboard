@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Listeners\LogStripeWebhookReceived;
 use App\Models\AdminActivityLog;
 use App\Models\CronDailyStats;
 use App\Models\DiscountCode;
@@ -65,7 +64,7 @@ class DashboardWidgetDataService
             ],
             'open-dunning-invoices' => $this->openDunningInvoices(),
             'invoice-status-pie' => $this->invoiceStatusPie(),
-            'last-stripe-webhook' => [
+            'last-mollie-webhook' => [
                 'minutesAgo' => $this->lastWebhookMinutesAgo(),
             ],
             'active-subscriptions' => [
@@ -204,7 +203,7 @@ class DashboardWidgetDataService
 
     private function lastWebhookMinutesAgo(): ?int
     {
-        $at = Cache::get(LogStripeWebhookReceived::CACHE_KEY);
+        $at = Cache::get('mollie_last_webhook_at');
 
         return $at ? (int) Carbon::parse($at)->diffInMinutes(now()) : null;
     }

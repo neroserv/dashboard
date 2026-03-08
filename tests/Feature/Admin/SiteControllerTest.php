@@ -62,9 +62,8 @@ test('admin users can update site subscription period end locally', function () 
     $site = Site::factory()->create();
     $sub = SiteSubscription::create([
         'site_id' => $site->id,
-        'stripe_subscription_id' => 'sub_test',
-        'stripe_price_id' => 'price_test',
-        'stripe_status' => 'active',
+        'mollie_subscription_id' => 'sub_test',
+        'mollie_status' => 'active',
         'current_period_ends_at' => Carbon::now()->addMonth(),
         'cancel_at_period_end' => false,
     ]);

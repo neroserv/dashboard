@@ -165,10 +165,10 @@
                 <div class="mt-4 space-y-3">
                     <form method="post" action="{{ $payInvoiceUrl }}" class="block">
                         @csrf
-                        <input type="hidden" name="payment_method" value="stripe" />
+                        <input type="hidden" name="payment_method" value="mollie" />
                         <button type="submit" class="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-gray-200 p-4 text-left transition-colors hover:bg-gray-50">
-                            <img src="https://logo.svgcdn.com/l/stripe.svg" alt="Stripe" class="h-5 w-5 object-contain opacity-90" />
-                            <span class="text-sm font-medium">Mit Stripe zahlen (Karte, SEPA, Apple Pay, …)</span>
+                            <img src="https://logo.svgcdn.com/l/mollie.svg" alt="Mollie" class="h-5 w-5 object-contain opacity-90" />
+                            <span class="text-sm font-medium">Mit Karte, SEPA, Apple Pay, … zahlen (Mollie)</span>
                         </button>
                     </form>
 

@@ -12,7 +12,7 @@ import type { BreadcrumbItem } from '@/types';
 
 type SiteSubscription = {
     id: number;
-    stripe_status: string;
+    mollie_status: string;
     current_period_ends_at: string | null;
 };
 

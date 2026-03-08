@@ -36,4 +36,20 @@ return [
 
     'remote' => env('UPDATE_REMOTE', 'origin'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | GitHub API (optional)
+    |--------------------------------------------------------------------------
+    |
+    | If set, the panel update page uses the GitHub API to show the latest
+    | commit on the branch and whether an update is available, instead of
+    | relying on git fetch (which may fail on the server). Set to "owner/repo"
+    | or leave null to auto-detect from git remote origin URL.
+    |
+    */
+
+    'github_repo' => env('UPDATE_GITHUB_REPO'),
+
+    'github_token' => env('UPDATE_GITHUB_TOKEN'),
+
 ];

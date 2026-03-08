@@ -13,7 +13,7 @@ import type { BreadcrumbItem } from '@/types';
 
 type SiteSubscription = {
     id: number;
-    stripe_status: string;
+    mollie_status: string;
     current_period_ends_at: string | null;
     cancel_at_period_end: boolean;
 };
@@ -88,7 +88,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 <TableCell>
                                     <template v-if="site.site_subscription">
                                         <span
-                                            v-if="site.site_subscription.stripe_status === 'active' && !site.site_subscription.cancel_at_period_end"
+                                            v-if="site.site_subscription.mollie_status === 'active' && !site.site_subscription.cancel_at_period_end"
                                             class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400"
                                         >
                                             Aktiv
@@ -103,7 +103,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                             v-else
                                             class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-800 dark:text-gray-400"
                                         >
-                                            {{ site.site_subscription.stripe_status }}
+                                            {{ site.site_subscription.mollie_status }}
                                         </span>
                                     </template>
                                     <span v-else class="text-muted">–</span>

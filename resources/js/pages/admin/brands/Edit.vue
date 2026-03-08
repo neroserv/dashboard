@@ -291,7 +291,7 @@ const submit = () => {
                         </div>
                         <div class="flex items-center gap-2">
                             <Checkbox id="feat_balance_topup" v-model="form.feature_balance_topup" />
-                            <Label for="feat_balance_topup">Selbstaufladung (Guthaben per Stripe aufladen)</Label>
+                            <Label for="feat_balance_topup">Selbstaufladung (Guthaben per Mollie aufladen)</Label>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
                             <Label for="balance_period_months" class="shrink-0">Vertragslaufzeit bei Guthaben-Zahlung (Monate)</Label>

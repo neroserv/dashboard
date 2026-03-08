@@ -25,7 +25,7 @@ import type { BreadcrumbItem } from '@/types';
 
 type SiteSubscription = {
     id: number;
-    stripe_status: string;
+    mollie_status: string;
     current_period_ends_at: string | null;
     current_period_ends_at_formatted: string | null;
     current_period_ends_at_date: string | null;
@@ -186,15 +186,15 @@ onMounted(() => {
             <Card>
                 <CardHeader>
                     <CardTitle>Abo</CardTitle>
-                    <CardDescription>Stripe-Status, Laufzeitende, Kündigung</CardDescription>
+                    <CardDescription>Mollie-Status, Laufzeitende, Kündigung</CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-3">
                     <template v-if="site.site_subscription">
                         <div class="grid gap-2 sm:grid-cols-2">
                             <div>
-                                <Text variant="small" muted>Stripe-Status</Text>
-                                <Badge :variant="site.site_subscription.stripe_status === 'active' ? 'success' : 'secondary'">
-                                    {{ site.site_subscription.stripe_status }}
+                                <Text variant="small" muted>Mollie-Status</Text>
+                                <Badge :variant="site.site_subscription.mollie_status === 'active' ? 'success' : 'secondary'">
+                                    {{ site.site_subscription.mollie_status }}
                                 </Badge>
                             </div>
                             <div>
@@ -207,7 +207,7 @@ onMounted(() => {
                             </div>
                         </div>
                         <form @submit.prevent="submitPeriod" class="mt-4 space-y-3 border-t pt-4">
-                            <Text variant="small" muted class="block">Laufzeitende anpassen (nur lokal, Stripe unverändert)</Text>
+                            <Text variant="small" muted class="block">Laufzeitende anpassen (nur lokal, Mollie unverändert)</Text>
                             <div class="flex flex-wrap items-end gap-2">
                                 <div class="space-y-2">
                                     <Label for="current_period_ends_at">Laufzeitende</Label>
@@ -223,7 +223,7 @@ onMounted(() => {
                             </div>
                         </form>
                         <div class="mt-4 flex flex-wrap gap-2 border-t pt-4">
-                            <template v-if="site.site_subscription.stripe_status === 'active' && !site.site_subscription.cancel_at_period_end">
+                            <template v-if="site.site_subscription.mollie_status === 'active' && !site.site_subscription.cancel_at_period_end">
                                 <Dialog v-model:open="cancelSubDialogOpen">
                                     <DialogTrigger as-child>
                                         <Button variant="outline" size="sm">Abo kündigen</Button>
@@ -251,7 +251,7 @@ onMounted(() => {
                                 class="mt-2"
                                 @click="syncSubscription"
                             >
-                                Abo mit Stripe abgleichen
+                                Abo mit Mollie abgleichen
                             </Button>
                         </div>
                     </template>

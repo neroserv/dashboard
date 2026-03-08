@@ -129,7 +129,7 @@ class SiteController extends Controller
 
         return redirect()
             ->route('admin.sites.show', $site)
-            ->with('success', 'Laufzeitende wurde lokal gespeichert. Stripe wurde nicht geändert.');
+            ->with('success', 'Laufzeitende wurde lokal gespeichert. Mollie wurde nicht geändert.');
     }
 
     public function cancelSubscription(Site $site): RedirectResponse

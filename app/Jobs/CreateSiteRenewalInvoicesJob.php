@@ -16,8 +16,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use romanzipp\QueueMonitor\Traits\IsMonitored;
-use Stripe\Exception\InvalidRequestException;
-use Stripe\StripeClient;
 
 class CreateSiteRenewalInvoicesJob implements ShouldQueue
 {
@@ -42,7 +40,7 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
 
         $createdCount = 0;
         SiteSubscription::query()
-            ->with(['site.user', 'site'])
+            ->with(['site.user', 'site.template'])
             ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'active'))
             ->whereNotNull('current_period_ends_at')
             ->whereBetween('current_period_ends_at', [$from, $to])
@@ -145,27 +143,13 @@ class CreateSiteRenewalInvoicesJob implements ShouldQueue
 
     protected function getRenewalAmount(SiteSubscription $sub): ?float
     {
-        $priceId = $sub->stripe_price_id;
-        if (! $priceId) {
+        $template = $sub->site?->template;
+        if (! $template || $template->price === null) {
             return null;
         }
 
-        try {
-            $stripe = new StripeClient(config('cashier.secret'));
-            $price = $stripe->prices->retrieve($priceId);
-        } catch (InvalidRequestException $e) {
-            report($e);
+        $amount = (float) $template->price;
 
-            return null;
-        }
-
-        $unitAmount = $price->unit_amount ?? 0;
-        $currency = strtolower($price->currency ?? 'eur');
-
-        if ($currency === 'eur') {
-            return (float) ($unitAmount / 100);
-        }
-
-        return (float) $unitAmount / 100;
+        return $amount > 0 ? $amount : null;
     }
 }

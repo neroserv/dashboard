@@ -11,8 +11,8 @@ import type { BreadcrumbItem } from '@/types';
 
 type SiteSubscription = {
     id: number;
-    stripe_subscription_id: string | null;
-    stripe_status: string;
+    mollie_subscription_id: string | null;
+    mollie_status: string;
     current_period_ends_at: string | null;
     cancel_at_period_end: boolean;
     site?: { id: number; name: string; template?: { name: string }; user?: { name: string; email: string } };
@@ -63,7 +63,7 @@ const handlePagination = (url: string) => {
                                 <TableHead>Kunde</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Laufzeitende</TableHead>
-                                <TableHead>Stripe</TableHead>
+                                <TableHead>Mollie</TableHead>
                                 <TableHead class="text-right">Aktionen</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -80,14 +80,14 @@ const handlePagination = (url: string) => {
                                     <span v-else>–</span>
                                 </TableCell>
                                 <TableCell>
-                                    <Badge :variant="sub.stripe_status === 'active' ? 'success' : 'warning'">
-                                        {{ sub.stripe_status }}
+                                    <Badge :variant="sub.mollie_status === 'active' ? 'success' : 'warning'">
+                                        {{ sub.mollie_status }}
                                     </Badge>
                                     <span v-if="sub.cancel_at_period_end" class="ml-1 text-xs text-amber-600">Läuft aus</span>
                                 </TableCell>
                                 <TableCell>{{ sub.current_period_ends_at ?? '–' }}</TableCell>
                                 <TableCell>
-                                    <code v-if="sub.stripe_subscription_id" class="text-xs">{{ sub.stripe_subscription_id }}</code>
+                                    <code v-if="sub.mollie_subscription_id" class="text-xs">{{ sub.mollie_subscription_id }}</code>
                                     <span v-else>–</span>
                                 </TableCell>
                             </TableRow>

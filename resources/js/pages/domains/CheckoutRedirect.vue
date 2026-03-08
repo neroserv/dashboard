@@ -38,7 +38,7 @@ const breadcrumbs = [
                 <CardHeader>
                     <CardTitle>Lokal (Development)</CardTitle>
                     <CardDescription>
-                        Ohne Webhook kannst du die Zahlung simulieren: Bestellung wird ausgeführt, ohne zu Stripe zu gehen.
+                        Ohne Webhook kannst du die Zahlung simulieren: Bestellung wird ausgeführt, ohne zu Mollie zu gehen.
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="flex flex-col gap-3">
@@ -48,7 +48,7 @@ const breadcrumbs = [
                         class="w-full sm:w-auto"
                         @click="() => (window.location.href = stripeUrl)"
                     >
-                        Zu Stripe Checkout (echte Test-Zahlung)
+                        Zu Mollie Checkout (echte Test-Zahlung)
                     </Button>
                     <Link :href="`/domains/checkout/dev-complete?token=${token}`">
                         <Button

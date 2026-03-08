@@ -42,7 +42,7 @@ test('prepaid gaming account can be renewed with balance', function () use ($bil
         'hosting_server_id' => null,
         'name' => 'Test Server',
         'status' => 'active',
-        'stripe_subscription_id' => null,
+        'mollie_subscription_id' => null,
         'renewal_type' => 'manual',
         'current_period_ends_at' => $periodEndsAt,
     ]);
@@ -93,7 +93,7 @@ test('prepaid gaming account can be renewed for 3 months with balance', function
         'hosting_server_id' => null,
         'name' => 'Test Server',
         'status' => 'active',
-        'stripe_subscription_id' => null,
+        'mollie_subscription_id' => null,
         'renewal_type' => 'manual',
         'current_period_ends_at' => $periodEndsAt,
     ]);
@@ -143,7 +143,7 @@ test('renew with balance returns error when insufficient balance', function () u
         'hosting_server_id' => null,
         'name' => 'Test Server',
         'status' => 'active',
-        'stripe_subscription_id' => null,
+        'mollie_subscription_id' => null,
         'renewal_type' => 'manual',
         'current_period_ends_at' => now()->addDays(5),
     ]);
@@ -186,7 +186,7 @@ test('renew with mollie redirects to checkout flow', function () use ($billingPr
         'hosting_server_id' => null,
         'name' => 'Test Server',
         'status' => 'active',
-        'stripe_subscription_id' => null,
+        'mollie_subscription_id' => null,
         'renewal_type' => 'manual',
         'current_period_ends_at' => now()->addDays(5),
     ]);
@@ -229,7 +229,7 @@ test('renew requires account to belong to user', function () use ($billingProfil
         'hosting_server_id' => null,
         'name' => 'Owner Server',
         'status' => 'active',
-        'stripe_subscription_id' => null,
+        'mollie_subscription_id' => null,
         'renewal_type' => 'manual',
         'current_period_ends_at' => now()->addDay(),
     ]);

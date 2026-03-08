@@ -44,7 +44,7 @@ class BalancePaymentService
             $invoice = Invoice::create([
                 'user_id' => $user->id,
                 'site_subscription_id' => null,
-                'stripe_invoice_id' => null,
+                'mollie_payment_id' => null,
                 'number' => $number,
                 'type' => $invoiceType,
                 'amount' => $amount,

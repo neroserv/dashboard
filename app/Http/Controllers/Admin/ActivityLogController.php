@@ -54,7 +54,7 @@ class ActivityLogController extends Controller
             'site_subscription_period_updated' => 'Laufzeitende geändert',
             'site_subscription_cancelled' => 'Abo gekündigt',
             'site_subscription_reactivated' => 'Kündigung zurückgenommen',
-            'site_subscription_synced' => 'Abo mit Stripe abgeglichen',
+            'site_subscription_synced' => 'Abo mit Mollie abgeglichen',
             'customer_updated' => 'Kunden-Stammdaten geändert',
             'customer_note_added' => 'Kunden-Notiz hinzugefügt',
             'customer_balance_added' => 'Guthaben aufgeladen',

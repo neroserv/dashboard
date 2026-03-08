@@ -13,7 +13,7 @@ const sizePx = `${props.size}px`;
 </script>
 
 <template>
-    <!-- Karte / Card (Stripe: card, Mollie: creditcard) -->
+    <!-- Karte / Card (Mollie: creditcard) -->
     <CreditCard
         v-if="type === 'card' || type === 'creditcard'"
         class="shrink-0 text-muted-foreground"
@@ -37,7 +37,7 @@ const sizePx = `${props.size}px`;
             d="M17.2 7.9c-.4-.9-1.2-1.4-2.3-1.4h-3.2c-.3 0-.5.2-.6.5l-1.5 9.3c0 .2.2.4.4.4h1.8c.3 0 .5-.2.5-.4l.4-2.5c0-.2.2-.4.4-.4h.8c1.9 0 3.3-.8 4-2.3.4-.9.5-1.8.3-2.7-.3-1.3-1.3-2.2-2.6-2.2h-.8c-.2 0-.4.2-.4.4l-.2 1.2c0 .3.2.5.5.5h.4c.6 0 1.1.2 1.3.7.2.4.1.9-.2 1.2-.4.4-1 .6-1.8.6h-.4l-.4 2.4c0 .2.2.4.4.4h1.6c.3 0 .5-.2.6-.4l.1-.5.9-5.5.1-.6c.1-.5-.2-1-.6-1.3z"
         />
     </svg>
-    <!-- SEPA / Bank (Stripe: sepa_debit, Mollie: directdebit) -->
+    <!-- SEPA / Bank (Mollie: directdebit) -->
     <Landmark
         v-else-if="type === 'sepa_debit' || type === 'directdebit'"
         class="shrink-0 text-muted-foreground"

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateDashboardLayoutRequest;
-use App\Listeners\LogStripeWebhookReceived;
 use App\Models\Invoice;
 use App\Models\InvoiceDunningLetter;
 use App\Models\Site;
@@ -97,7 +96,7 @@ class DashboardController extends Controller
             ->count();
         $cancellationsAtPeriodEnd = SiteSubscription::where('cancel_at_period_end', true)->count();
 
-        $lastWebhookAt = Cache::get(LogStripeWebhookReceived::CACHE_KEY);
+        $lastWebhookAt = Cache::get('mollie_last_webhook_at');
         $lastWebhookMinutesAgo = $lastWebhookAt
             ? (int) Carbon::parse($lastWebhookAt)->diffInMinutes(now())
             : null;

@@ -30,9 +30,16 @@ class PanelUpdateController extends Controller
         } else {
             try {
                 $currentCommit = $updateService->getCurrentCommit();
-                $remoteCommit = $updateService->getRemoteCommit();
-                $updateAvailable = $updateService->isUpdateAvailable();
-                $recentCommits = $updateService->getRecentCommits(15);
+                $github = $updateService->fetchFromGitHub();
+                if ($github !== null) {
+                    $remoteCommit = $github['remote_commit'];
+                    $updateAvailable = $github['behind_by'] > 0;
+                    $recentCommits = $updateService->getRecentCommitsFromGitHub(15);
+                } else {
+                    $remoteCommit = $updateService->getRemoteCommit();
+                    $updateAvailable = $updateService->isUpdateAvailable();
+                    $recentCommits = $updateService->getRecentCommits(15);
+                }
             } catch (\Throwable $e) {
                 $error = $e->getMessage();
             }
@@ -77,7 +84,11 @@ class PanelUpdateController extends Controller
         }
 
         try {
-            if (! $updateService->isUpdateAvailable()) {
+            $github = $updateService->fetchFromGitHub();
+            $updateAvailable = $github !== null
+                ? $github['behind_by'] > 0
+                : $updateService->isUpdateAvailable();
+            if (! $updateAvailable) {
                 $lock->release();
 
                 return response()->stream(function (): void {

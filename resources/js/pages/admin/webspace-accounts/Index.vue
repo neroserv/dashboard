@@ -20,7 +20,7 @@ type WebspaceAccount = {
     domain: string;
     status: string;
     current_period_ends_at: string | null;
-    stripe_subscription_id: string | null;
+    mollie_subscription_id: string | null;
     user: User;
     hosting_plan: HostingPlan;
     hosting_server: HostingServer;

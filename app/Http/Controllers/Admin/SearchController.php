@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 class SearchController extends Controller
 {
     /**
-     * Global admin search: sites (name/slug), customers (name/email), invoices (number), subscriptions (Stripe ID).
+     * Global admin search: sites (name/slug), customers (name/email), invoices (number), subscriptions (Mollie ID).
      *
      * @return JsonResponse{ sites: array, customers: array, invoices: array, subscriptions: array }
      */

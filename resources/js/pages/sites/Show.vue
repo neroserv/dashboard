@@ -72,7 +72,7 @@ type SiteVersion = {
 
 type SiteSubscription = {
     id: number;
-    stripe_status: string;
+    mollie_status: string;
     current_period_ends_at: string | null;
     cancel_at_period_end: boolean;
 };
@@ -338,7 +338,7 @@ const canShowPageDesigner = computed(() => {
                             <Text variant="small" muted>Abo-Status</Text>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
                                 <Badge
-                                    v-if="site.site_subscription.stripe_status === 'active' && !site.site_subscription.cancel_at_period_end"
+                                    v-if="site.site_subscription.mollie_status === 'active' && !site.site_subscription.cancel_at_period_end"
                                     variant="success"
                                 >
                                     Aktiv
@@ -350,7 +350,7 @@ const canShowPageDesigner = computed(() => {
                                     Läuft aus
                                 </Badge>
                                 <Badge v-else variant="secondary">
-                                    {{ site.site_subscription.stripe_status }}
+                                    {{ site.site_subscription.mollie_status }}
                                 </Badge>
                                 <Text v-if="site.site_subscription.current_period_ends_at" class="text-sm text-muted-foreground">
                                     bis {{ site.site_subscription.current_period_ends_at }}
@@ -358,7 +358,7 @@ const canShowPageDesigner = computed(() => {
                             </div>
                             <div
                                 v-if="
-                                    site.site_subscription.stripe_status === 'active' &&
+                                    site.site_subscription.mollie_status === 'active' &&
                                     !site.site_subscription.cancel_at_period_end
                                 "
                                 class="mt-2"

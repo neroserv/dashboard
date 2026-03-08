@@ -76,7 +76,7 @@ const handlePagination = (url: string) => {
                                 <TableHead>Typ</TableHead>
                                 <TableHead>Marke</TableHead>
                                 <TableHead>Verknüpftes Angebot</TableHead>
-                                <TableHead>Stripe Produkt-ID</TableHead>
+                                <TableHead>Produkt-ID</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead class="text-right">Aktionen</TableHead>
                             </TableRow>

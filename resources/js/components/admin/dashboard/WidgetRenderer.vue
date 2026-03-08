@@ -29,7 +29,7 @@ const componentMap: Record<string, unknown> = {
     'sites-stats': SitesStatsWidget,
     'sites-suspended': CountWidget,
     'unpaid-overdue': UnpaidOverdueWidget,
-    'last-stripe-webhook': LastWebhookWidget,
+    'last-mollie-webhook': LastWebhookWidget,
     'active-subscriptions': CountWidget,
     'subscriptions-ending-week': CountWidget,
     'cancellations-period-end': CountWidget,

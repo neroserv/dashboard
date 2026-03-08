@@ -57,7 +57,7 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Pay invoice: with balance (deduct and mark paid) or redirect to Stripe Checkout.
+     * Pay invoice: with balance (deduct and mark paid) or redirect to Mollie Checkout.
      */
     public function pay(PayInvoiceRequest $request, Invoice $invoice): RedirectResponse|\Inertia\Response
     {
