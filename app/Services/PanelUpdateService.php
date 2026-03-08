@@ -237,7 +237,13 @@ class PanelUpdateService
     public function runUpdate(callable $outputCallback): int
     {
         $path = $this->getPath();
-        $cmd = 'git pull && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-interaction && npm i && php artisan optimize && npm run build && php artisan migrate && supervisorctl restart praxishosting-worker:*';
+        $cmd = 'git pull \
+&& COMPOSER_ALLOW_SUPERUSER=1 composer install --no-interaction --prefer-dist --optimize-autoloader \
+&& npm install \
+&& npm run build \
+&& php artisan optimize \
+&& php artisan migrate --force \
+&& supervisorctl restart praxishosting-worker:*';
         $process = Process::fromShellCommandline($cmd, $path, null, null, 600);
         $process->run(function (string $type, string $buffer) use ($outputCallback): void {
             $channel = $type === Process::OUT ? 'out' : 'err';
