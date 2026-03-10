@@ -24,7 +24,6 @@ use Inertia\Response;
 use Mollie\Api\Exceptions\ApiException as MollieApiException;
 use Mollie\Api\MollieApiClient;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class GamingAccountController extends Controller
 {
