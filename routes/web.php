@@ -73,6 +73,10 @@ use Laravel\Cashier\Cashier;
 Route::post('webhooks/mollie', [MollieWebhookController::class, 'handleWebhook'])
     ->name('webhooks.mollie.default');
 
+// phpMyAdmin Signon: Einmal-Token-API (wird vom Signon-Skript auf dem phpMyAdmin-Server aufgerufen)
+Route::get('phpmyadmin-signon-credentials', [GamingAccountController::class, 'phpmyadminSignonCredentials'])
+    ->name('phpmyadmin-signon-credentials');
+
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
     ->name('auth.social.redirect');
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])

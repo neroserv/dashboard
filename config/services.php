@@ -58,6 +58,9 @@ return [
 
     'phpmyadmin' => [
         'url' => env('PHPMYADMIN_URL', ''),
+        'server_index' => (int) env('PHPMYADMIN_SERVER_INDEX', 1),
+        'signon_url' => env('PHPMYADMIN_SIGNON_URL', ''),
+        'credentials_base_url' => env('PHPMYADMIN_CREDENTIALS_BASE_URL', null),
     ],
 
     'pterodactyl' => [

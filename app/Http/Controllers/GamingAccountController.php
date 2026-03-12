@@ -21,6 +21,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\StreamedResponse;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Mollie\Api\Exceptions\ApiException as MollieApiException;
@@ -1128,11 +1130,57 @@ class GamingAccountController extends Controller
                 ->with('error', 'Datenbank-Zugangsdaten konnten nicht geladen werden.');
         }
 
+        $signonUrl = rtrim((string) config('services.phpmyadmin.signon_url'), '/');
+        if ($signonUrl !== '') {
+            $token = Str::random(64);
+            Cache::put('phpmyadmin_signon_'.$token, [
+                'username' => $credentials['username'],
+                'password' => $credentials['password'],
+                'host' => $credentials['host']['address'],
+                'port' => $credentials['host']['port'],
+            ], now()->addMinutes(2));
+            $baseUrl = config('services.phpmyadmin.credentials_base_url');
+            $credentialsUrl = $baseUrl
+                ? rtrim($baseUrl, '/').'/'.ltrim(route('phpmyadmin-signon-credentials', ['token' => $token], false), '/')
+                : route('phpmyadmin-signon-credentials', ['token' => $token]);
+
+            return redirect()->away(
+                $signonUrl.'?token='.urlencode($token).'&credentials_url='.urlencode($credentialsUrl)
+            );
+        }
+
+        $serverIndex = (int) config('services.phpmyadmin.server_index', 1);
+
         return response()->view('gaming-accounts.phpmyadmin-signon', [
             'phpmyadmin_url' => $phpmyadminUrl,
-            'host' => $credentials['host']['address'].':'.$credentials['host']['port'],
+            'server_index' => $serverIndex,
             'username' => $credentials['username'],
             'password' => $credentials['password'],
+            'signon_hint' => true,
+        ]);
+    }
+
+    /**
+     * Liefert Zugangsdaten für phpMyAdmin-Signon (einmaliger Token). Wird vom Signon-Skript auf dem phpMyAdmin-Server aufgerufen.
+     */
+    public function phpmyadminSignonCredentials(Request $request): JsonResponse
+    {
+        $token = $request->query('token');
+        if (! is_string($token) || $token === '') {
+            return response()->json(['error' => 'token missing'], 400);
+        }
+        $key = 'phpmyadmin_signon_'.$token;
+        $credentials = Cache::get($key);
+        if ($credentials === null) {
+            return response()->json(['error' => 'invalid or expired token'], 404);
+        }
+        Cache::forget($key);
+
+        return response()->json([
+            'username' => $credentials['username'],
+            'password' => $credentials['password'],
+            'host' => $credentials['host'],
+            'port' => (int) $credentials['port'],
         ]);
     }
 

@@ -640,6 +640,7 @@ class PterodactylClient implements ControlPanelContract
         $this->setServer($server);
         $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/databases');
         $list = [];
+
         foreach ($data['data'] ?? [] as $item) {
             $attrs = $item['attributes'] ?? $item;
             $entry = [

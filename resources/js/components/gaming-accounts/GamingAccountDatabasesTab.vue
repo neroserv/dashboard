@@ -22,6 +22,7 @@ type DatabaseItem = {
     username?: string;
     connections_from?: string;
     max_connections?: number;
+    password?: string;
 };
 
 const databases = ref<DatabaseItem[]>([]);
@@ -124,6 +125,17 @@ function copyToClipboard(text: string) {
                             >
                                 <Copy class="h-3 w-3" />
                             </Button>
+                        </p>
+
+                        <p class="text-sm text-muted-foreground">
+                            Verbindungen von: <code class="rounded bg-muted px-1">{{ db.connections_from ?? '—' }}</code>
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            Maximale Verbindungen: <code class="rounded bg-muted px-1">{{ db.max_connections ?? '—' }}</code>
+                        </p>
+
+                        <p class="text-sm text-muted-foreground">
+                            Passwort: <code class="rounded bg-muted px-1">{{ db.password ?? '—' }}</code>
                         </p>
                     </div>
                     <div class="flex shrink-0 gap-2">
