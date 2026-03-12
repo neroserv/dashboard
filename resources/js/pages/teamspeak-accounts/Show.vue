@@ -16,7 +16,9 @@ import {
     LayoutDashboard,
     ExternalLink,
     RefreshCcw,
+    Share2,
 } from 'lucide-vue-next';
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import AutoRenewModal from '@/components/AutoRenewModal.vue';
 import { Badge } from '@/components/ui/badge';
@@ -92,6 +94,11 @@ type Props = {
     isSuspendedOrExpired?: boolean;
     auto_renew_with_balance?: boolean;
     has_mollie_subscription?: boolean;
+    canManageCollaborators?: boolean;
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>;
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>;
+    allowedSharePermissions?: string[];
+    storeInvitationUrl?: string | null;
 };
 
 const props = withDefaults(defineProps<Props>(), {
@@ -103,6 +110,11 @@ const props = withDefaults(defineProps<Props>(), {
     isSuspendedOrExpired: false,
     auto_renew_with_balance: false,
     has_mollie_subscription: false,
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
 });
 
 const powerLoading = ref<'start' | 'stop' | null>(null);
@@ -430,6 +442,10 @@ function deleteBackup(snapshotId: number) {
                         <TabsTrigger value="rename" class="gap-2 px-3 py-2">
                             <Pencil class="h-4 w-4" />
                             <span class="hidden sm:inline">Umbenennen</span>
+                        </TabsTrigger>
+                        <TabsTrigger v-if="canManageCollaborators" value="sharing" class="gap-2 px-3 py-2">
+                            <Share2 class="h-4 w-4" />
+                            <span class="hidden sm:inline">Teilen</span>
                         </TabsTrigger>
                     </TabsList>
 
@@ -810,6 +826,14 @@ function deleteBackup(snapshotId: number) {
                                 </Button>
                             </CardContent>
                         </Card>
+                    </TabsContent>
+                    <TabsContent v-if="canManageCollaborators" value="sharing" class="mt-4">
+                        <ProductSharingCard
+                            :product-shares="productShares"
+                            :product-invitations="productInvitations"
+                            :allowed-share-permissions="allowedSharePermissions"
+                            :store-invitation-url="storeInvitationUrl ?? ''"
+                        />
                     </TabsContent>
                 </Tabs>
             </div>

@@ -19,7 +19,9 @@ import {
     Play,
     Square,
     RotateCw,
+    Share2,
 } from 'lucide-vue-next';
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue';
 import Alert from '@/components/ui/alert/Alert.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -81,9 +83,20 @@ type Props = {
     balanceUrl: string;
     mollieUrl: string;
     domainsSearchUrl?: string;
+    canManageCollaborators?: boolean;
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>;
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>;
+    allowedSharePermissions?: string[];
+    storeInvitationUrl?: string | null;
 };
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
+});
 
 const hasAnySubdomain = computed(() =>
     props.subscription.game_server_accounts?.some((acc) => acc.allocation?.subdomain) ?? false,
@@ -1208,6 +1221,14 @@ function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart')
                             </p>
                         </CardContent>
                     </Card>
+
+                    <ProductSharingCard
+                        v-if="canManageCollaborators"
+                        :product-shares="productShares"
+                        :product-invitations="productInvitations"
+                        :allowed-share-permissions="allowedSharePermissions"
+                        :store-invitation-url="storeInvitationUrl ?? ''"
+                    />
                 </div>
             </div>
 

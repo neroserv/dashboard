@@ -13,6 +13,7 @@ type Subscription = {
     id: number;
     status: string;
     current_period_ends_at: string | null;
+    is_shared_with_me?: boolean;
     plan: { id: number; name: string; price: string; config: Record<string, number> };
     used_cpu: number;
     used_memory_mb: number;
@@ -70,6 +71,7 @@ function formatDate(d: string | null): string {
                             <span class="flex items-center gap-2">
                                 <Cloud class="h-5 w-5" />
                                 {{ sub.plan.name }}
+                                <Badge v-if="sub.is_shared_with_me" variant="secondary" size="sm">Geteilt</Badge>
                             </span>
                             <Badge :variant="sub.status === 'active' ? 'success' : 'secondary'">
                                 {{ sub.status === 'active' ? 'Aktiv' : sub.status }}

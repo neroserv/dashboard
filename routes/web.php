@@ -52,9 +52,12 @@ use App\Http\Controllers\InvoiceController as CustomerInvoiceController;
 use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\MollieWebhookController;
 use App\Http\Controllers\PostfachController;
+use App\Http\Controllers\ProductInvitationAcceptController;
+use App\Http\Controllers\ProductShareController;
 use App\Http\Controllers\RedeemVoucherController;
 use App\Http\Controllers\SiteCollaboratorController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\SiteInvitationAcceptController;
 use App\Http\Controllers\SiteRenderController;
 use App\Http\Controllers\SiteSubscriptionController;
 use App\Http\Controllers\SupportController;
@@ -81,6 +84,12 @@ Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'
     ->name('auth.social.redirect');
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])
     ->name('auth.social.callback');
+
+Route::get('invitations/accept-product', ProductInvitationAcceptController::class)
+    ->name('product-invitations.accept');
+
+Route::get('invitations/accept-site', SiteInvitationAcceptController::class)
+    ->name('site-invitations.accept');
 
 Route::get('/', function () {
     $isAdminDomain = request()->attributes->get('is_admin_domain', false);
@@ -146,6 +155,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::delete('domains/{reseller_domain}/dnssec', [\App\Http\Controllers\DomainManageController::class, 'deleteDnssec'])->name('domains.manage.dnssec.destroy');
     Route::post('domains/{reseller_domain}/renew', [\App\Http\Controllers\DomainManageController::class, 'renew'])->name('domains.manage.renew');
     Route::post('domains/{reseller_domain}/autorenew', [\App\Http\Controllers\DomainManageController::class, 'setAutoRenew'])->name('domains.manage.autorenew');
+    Route::post('domains/{reseller_domain}/shares/invitations', [ProductShareController::class, 'storeInvitationDomain'])->name('domains.shares.invitations.store');
+    Route::patch('domains/{reseller_domain}/shares/{share}', [ProductShareController::class, 'updateShareDomain'])->name('domains.shares.update');
+    Route::delete('domains/{reseller_domain}/shares/{share}', [ProductShareController::class, 'destroyShareDomain'])->name('domains.shares.destroy');
+    Route::delete('domains/{reseller_domain}/invitations/{invitation}', [ProductShareController::class, 'destroyInvitationDomain'])->name('domains.invitations.destroy');
 
     Route::post('checkout', [CheckoutController::class, 'store'])->middleware('billing.profile')->name('checkout.store');
     Route::get('checkout/redirect', [CheckoutController::class, 'redirect'])->middleware('billing.profile')->name('checkout.redirect');
@@ -167,6 +180,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
         ->name('webspace-accounts.auto-renew-balance');
     Route::post('webspace-accounts/{webspace_account}/auto-renew-mollie-subscription', [WebspaceAccountController::class, 'createMollieSubscription'])
         ->name('webspace-accounts.auto-renew-mollie-subscription');
+    Route::post('webspace-accounts/{webspace_account}/shares/invitations', [ProductShareController::class, 'storeInvitationWebspace'])->name('webspace-accounts.shares.invitations.store');
+    Route::patch('webspace-accounts/{webspace_account}/shares/{share}', [ProductShareController::class, 'updateShareWebspace'])->name('webspace-accounts.shares.update');
+    Route::delete('webspace-accounts/{webspace_account}/shares/{share}', [ProductShareController::class, 'destroyShareWebspace'])->name('webspace-accounts.shares.destroy');
+    Route::delete('webspace-accounts/{webspace_account}/invitations/{invitation}', [ProductShareController::class, 'destroyInvitationWebspace'])->name('webspace-accounts.invitations.destroy');
 
     Route::get('gaming', [GamingController::class, 'index'])->name('gaming.index');
     Route::get('gaming/checkout/pterodactyl-nests', [GamingController::class, 'pterodactylNests'])->name('gaming.checkout.pterodactyl-nests');
@@ -187,6 +204,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::post('gaming/cloud/subscriptions/{subscription}/renew', [GameserverCloudSubscriptionController::class, 'renew'])->middleware('billing.profile')->name('gaming.cloud.subscriptions.renew');
     Route::post('gaming/cloud/subscriptions/{subscription}/auto-renew-balance', [GameserverCloudSubscriptionController::class, 'setAutoRenewWithBalance'])->name('gaming.cloud.subscriptions.auto-renew-balance');
     Route::post('gaming/cloud/subscriptions/{subscription}/auto-renew-mollie-subscription', [GameserverCloudSubscriptionController::class, 'createMollieSubscription'])->name('gaming.cloud.subscriptions.auto-renew-mollie-subscription');
+    Route::post('gaming/cloud/subscriptions/{subscription}/shares/invitations', [ProductShareController::class, 'storeInvitationGameserverCloud'])->name('gaming.cloud.subscriptions.shares.invitations.store');
+    Route::patch('gaming/cloud/subscriptions/{subscription}/shares/{share}', [ProductShareController::class, 'updateShareGameserverCloud'])->name('gaming.cloud.subscriptions.shares.update');
+    Route::delete('gaming/cloud/subscriptions/{subscription}/shares/{share}', [ProductShareController::class, 'destroyShareGameserverCloud'])->name('gaming.cloud.subscriptions.shares.destroy');
+    Route::delete('gaming/cloud/subscriptions/{subscription}/invitations/{invitation}', [ProductShareController::class, 'destroyInvitationGameserverCloud'])->name('gaming.cloud.subscriptions.invitations.destroy');
     Route::get('gaming-accounts', [GamingAccountController::class, 'index'])->name('gaming-accounts.index');
     Route::get('gaming-accounts/{game_server_account}', [GamingAccountController::class, 'show'])->name('gaming-accounts.show');
     Route::get('gaming-accounts/{game_server_account}/connect-domain', [GamingAccountController::class, 'showConnectDomain'])->name('gaming-accounts.connect-domain.show');
@@ -204,6 +225,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
         ->name('gaming-accounts.auto-renew-balance');
     Route::post('gaming-accounts/{game_server_account}/auto-renew-mollie-subscription', [GamingAccountController::class, 'createMollieSubscription'])
         ->name('gaming-accounts.auto-renew-mollie-subscription');
+    Route::post('gaming-accounts/{game_server_account}/shares/invitations', [ProductShareController::class, 'storeInvitationGameServer'])->name('gaming-accounts.shares.invitations.store');
+    Route::patch('gaming-accounts/{game_server_account}/shares/{share}', [ProductShareController::class, 'updateShareGameServer'])->name('gaming-accounts.shares.update');
+    Route::delete('gaming-accounts/{game_server_account}/shares/{share}', [ProductShareController::class, 'destroyShareGameServer'])->name('gaming-accounts.shares.destroy');
+    Route::delete('gaming-accounts/{game_server_account}/invitations/{invitation}', [ProductShareController::class, 'destroyInvitationGameServer'])->name('gaming-accounts.invitations.destroy');
 
     // Pterodactyl proxy: console, files, backups, schedules
     Route::get('gaming-accounts/{game_server_account}/api/console/websocket', [GamingAccountController::class, 'consoleWebsocket'])->name('gaming-accounts.api.console.websocket');
@@ -240,6 +265,10 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::post('teamspeak/checkout', [TeamSpeakController::class, 'storeCheckout'])->middleware('billing.profile')->name('teamspeak.checkout.store');
     Route::get('teamspeak-accounts', [TeamSpeakAccountController::class, 'index'])->name('teamspeak-accounts.index');
     Route::get('teamspeak-accounts/{team_speak_server_account}', [TeamSpeakAccountController::class, 'show'])->name('teamspeak-accounts.show');
+    Route::post('teamspeak-accounts/{team_speak_server_account}/shares/invitations', [ProductShareController::class, 'storeInvitationTeamSpeak'])->name('teamspeak-accounts.shares.invitations.store');
+    Route::patch('teamspeak-accounts/{team_speak_server_account}/shares/{share}', [ProductShareController::class, 'updateShareTeamSpeak'])->name('teamspeak-accounts.shares.update');
+    Route::delete('teamspeak-accounts/{team_speak_server_account}/shares/{share}', [ProductShareController::class, 'destroyShareTeamSpeak'])->name('teamspeak-accounts.shares.destroy');
+    Route::delete('teamspeak-accounts/{team_speak_server_account}/invitations/{invitation}', [ProductShareController::class, 'destroyInvitationTeamSpeak'])->name('teamspeak-accounts.invitations.destroy');
     Route::get('teamspeak-accounts/{team_speak_server_account}/overview', [TeamSpeakAccountController::class, 'overview'])->name('teamspeak-accounts.overview');
     Route::post('teamspeak-accounts/{team_speak_server_account}/power', [TeamSpeakAccountController::class, 'power'])->name('teamspeak-accounts.power');
     Route::post('teamspeak-accounts/{team_speak_server_account}/reinstall', [TeamSpeakAccountController::class, 'reinstall'])->name('teamspeak-accounts.reinstall');

@@ -17,6 +17,7 @@ type Domain = {
     status: string;
     expires_at: string | null;
     auto_renew: boolean;
+    is_shared_with_me?: boolean;
 };
 
 type Props = {
@@ -114,7 +115,10 @@ function displayStatus(status: string): string {
                                         <Globe class="h-5 w-5" />
                                     </div>
                                     <div class="min-w-0">
-                                        <CardTitle class="truncate font-mono text-base">{{ d.domain }}</CardTitle>
+                                        <div class="flex items-center gap-2">
+                                            <CardTitle class="truncate font-mono text-base">{{ d.domain }}</CardTitle>
+                                            <Badge v-if="d.is_shared_with_me" variant="secondary" size="sm">Geteilt</Badge>
+                                        </div>
                                         <div class="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                                             <span>{{ d.auto_renew ? 'Auto-Verlängerung: Ja' : 'Auto-Verlängerung: Nein' }}</span>
                                         </div>

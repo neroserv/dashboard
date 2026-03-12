@@ -47,12 +47,13 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        $subscriptions = $request->user()
-            ->gameserverCloudSubscriptions()
+        $user = $request->user();
+        $subscriptions = GameserverCloudSubscription::query()
+            ->viewableBy($user)
             ->with('gameserverCloudPlan')
             ->latest()
             ->get()
-            ->map(function (GameserverCloudSubscription $sub) {
+            ->map(function (GameserverCloudSubscription $sub) use ($user) {
                 $plan = $sub->gameserverCloudPlan;
                 $config = $plan->config ?? [];
 
@@ -60,6 +61,7 @@ class GameserverCloudSubscriptionController extends Controller
                     'id' => $sub->id,
                     'status' => $sub->status,
                     'current_period_ends_at' => $sub->current_period_ends_at?->toIso8601String(),
+                    'is_shared_with_me' => ! $sub->isOwnedBy($user),
                     'plan' => [
                         'id' => $plan->id,
                         'name' => $plan->name,
@@ -87,9 +89,7 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         $subscription->load('gameserverCloudPlan.hostingServer', 'gameServerAccounts');
 
@@ -181,6 +181,35 @@ class GameserverCloudSubscriptionController extends Controller
             'balanceUrl' => route('gaming.cloud.subscriptions.auto-renew-balance', $subscription),
             'mollieUrl' => route('gaming.cloud.subscriptions.auto-renew-mollie-subscription', $subscription),
             'domainsSearchUrl' => route('domains.search'),
+            'canManageCollaborators' => $request->user()->can('manageCollaborators', $subscription),
+            'productShares' => $request->user()->can('manageCollaborators', $subscription)
+                ? $subscription->productShares()
+                    ->with('user:id,name,email')
+                    ->get()
+                    ->map(fn ($s) => [
+                        'id' => $s->id,
+                        'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name, 'email' => $s->user->email] : null,
+                        'permissions' => $s->permissions ?? [],
+                        'update_url' => route('gaming.cloud.subscriptions.shares.update', [$subscription, $s]),
+                        'destroy_url' => route('gaming.cloud.subscriptions.shares.destroy', [$subscription, $s]),
+                    ])->all()
+                : [],
+            'productInvitations' => $request->user()->can('manageCollaborators', $subscription)
+                ? $subscription->productInvitations()->whereNull('accepted_at')->where('expires_at', '>', now())->get()
+                    ->map(fn ($i) => [
+                        'id' => $i->id,
+                        'email' => $i->email,
+                        'permissions' => $i->permissions ?? [],
+                        'expires_at' => $i->expires_at?->toIso8601String(),
+                        'destroy_url' => route('gaming.cloud.subscriptions.invitations.destroy', [$subscription, $i]),
+                    ])->all()
+                : [],
+            'allowedSharePermissions' => $request->user()->can('manageCollaborators', $subscription)
+                ? config('product-share-permissions.'.GameserverCloudSubscription::class, [])
+                : [],
+            'storeInvitationUrl' => $request->user()->can('manageCollaborators', $subscription)
+                ? route('gaming.cloud.subscriptions.shares.invitations.store', $subscription)
+                : null,
         ]);
     }
 
@@ -190,9 +219,7 @@ class GameserverCloudSubscriptionController extends Controller
      */
     public function eggVariables(Request $request, GameserverCloudSubscription $subscription): JsonResponse
     {
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         $nestId = $request->integer('nest_id');
         $eggId = $request->integer('egg_id');
@@ -546,9 +573,7 @@ class GameserverCloudSubscriptionController extends Controller
 
     public function destroyServer(Request $request, GameserverCloudSubscription $subscription, GameServerAccount $gameServerAccount): RedirectResponse
     {
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
         if ($gameServerAccount->gameserver_cloud_subscription_id !== $subscription->id) {
             abort(404);
         }
@@ -650,9 +675,7 @@ class GameserverCloudSubscriptionController extends Controller
 
     public function renew(Request $request, GameserverCloudSubscription $subscription): RedirectResponse
     {
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         $validated = $request->validate([
             'period_months' => ['required', 'integer', 'in:1,3,6,12'],
@@ -711,9 +734,7 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         $action = $request->input('action', '');
         if (! in_array($action, ['start_all', 'stop_all'], true)) {
@@ -751,9 +772,7 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
@@ -788,9 +807,7 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         if ($subscription->status !== 'active' && $subscription->current_period_ends_at?->isPast()) {
             return redirect()
@@ -869,9 +886,7 @@ class GameserverCloudSubscriptionController extends Controller
             return $redirect;
         }
 
-        if ($subscription->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $subscription);
 
         if ($gameServerAccount->gameserver_cloud_subscription_id !== $subscription->id) {
             abort(404);

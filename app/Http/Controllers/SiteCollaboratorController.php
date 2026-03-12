@@ -37,33 +37,22 @@ class SiteCollaboratorController extends Controller
         $email = $validated['email'];
         $role = $validated['role'] ?? 'editor';
 
-        // Check if user is already owner
-        if ($site->user->email === $email) {
+        // Check if user is already owner (by email to avoid revealing if account exists)
+        if (strtolower($site->user->email ?? '') === strtolower($email)) {
             return back()->withErrors(['email' => __('Dieser Nutzer ist bereits der Besitzer.')]);
         }
 
-        // Check if user exists
-        $user = User::where('email', $email)->first();
-
-        if ($user) {
-            // User exists - add directly as collaborator
-            if ($site->collaborators()->where('user_id', $user->id)->exists()) {
-                return back()->withErrors(['email' => __('Dieser Nutzer ist bereits Mitbearbeiter.')]);
-            }
-
-            $site->collaborators()->attach($user->id, [
-                'invited_by' => $request->user()->id,
-                'invited_at' => now(),
-            ]);
-
-            return back()->with('success', __('Mitbearbeiter erfolgreich hinzugefügt.'));
+        // Check for existing collaborator by email
+        $existingCollaborator = $site->collaborators()->where('email', $email)->first();
+        if ($existingCollaborator) {
+            return back()->withErrors(['email' => __('Dieser Nutzer ist bereits Mitbearbeiter.')]);
         }
 
-        // User doesn't exist - create invitation
-        if ($site->invitations()->where('email', $email)->whereNull('accepted_at')->exists()) {
+        if ($site->invitations()->where('email', $email)->whereNull('accepted_at')->where('expires_at', '>', now())->exists()) {
             return back()->withErrors(['email' => __('Eine Einladung wurde bereits an diese E-Mail-Adresse gesendet.')]);
         }
 
+        // Always create invitation and send email (do not reveal whether user exists)
         $invitation = $site->invitations()->create([
             'email' => $email,
             'token' => SiteInvitation::generateToken(),
@@ -72,9 +61,9 @@ class SiteCollaboratorController extends Controller
             'expires_at' => now()->addDays(7),
         ]);
 
-        Mail::to($email)->send(new SiteInvitationMail($invitation));
+        Mail::to($email)->send(new SiteInvitationMail($invitation->load('inviter')));
 
-        return back()->with('success', __('Einladung wurde erfolgreich gesendet.'));
+        return back()->with('success', __('Einladung wurde gesendet. Der Eingeladene erhält eine E-Mail mit einem Link zur Annahme.'));
     }
 
     public function destroy(Site $site, User $user): RedirectResponse

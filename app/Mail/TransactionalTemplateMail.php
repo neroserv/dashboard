@@ -8,8 +8,8 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TransactionalTemplateMail extends Mailable
 {
@@ -155,7 +155,9 @@ class TransactionalTemplateMail extends Mailable
 
         $alt = e($brand->name);
 
-        return '<img src="'.e($logoUrl).'" alt="'.$alt.'" style="max-height: 48px; height: auto; width: auto; display: block;" />';
+        $imgStyle = 'display: block; max-width: 200px; max-height: 48px; width: auto; height: auto; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;';
+
+        return '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="max-width: 200px;"><tr><td style="height: 48px; max-height: 48px; line-height: 0;"><img src="'.e($logoUrl).'" alt="'.$alt.'" style="'.$imgStyle.'" /></td></tr></table>';
     }
 
     private function getGlobalFooter(): string

@@ -46,10 +46,45 @@ class DomainManageController extends Controller
             ->values()
             ->all();
 
+        $canManageCollaborators = $request->user()->can('manageCollaborators', $reseller_domain);
+        $productShares = [];
+        $productInvitations = [];
+        $allowedSharePermissions = [];
+        $storeInvitationUrl = null;
+        if ($canManageCollaborators) {
+            $productShares = $reseller_domain->productShares()
+                ->with('user:id,name,email')
+                ->get()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name, 'email' => $s->user->email] : null,
+                    'permissions' => $s->permissions ?? [],
+                    'update_url' => route('domains.shares.update', [$reseller_domain, $s]),
+                    'destroy_url' => route('domains.shares.destroy', [$reseller_domain, $s]),
+                ])->all();
+            $productInvitations = $reseller_domain->productInvitations()
+                ->whereNull('accepted_at')->where('expires_at', '>', now())
+                ->get()
+                ->map(fn ($i) => [
+                    'id' => $i->id,
+                    'email' => $i->email,
+                    'permissions' => $i->permissions ?? [],
+                    'expires_at' => $i->expires_at?->toIso8601String(),
+                    'destroy_url' => route('domains.invitations.destroy', [$reseller_domain, $i]),
+                ])->all();
+            $allowedSharePermissions = config('product-share-permissions.'.\App\Models\ResellerDomain::class, []);
+            $storeInvitationUrl = route('domains.shares.invitations.store', $reseller_domain);
+        }
+
         return Inertia::render('domains/Show', [
             'domain' => $domain,
             'domains_index_url' => route('domains.index'),
             'easy_dns_presets' => $easyDnsPresets,
+            'canManageCollaborators' => $canManageCollaborators,
+            'productShares' => $productShares,
+            'productInvitations' => $productInvitations,
+            'allowedSharePermissions' => $allowedSharePermissions,
+            'storeInvitationUrl' => $storeInvitationUrl,
         ]);
     }
 

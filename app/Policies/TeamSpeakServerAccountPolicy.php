@@ -9,12 +9,13 @@ class TeamSpeakServerAccountPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin();
+        return true;
     }
 
     public function view(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->userCan($user, 'view');
     }
 
     public function create(User $user): bool
@@ -40,5 +41,35 @@ class TeamSpeakServerAccountPolicy
     public function forceDelete(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
     {
         return $user->isAdmin();
+    }
+
+    public function manageCollaborators(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
+    {
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->isOwnedBy($user);
+    }
+
+    public function renew(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
+    {
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->userCan($user, 'renew');
+    }
+
+    public function cancelSubscription(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
+    {
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->userCan($user, 'cancel_subscription');
+    }
+
+    public function manageTokens(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
+    {
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->userCan($user, 'manage_tokens');
+    }
+
+    public function manageAutoRenew(User $user, TeamSpeakServerAccount $teamSpeakServerAccount): bool
+    {
+        return $user->isAdmin()
+            || $teamSpeakServerAccount->userCan($user, 'manage_auto_renew');
     }
 }

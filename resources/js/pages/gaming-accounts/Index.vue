@@ -23,6 +23,7 @@ type GameServerAccount = {
     current_period_ends_at: string | null;
     hosting_plan: HostingPlan | null;
     gameserver_cloud_subscription?: GameserverCloudSubscription | null;
+    is_shared_with_me?: boolean;
 };
 
 type ServerOverview = {
@@ -127,7 +128,10 @@ function statusVariant(overview: ServerOverview | null, fallbackStatus: string):
                                         <Gamepad2 class="h-5 w-5" />
                                     </div>
                                     <div class="min-w-0">
-                                        <CardTitle class="truncate text-base">{{ acc.name }}</CardTitle>
+                                        <div class="flex items-center gap-2">
+                                            <CardTitle class="truncate text-base">{{ acc.name }}</CardTitle>
+                                            <Badge v-if="acc.is_shared_with_me" variant="secondary" size="sm">Geteilt</Badge>
+                                        </div>
                                         <div class="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                                             <Package class="h-3.5 w-3.5 shrink-0" />
                                             <span class="truncate">{{ planLabel(acc) }}</span>

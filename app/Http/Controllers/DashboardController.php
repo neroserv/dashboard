@@ -240,62 +240,66 @@ class DashboardController extends Controller
 
         if ($brandFeatures['domains_shop'] ?? true) {
             $domains = ResellerDomain::query()
-                ->where('user_id', $user->id)
+                ->viewableBy($user)
                 ->where('status', 'active')
-                ->get(['id', 'domain']);
+                ->get(['id', 'domain', 'user_id']);
             foreach ($domains as $domain) {
                 $list[] = [
                     'name' => $domain->domain,
                     'url' => route('domains.manage.show', $domain),
                     'type' => 'domain',
+                    'is_shared_with_me' => ! $domain->isOwnedBy($user),
                 ];
             }
         }
 
         if ($brandFeatures['webspace'] ?? false) {
             $webspaces = WebspaceAccount::query()
-                ->where('user_id', $user->id)
+                ->viewableBy($user)
                 ->where('status', 'active')
                 ->with('hostingPlan:id,name')
-                ->get(['id', 'domain', 'hosting_plan_id']);
+                ->get(['id', 'domain', 'hosting_plan_id', 'user_id']);
             foreach ($webspaces as $acc) {
                 $name = $acc->hostingPlan?->name ?: $acc->domain ?: 'Webspace';
                 $list[] = [
                     'name' => $name,
                     'url' => route('webspace-accounts.show', $acc),
                     'type' => 'webspace',
+                    'is_shared_with_me' => ! $acc->isOwnedBy($user),
                 ];
             }
         }
 
         if ($brandFeatures['gaming'] ?? false) {
             $gameServers = GameServerAccount::query()
-                ->where('user_id', $user->id)
+                ->viewableBy($user)
                 ->where('status', 'active')
                 ->with('hostingPlan:id,name')
-                ->get(['id', 'name', 'identifier', 'hosting_plan_id']);
+                ->get(['id', 'name', 'identifier', 'hosting_plan_id', 'user_id']);
             foreach ($gameServers as $acc) {
                 $name = $acc->name ?: $acc->identifier ?: $acc->hostingPlan?->name ?: 'Game Server';
                 $list[] = [
                     'name' => $name,
                     'url' => route('gaming-accounts.show', $acc),
                     'type' => 'gaming',
+                    'is_shared_with_me' => ! $acc->isOwnedBy($user),
                 ];
             }
         }
 
         if ($brandFeatures['teamspeak'] ?? false) {
             $teamSpeakServers = TeamSpeakServerAccount::query()
-                ->where('user_id', $user->id)
+                ->viewableBy($user)
                 ->where('status', 'active')
                 ->with('hostingPlan:id,name')
-                ->get(['id', 'name', 'hosting_plan_id']);
+                ->get(['id', 'name', 'hosting_plan_id', 'user_id']);
             foreach ($teamSpeakServers as $acc) {
                 $name = $acc->name ?: $acc->hostingPlan?->name ?: 'TeamSpeak-Server';
                 $list[] = [
                     'name' => $name,
                     'url' => route('teamspeak-accounts.show', $acc),
                     'type' => 'teamspeak',
+                    'is_shared_with_me' => ! $acc->isOwnedBy($user),
                 ];
             }
         }

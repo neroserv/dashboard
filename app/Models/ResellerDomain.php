@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasProductShares;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ResellerDomain extends Model
 {
-    use HasFactory;
+    use HasFactory, HasProductShares;
 
     /**
      * @var list<string>
@@ -56,5 +57,10 @@ class ResellerDomain extends Model
         }
 
         return round($sale - $purchase, 2);
+    }
+
+    public function isOwnedBy(User $user): bool
+    {
+        return $this->user_id === $user->id;
     }
 }

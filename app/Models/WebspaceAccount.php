@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasProductShares;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WebspaceAccount extends Model
 {
+    use HasProductShares;
+
     /**
      * @var list<string>
      */
@@ -89,5 +92,10 @@ class WebspaceAccount extends Model
         }
 
         return $this->current_period_ends_at !== null && $this->current_period_ends_at->isPast();
+    }
+
+    public function isOwnedBy(User $user): bool
+    {
+        return $this->user_id === $user->id;
     }
 }

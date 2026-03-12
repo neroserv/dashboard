@@ -13,7 +13,9 @@ import {
     Wand2,
     Plus,
     Trash2,
+    Share2,
 } from 'lucide-vue-next';
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue';
 import { ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -80,10 +82,20 @@ type Props = {
     domain: Domain;
     domains_index_url: string;
     easy_dns_presets?: EasyDnsPreset[];
+    canManageCollaborators?: boolean;
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>;
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>;
+    allowedSharePermissions?: string[];
+    storeInvitationUrl?: string | null;
 };
 
 const props = withDefaults(defineProps<Props>(), {
     easy_dns_presets: () => [],
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
 });
 
 const baseUrl = () => `/domains/${props.domain.id}`;
@@ -820,6 +832,10 @@ const zoneInfo = {
                             <Info class="h-4 w-4" />
                             <span class="hidden sm:inline">Whois Privacy</span>
                         </TabsTrigger>
+                        <TabsTrigger v-if="canManageCollaborators" value="sharing" class="gap-2 px-3 py-2">
+                            <Share2 class="h-4 w-4" />
+                            <span class="hidden sm:inline">Teilen</span>
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="overview" class="mt-0">
@@ -1229,6 +1245,14 @@ const zoneInfo = {
                                 </CardContent>
                             </Card>
                         </div>
+                    </TabsContent>
+                    <TabsContent v-if="canManageCollaborators" value="sharing" class="mt-4">
+                        <ProductSharingCard
+                            :product-shares="productShares"
+                            :product-invitations="productInvitations"
+                            :allowed-share-permissions="allowedSharePermissions"
+                            :store-invitation-url="storeInvitationUrl ?? ''"
+                        />
                     </TabsContent>
                 </Tabs>
             </div>

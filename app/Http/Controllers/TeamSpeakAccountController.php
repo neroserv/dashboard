@@ -37,9 +37,7 @@ class TeamSpeakAccountController extends Controller
 
     protected function authorizeAccount(Request $request, TeamSpeakServerAccount $account): void
     {
-        if ($account->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $account);
     }
 
     public function index(Request $request): Response|RedirectResponse
@@ -49,11 +47,17 @@ class TeamSpeakAccountController extends Controller
             return $redirect;
         }
 
-        $accounts = $request->user()
-            ->teamSpeakServerAccounts()
+        $user = $request->user();
+        $accounts = TeamSpeakServerAccount::query()
+            ->viewableBy($user)
             ->with(['hostingPlan', 'hostingServer'])
             ->latest()
-            ->get();
+            ->get()
+            ->map(function (TeamSpeakServerAccount $account) use ($user) {
+                $account->setAttribute('is_shared_with_me', ! $account->isOwnedBy($user));
+
+                return $account;
+            });
 
         $serverInfos = [];
         $client = null;
@@ -138,6 +142,35 @@ class TeamSpeakAccountController extends Controller
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
             'auto_renew_with_balance' => (bool) $teamSpeakServerAccount->auto_renew_with_balance,
             'has_mollie_subscription' => ! empty($teamSpeakServerAccount->mollie_subscription_id),
+            'canManageCollaborators' => $request->user()->can('manageCollaborators', $teamSpeakServerAccount),
+            'productShares' => $request->user()->can('manageCollaborators', $teamSpeakServerAccount)
+                ? $teamSpeakServerAccount->productShares()
+                    ->with('user:id,name,email')
+                    ->get()
+                    ->map(fn ($s) => [
+                        'id' => $s->id,
+                        'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name, 'email' => $s->user->email] : null,
+                        'permissions' => $s->permissions ?? [],
+                        'update_url' => route('teamspeak-accounts.shares.update', [$teamSpeakServerAccount, $s]),
+                        'destroy_url' => route('teamspeak-accounts.shares.destroy', [$teamSpeakServerAccount, $s]),
+                    ])->all()
+                : [],
+            'productInvitations' => $request->user()->can('manageCollaborators', $teamSpeakServerAccount)
+                ? $teamSpeakServerAccount->productInvitations()->whereNull('accepted_at')->where('expires_at', '>', now())->get()
+                    ->map(fn ($i) => [
+                        'id' => $i->id,
+                        'email' => $i->email,
+                        'permissions' => $i->permissions ?? [],
+                        'expires_at' => $i->expires_at?->toIso8601String(),
+                        'destroy_url' => route('teamspeak-accounts.invitations.destroy', [$teamSpeakServerAccount, $i]),
+                    ])->all()
+                : [],
+            'allowedSharePermissions' => $request->user()->can('manageCollaborators', $teamSpeakServerAccount)
+                ? config('product-share-permissions.'.TeamSpeakServerAccount::class, [])
+                : [],
+            'storeInvitationUrl' => $request->user()->can('manageCollaborators', $teamSpeakServerAccount)
+                ? route('teamspeak-accounts.shares.invitations.store', $teamSpeakServerAccount)
+                : null,
         ]);
     }
 
@@ -542,9 +575,7 @@ class TeamSpeakAccountController extends Controller
             return $redirect;
         }
 
-        if ($teamSpeakServerAccount->user_id !== $request->user()->id) {
-            abort(403, 'Nur der Besitzer kann das Abo kündigen.');
-        }
+        $this->authorize('cancelSubscription', $teamSpeakServerAccount);
 
         if (! $teamSpeakServerAccount->mollie_subscription_id) {
             return redirect()

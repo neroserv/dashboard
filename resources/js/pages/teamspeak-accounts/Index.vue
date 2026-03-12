@@ -18,6 +18,7 @@ type TeamSpeakServerAccount = {
     port: number | null;
     current_period_ends_at: string | null;
     hosting_plan: HostingPlan;
+    is_shared_with_me?: boolean;
 };
 
 type ServerInfo = {
@@ -106,6 +107,7 @@ function statusVariant(info: ServerInfo | null, fallbackStatus: string): 'succes
                             <CardTitle class="flex items-center gap-2 text-base">
                                 <Headphones class="h-4 w-4" />
                                 {{ acc.name }}
+                                <Badge v-if="acc.is_shared_with_me" variant="secondary" size="sm">Geteilt</Badge>
                             </CardTitle>
                             <Badge :variant="statusVariant(getInfo(acc), acc.status)">
                                 {{ displayStatus(getInfo(acc), acc.status) }}

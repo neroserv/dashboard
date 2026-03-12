@@ -54,11 +54,17 @@ class GamingAccountController extends Controller
             return $redirect;
         }
 
-        $accounts = $request->user()
-            ->gameServerAccounts()
+        $user = $request->user();
+        $accounts = GameServerAccount::query()
+            ->viewableBy($user)
             ->with(['hostingPlan', 'hostingServer', 'gameserverCloudSubscription.gameserverCloudPlan'])
             ->latest()
             ->get();
+        $accounts = $accounts->map(function (GameServerAccount $account) use ($user) {
+            $account->setAttribute('is_shared_with_me', ! $account->isOwnedBy($user));
+
+            return $account;
+        });
 
         $serverOverviews = [];
         $client = null;
@@ -99,9 +105,7 @@ class GamingAccountController extends Controller
             return $redirect;
         }
 
-        if ($gameServerAccount->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $gameServerAccount);
 
         $gameServerAccount->load('hostingPlan', 'hostingServer', 'gameserverCloudSubscription.gameserverCloudPlan');
 
@@ -207,6 +211,35 @@ class GamingAccountController extends Controller
             'subdomainSuffix' => $subdomainSuffix,
             'currentSubdomainPart' => $currentSubdomainPart,
             'phpmyadminAvailable' => (bool) config('services.phpmyadmin.url'),
+            'canManageCollaborators' => $request->user()->can('manageCollaborators', $gameServerAccount),
+            'productShares' => $request->user()->can('manageCollaborators', $gameServerAccount)
+                ? $gameServerAccount->productShares()
+                    ->with('user:id,name,email')
+                    ->get()
+                    ->map(fn ($s) => [
+                        'id' => $s->id,
+                        'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name, 'email' => $s->user->email] : null,
+                        'permissions' => $s->permissions ?? [],
+                        'update_url' => route('gaming-accounts.shares.update', [$gameServerAccount, $s]),
+                        'destroy_url' => route('gaming-accounts.shares.destroy', [$gameServerAccount, $s]),
+                    ])->all()
+                : [],
+            'productInvitations' => $request->user()->can('manageCollaborators', $gameServerAccount)
+                ? $gameServerAccount->productInvitations()->whereNull('accepted_at')->where('expires_at', '>', now())->get()
+                    ->map(fn ($i) => [
+                        'id' => $i->id,
+                        'email' => $i->email,
+                        'permissions' => $i->permissions ?? [],
+                        'expires_at' => $i->expires_at?->toIso8601String(),
+                        'destroy_url' => route('gaming-accounts.invitations.destroy', [$gameServerAccount, $i]),
+                    ])->all()
+                : [],
+            'allowedSharePermissions' => $request->user()->can('manageCollaborators', $gameServerAccount)
+                ? config('product-share-permissions.'.GameServerAccount::class, [])
+                : [],
+            'storeInvitationUrl' => $request->user()->can('manageCollaborators', $gameServerAccount)
+                ? route('gaming-accounts.shares.invitations.store', $gameServerAccount)
+                : null,
         ]);
     }
 
@@ -220,9 +253,7 @@ class GamingAccountController extends Controller
             return $redirect;
         }
 
-        if ($gameServerAccount->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $gameServerAccount);
 
         if ($gameServerAccount->isSuspendedOrExpired()) {
             return redirect()
@@ -261,9 +292,7 @@ class GamingAccountController extends Controller
             return $redirect;
         }
 
-        if ($gameServerAccount->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $gameServerAccount);
 
         if (! $gameServerAccount->isCloudAccount()) {
             return redirect()->route('gaming-accounts.show', $gameServerAccount)
@@ -1131,9 +1160,7 @@ class GamingAccountController extends Controller
         if ($redirect !== null) {
             return $redirect;
         }
-        if ($gameServerAccount->user_id !== $request->user()->id) {
-            abort(404);
-        }
+        $this->authorize('view', $gameServerAccount);
         $phpmyadminUrl = rtrim((string) config('services.phpmyadmin.url'), '/');
         if ($phpmyadminUrl === '') {
             return redirect()

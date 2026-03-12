@@ -24,15 +24,21 @@ class WebspaceAccountController extends Controller
     use \App\Http\Controllers\Concerns\RedirectsToMollieSubscriptionFirstPayment;
 
     /**
-     * List current user's webspace accounts.
+     * List webspace accounts the user owns or has shared access to.
      */
     public function index(Request $request): Response
     {
-        $accounts = $request->user()
-            ->webspaceAccounts()
+        $user = $request->user();
+        $accounts = WebspaceAccount::query()
+            ->viewableBy($user)
             ->with('hostingPlan')
             ->latest()
-            ->get();
+            ->get()
+            ->map(function (WebspaceAccount $account) use ($user) {
+                $account->setAttribute('is_shared_with_me', ! $account->isOwnedBy($user));
+
+                return $account;
+            });
 
         return Inertia::render('webspace-accounts/Index', [
             'webspaceAccounts' => $accounts,
@@ -94,6 +100,39 @@ class WebspaceAccountController extends Controller
 
         $isSuspendedOrExpired = $webspaceAccount->isSuspendedOrExpired();
 
+        $canManageCollaborators = $request->user()->can('manageCollaborators', $webspaceAccount);
+        $productShares = [];
+        $productInvitations = [];
+        $allowedSharePermissions = [];
+        $storeInvitationUrl = null;
+        if ($canManageCollaborators) {
+            $productShares = $webspaceAccount->productShares()
+                ->with('user:id,name,email')
+                ->get()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name, 'email' => $s->user->email] : null,
+                    'permissions' => $s->permissions ?? [],
+                    'update_url' => route('webspace-accounts.shares.update', [$webspaceAccount, $s]),
+                    'destroy_url' => route('webspace-accounts.shares.destroy', [$webspaceAccount, $s]),
+                ])
+                ->all();
+            $productInvitations = $webspaceAccount->productInvitations()
+                ->whereNull('accepted_at')
+                ->where('expires_at', '>', now())
+                ->get()
+                ->map(fn ($i) => [
+                    'id' => $i->id,
+                    'email' => $i->email,
+                    'permissions' => $i->permissions ?? [],
+                    'expires_at' => $i->expires_at?->toIso8601String(),
+                    'destroy_url' => route('webspace-accounts.invitations.destroy', [$webspaceAccount, $i]),
+                ])
+                ->all();
+            $allowedSharePermissions = config('product-share-permissions.'.WebspaceAccount::class, []);
+            $storeInvitationUrl = route('webspace-accounts.shares.invitations.store', $webspaceAccount);
+        }
+
         return Inertia::render('webspace-accounts/Show', [
             'webspaceAccount' => $webspaceAccount,
             'pleskPassword' => $pleskPassword,
@@ -107,6 +146,11 @@ class WebspaceAccountController extends Controller
             'isSuspendedOrExpired' => $isSuspendedOrExpired,
             'auto_renew_with_balance' => (bool) $webspaceAccount->auto_renew_with_balance,
             'has_mollie_subscription' => ! empty($webspaceAccount->mollie_subscription_id),
+            'canManageCollaborators' => $canManageCollaborators,
+            'productShares' => $productShares,
+            'productInvitations' => $productInvitations,
+            'allowedSharePermissions' => $allowedSharePermissions,
+            'storeInvitationUrl' => $storeInvitationUrl,
         ]);
     }
 

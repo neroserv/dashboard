@@ -9,12 +9,13 @@ class WebspaceAccountPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isAdmin();
+        return true;
     }
 
     public function view(User $user, WebspaceAccount $webspaceAccount): bool
     {
-        return $user->isAdmin() || $user->id === $webspaceAccount->user_id;
+        return $user->isAdmin()
+            || $webspaceAccount->userCan($user, 'view');
     }
 
     public function create(User $user): bool
@@ -40,5 +41,35 @@ class WebspaceAccountPolicy
     public function forceDelete(User $user, WebspaceAccount $webspaceAccount): bool
     {
         return $user->isAdmin();
+    }
+
+    public function manageCollaborators(User $user, WebspaceAccount $webspaceAccount): bool
+    {
+        return $user->isAdmin()
+            || $webspaceAccount->isOwnedBy($user);
+    }
+
+    public function renew(User $user, WebspaceAccount $webspaceAccount): bool
+    {
+        return $user->isAdmin()
+            || $webspaceAccount->userCan($user, 'renew');
+    }
+
+    public function cancelSubscription(User $user, WebspaceAccount $webspaceAccount): bool
+    {
+        return $user->isAdmin()
+            || $webspaceAccount->userCan($user, 'cancel_subscription');
+    }
+
+    public function pleskLogin(User $user, WebspaceAccount $webspaceAccount): bool
+    {
+        return $user->isAdmin()
+            || $webspaceAccount->userCan($user, 'plesk_login');
+    }
+
+    public function manageAutoRenew(User $user, WebspaceAccount $webspaceAccount): bool
+    {
+        return $user->isAdmin()
+            || $webspaceAccount->userCan($user, 'manage_auto_renew');
     }
 }

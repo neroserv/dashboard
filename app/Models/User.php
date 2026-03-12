@@ -179,6 +179,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Product shares granted to this user (products shared with them).
+     *
+     * @return HasMany<ProductShare>
+     */
+    public function productShares(): HasMany
+    {
+        return $this->hasMany(ProductShare::class);
+    }
+
+    /**
      * Sites this user can edit as a collaborator.
      *
      * @return BelongsToMany<Site>

@@ -31,12 +31,14 @@ class DomainShopController extends Controller
 {
     public function index(Request $request): InertiaResponse
     {
-        $domains = $request->user()
-            ->resellerDomains()
+        $user = $request->user();
+        $domains = ResellerDomain::query()
+            ->viewableBy($user)
             ->latest('created_at')
             ->get()
             ->map(fn (ResellerDomain $d) => array_merge($d->only(['id', 'domain', 'status', 'expires_at', 'auto_renew']), [
                 'expires_at' => $d->expires_at?->format('d.m.Y'),
+                'is_shared_with_me' => ! $d->isOwnedBy($user),
             ]));
 
         return Inertia::render('domains/Index', [
