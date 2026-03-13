@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
-import { UserPlus, Mail, X } from 'lucide-vue-next';
+import { UserPlus, Mail, X, Pencil } from 'lucide-vue-next';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -54,10 +54,22 @@ const props = withDefaults(
 );
 
 const inviteDialogOpen = ref(false);
+const editingShare = ref<ProductShareItem | null>(null);
 
 const inviteForm = useForm({
     email: '',
     permissions: [] as string[],
+});
+
+const editForm = useForm({
+    permissions: [] as string[],
+});
+
+const isEditDialogOpen = computed({
+    get: () => editingShare.value !== null,
+    set: (open: boolean) => {
+        if (!open) editingShare.value = null;
+    },
 });
 
 function inviteSubmit() {
@@ -78,6 +90,37 @@ function setPermissionChecked(perm: string, checked: boolean) {
         }
     } else {
         inviteForm.permissions = inviteForm.permissions.filter((p) => p !== perm);
+    }
+}
+
+function openEditShare(share: ProductShareItem) {
+    editingShare.value = share;
+    editForm.permissions = [...(share.permissions ?? [])];
+    editForm.clearErrors();
+}
+
+function submitEditShare() {
+    const share = editingShare.value;
+    if (!share || editForm.processing) return;
+    editForm.permissions = editForm.permissions.filter((p) =>
+        props.allowedSharePermissions.includes(p),
+    );
+    if (editForm.permissions.length === 0) return;
+    editForm.patch(share.update_url, {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingShare.value = null;
+        },
+    });
+}
+
+function setEditPermissionChecked(perm: string, checked: boolean) {
+    if (checked) {
+        if (!editForm.permissions.includes(perm)) {
+            editForm.permissions = [...editForm.permissions, perm];
+        }
+    } else {
+        editForm.permissions = editForm.permissions.filter((p) => p !== perm);
     }
 }
 
@@ -152,9 +195,14 @@ function labelFor(perm: string): string {
                             </div>
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm" @click="removeShare(share.destroy_url)">
-                        <X class="h-4 w-4" />
-                    </Button>
+                    <div class="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" @click="openEditShare(share)" title="Berechtigungen anpassen">
+                            <Pencil class="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" @click="removeShare(share.destroy_url)" title="Zugriff entfernen">
+                            <X class="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
                 <div
                     v-for="inv in productInvitations"
@@ -223,6 +271,43 @@ function labelFor(perm: string): string {
                             </Button>
                             <Button type="submit" :disabled="inviteForm.processing || inviteForm.permissions.length === 0">
                                 Einladung senden
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+            <Dialog v-model:open="isEditDialogOpen">
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Berechtigungen anpassen</DialogTitle>
+                        <DialogDescription v-if="editingShare">
+                            Berechtigungen für {{ editingShare.user?.name ?? editingShare.user?.email ?? '–' }} ändern.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form v-if="editingShare" @submit.prevent="submitEditShare" class="space-y-4">
+                        <div class="space-y-2">
+                            <Label>Berechtigungen</Label>
+                            <div class="flex flex-wrap gap-3">
+                                <div
+                                    v-for="perm in allowedSharePermissions"
+                                    :key="perm"
+                                    class="flex items-center gap-2"
+                                >
+                                    <Checkbox
+                                        :model-value="editForm.permissions.includes(perm)"
+                                        @update:model-value="(val: boolean) => setEditPermissionChecked(perm, val)"
+                                    />
+                                    <span class="text-sm cursor-pointer" @click="setEditPermissionChecked(perm, !editForm.permissions.includes(perm))">{{ labelFor(perm) }}</span>
+                                </div>
+                            </div>
+                            <InputError :message="editForm.errors.permissions" />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" @click="editingShare = null">
+                                Abbrechen
+                            </Button>
+                            <Button type="submit" :disabled="editForm.processing || editForm.permissions.length === 0">
+                                Speichern
                             </Button>
                         </DialogFooter>
                     </form>
