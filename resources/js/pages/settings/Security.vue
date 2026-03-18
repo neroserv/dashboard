@@ -83,7 +83,7 @@
         </BCardBody>
       </BCard>
 
-      <BModal v-model="showEnablePinModal" title="PIN aktivieren" hide-footer @hidden="enablePinForm.reset()">
+      <BModal v-model="showEnablePinModal" title="PIN aktivieren" no-footer @hidden="enablePinForm.reset()">
         <BForm @submit.prevent="submitEnablePin">
           <div class="mb-3">
             <label class="form-label">Aktuelles Passwort</label>
@@ -126,7 +126,7 @@
         </BForm>
       </BModal>
 
-      <BModal v-model="showChangePinModal" title="PIN ändern" hide-footer @hidden="changePinForm.reset()">
+      <BModal v-model="showChangePinModal" title="PIN ändern" no-footer @hidden="changePinForm.reset()">
         <BForm @submit.prevent="submitChangePin">
           <div class="mb-3">
             <label class="form-label">Aktuelles Passwort</label>
@@ -169,7 +169,7 @@
         </BForm>
       </BModal>
 
-      <BModal v-model="showDisablePinModal" title="PIN deaktivieren" hide-footer @hidden="disablePinForm.reset()">
+      <BModal v-model="showDisablePinModal" title="PIN deaktivieren" no-footer @hidden="disablePinForm.reset()">
         <BForm @submit.prevent="submitDisablePin">
           <div class="mb-3">
             <label class="form-label">Aktuelles Passwort</label>

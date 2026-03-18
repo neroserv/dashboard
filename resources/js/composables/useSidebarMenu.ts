@@ -274,7 +274,7 @@ function buildAdminMenuItems(
   }
   if (hp('admin.hosting-servers') && brandFeatures.teamspeak === true) hostingChildren.push({ slug: 'admin-teamspeak-accounts', label: 'TeamSpeak-Server-Accounts', url: '/admin/teamspeak-accounts', icon: 'layout-dashboard' })
   if (hostingChildren.length > 0) {
-    items.push({ slug: 'admin-hosting', label: 'Hosting', icon: 'package-check', children: hostingChildren })
+    items.push({ slug: 'admin-hosting', label: 'Hosting', icon: 'server', children: hostingChildren })
   }
 
   if (hp('admin.sites') || hp('admin.templates')) {

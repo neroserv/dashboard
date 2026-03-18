@@ -53,6 +53,7 @@
         <BNav tabs class="mb-3">
           <BNavItem :active="activeTab === 'overview'" @click="activeTab = 'overview'">Übersicht</BNavItem>
           <BNavItem :active="activeTab === 'access'" @click="activeTab = 'access'">Zugang</BNavItem>
+          <BNavItem v-if="canManageCollaborators" :active="activeTab === 'sharing'" @click="activeTab = 'sharing'">Teilen</BNavItem>
         </BNav>
 
         <BCard v-if="activeTab === 'overview'" no-body>
@@ -108,6 +109,14 @@
           </BCardBody>
         </BCard>
 
+        <ProductSharingCard
+          v-else-if="activeTab === 'sharing' && canManageCollaborators"
+          :product-shares="productShares ?? []"
+          :product-invitations="productInvitations ?? []"
+          :allowed-share-permissions="allowedSharePermissions ?? []"
+          :store-invitation-url="storeInvitationUrl ?? ''"
+        />
+
         <BCard v-else-if="activeTab === 'access'" no-body>
           <BCardBody>
             <div class="mb-3">
@@ -159,6 +168,7 @@ import {
 } from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type WebspaceAccount = {
@@ -184,15 +194,29 @@ type ResourceUsage = {
   databases_limit: number
 }
 
-const props = defineProps<{
-  webspaceAccount: WebspaceAccount | null
-  pleskPassword: string | null
-  webmailUrl: string
-  resourceUsage: ResourceUsage | null
-  renewUrl?: string
-  isSuspendedOrExpired?: boolean
-  connectDomainShowUrl?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    webspaceAccount: WebspaceAccount | null
+    pleskPassword: string | null
+    webmailUrl: string
+    resourceUsage: ResourceUsage | null
+    renewUrl?: string
+    isSuspendedOrExpired?: boolean
+    connectDomainShowUrl?: string
+    canManageCollaborators?: boolean
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
+    allowedSharePermissions?: string[]
+    storeInvitationUrl?: string | null
+  }>(),
+  {
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
+  },
+)
 
 const activeTab = ref('overview')
 const showPassword = ref(false)

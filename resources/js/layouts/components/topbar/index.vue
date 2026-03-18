@@ -6,19 +6,19 @@
         <div class="logo-topbar">
           <Link href="/" class="logo-light">
             <span class="logo-lg">
-              <img src="/images/logo.png" alt="logo" />
+              <img :src="logoForDarkBg" alt="logo" />
             </span>
             <span class="logo-sm">
-              <img src="/images/logo-sm.png" alt="small logo" />
+              <img :src="logoCollapsed" alt="small logo" />
             </span>
           </Link>
 
           <Link href="/" class="logo-dark">
             <span class="logo-lg">
-              <img src="/images/logo-black.png" alt="dark logo" />
+              <img :src="logoForLightBg" alt="dark logo" />
             </span>
             <span class="logo-sm">
-              <img src="/images/logo-sm.png" alt="small logo" />
+              <img :src="logoCollapsed" alt="small logo" />
             </span>
           </Link>
         </div>
@@ -61,31 +61,26 @@
 
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import Icon from '@/components/wrappers/Icon.vue'
-import MenuToggler from './components/MenuToggler.vue'
+import { ref, onMounted, onUnmounted, provide } from 'vue';
+import Icon from '@/components/wrappers/Icon.vue';
+import { useBrandLogos } from '@/composables/useBrandLogos';
+import { topbarDropdownKey } from '@/composables/useTopbarDropdown';
+import AppsDropdownGrid from './components/AppsDropdownGrid.vue';
+import CustomizerToggler from './components/CustomizerToggler.vue';
+import FullscreenToggler from './components/FullscreenToggler.vue';
+import LanguageSelectorRounded from './components/LanguageSelectorRounded.vue';
+import MegamenuApps from './components/MegamenuApps.vue';
+import MegamenuColumns from './components/MegamenuColumns.vue';
+import MenuToggler from './components/MenuToggler.vue';
+import MonochromeToggler from './components/MonochromeToggler.vue';
+import NotificationDropdownPeople from './components/NotificationDropdownPeople.vue';
+import SearchBoxRounded from './components/SearchBoxRounded.vue';
+import ThemeDropdown from './components/ThemeDropdown.vue';
+import UserDropdownDetailed from './components/UserDropdownDetailed.vue';
 
-import SearchBoxRounded from './components/SearchBoxRounded.vue'
+const { logoForDarkBg, logoForLightBg, logoCollapsed } = useBrandLogos();
 
-import MegamenuColumns from './components/MegamenuColumns.vue'
-import MegamenuApps from './components/MegamenuApps.vue'
-
-import ThemeDropdown from './components/ThemeDropdown.vue'
-
-import LanguageSelectorRounded from './components/LanguageSelectorRounded.vue'
-import AppsDropdownGrid from './components/AppsDropdownGrid.vue'
-
-import NotificationDropdownPeople from './components/NotificationDropdownPeople.vue'
-
-import FullscreenToggler from './components/FullscreenToggler.vue'
-import MonochromeToggler from './components/MonochromeToggler.vue'
-import UserDropdownDetailed from './components/UserDropdownDetailed.vue'
-
-import CustomizerToggler from './components/CustomizerToggler.vue'
-
-import { ref, onMounted, onUnmounted, provide } from 'vue'
-import { topbarDropdownKey } from '@/composables/useTopbarDropdown'
-
-const isActive = ref(false)
+const isActive = ref(false);
 const topbar = ref<HTMLElement | null>(null)
 
 const openDropdownId = ref<string | null>(null)

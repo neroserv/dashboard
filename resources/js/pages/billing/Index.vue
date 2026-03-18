@@ -17,6 +17,11 @@
       </BCardHeader>
       <BCardBody>
         <BTable v-if="invoices?.length" :items="invoices" :fields="invoiceFields" responsive stacked="sm">
+          <template #cell(status)="{ item }">
+            <span :class="invoiceStatusBadgeClass(item.status)">
+              {{ invoiceStatusLabelDe(item.status) }}
+            </span>
+          </template>
           <template #cell(number)="{ item }">
             <code class="small">{{ item.number }}</code>
           </template>
@@ -174,7 +179,6 @@
 
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
 import {
   BButton,
   BCard,
@@ -184,9 +188,11 @@ import {
   BFormRadio,
   BTable,
 } from 'bootstrap-vue-next'
+import { ref, computed, watch } from 'vue'
+import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import { invoiceStatusBadgeClass, invoiceStatusLabelDe } from '@/lib/invoiceStatus'
 
 const QUICK_AMOUNTS = [5, 10, 20, 50, 100, 200]
 const BALANCE_TOPUP_MAX = 500
@@ -231,6 +237,7 @@ const invoiceFields = [
   { key: 'number', label: 'Nummer' },
   { key: 'amount', label: 'Betrag' },
   { key: 'invoice_date', label: 'Datum' },
+  { key: 'status', label: 'Status' },
   { key: 'actions', label: 'Aktionen' },
 ]
 const balanceFields = [

@@ -65,7 +65,7 @@
         </BCardBody>
       </BCard>
 
-      <BModal v-model="consentModalOpen" title="Zustimmung zu Discord-Benachrichtigungen" hide-footer @hidden="pendingConsentPreference = null">
+      <BModal v-model="consentModalOpen" title="Zustimmung zu Discord-Benachrichtigungen" no-footer @hidden="pendingConsentPreference = null">
         <p class="text-body-secondary">
           Discord ist ein externer Dienst. Die Nutzung von Discord erfolgt auf Ihre eigene Verantwortung. Wir übermitteln nur die für die Benachrichtigung nötigen Daten an Discord. Mit Ihrer Zustimmung bestätigen Sie, dass Sie diese Nutzung wünschen und die Verantwortung dafür tragen.
         </p>

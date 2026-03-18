@@ -2,17 +2,15 @@
   <div class="sidenav-menu">
     <Link href="/" class="logo">
       <span class="logo logo-light">
-        <span class="logo-lg"><img src="/images/logo.png" alt="logo" /></span>
-        <span class="logo-sm"><img src="/images/logo-sm.png" alt="small logo" /></span>
+        <span class="logo-lg"><img :src="logoForDarkBg" alt="logo" /></span>
+        <span class="logo-sm"><img :src="logoCollapsed" alt="small logo" /></span>
       </span>
 
       <span class="logo logo-dark">
-        <span class="logo-lg"><img src="/images/logo-black.png" alt="dark logo" /></span>
-        <span class="logo-sm"><img src="/images/logo-sm.png" alt="small logo" /></span>
+        <span class="logo-lg"><img :src="logoForLightBg" alt="dark logo" /></span>
+        <span class="logo-sm"><img :src="logoCollapsed" alt="small logo" /></span>
       </span>
     </Link>
-
-    <OnHoverToggle />
 
     <OffcanvasToggle />
 
@@ -26,10 +24,11 @@
 
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import simplebar from 'simplebar-vue'
-import AppMenu from './components/AppMenu.vue'
-import UserProfileSettings from './components/UserProfileSettings.vue'
+import simplebar from 'simplebar-vue';
+import { useBrandLogos } from '@/composables/useBrandLogos';
+import AppMenu from './components/AppMenu.vue';
+import OffcanvasToggle from './components/OffcanvasToggle.vue';
+import UserProfileSettings from './components/UserProfileSettings.vue';
 
-import OnHoverToggle from './components/OnHoverToggle.vue'
-import OffcanvasToggle from './components/OffcanvasToggle.vue'
+const { logoForDarkBg, logoForLightBg, logoCollapsed } = useBrandLogos();
 </script>

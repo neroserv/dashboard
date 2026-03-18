@@ -1,10 +1,10 @@
 <template>
     <div class="position-absolute top-0 end-0">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
 
     <div class="position-absolute start-0 bottom-0" style="transform: rotate(180deg)">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
 
     <div class="auth-box overflow-hidden align-items-center d-flex">
@@ -90,8 +90,11 @@ import {
     BSpinner,
 } from 'bootstrap-vue-next';
 import AuthLogo from '@/components/AuthLogo.vue';
+import { useAuthCardBgUrl } from '@/composables/useBrandLogos';
 import { currentYear, META_DATA } from '@/config/constants';
 import password from '@/routes/password';
+
+const authCardBgSrc = useAuthCardBgUrl();
 
 defineProps<{
     status?: string;

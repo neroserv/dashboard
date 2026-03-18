@@ -426,13 +426,13 @@
         </BCard>
 
         <!-- Teilen -->
-        <BCard v-else-if="activeTab === 'sharing' && canManageCollaborators" no-body>
-          <BCardBody>
-            <p class="text-muted small mb-0">
-              Produkt teilen: Diese Funktion können Sie über das Panel oder den Support nutzen.
-            </p>
-          </BCardBody>
-        </BCard>
+        <ProductSharingCard
+          v-else-if="activeTab === 'sharing' && canManageCollaborators"
+          :product-shares="productShares ?? []"
+          :product-invitations="productInvitations ?? []"
+          :allowed-share-permissions="allowedSharePermissions ?? []"
+          :store-invitation-url="storeInvitationUrl ?? ''"
+        />
       </BCol>
     </BRow>
   </DefaultLayout>
@@ -465,6 +465,7 @@ import {
   GamingAccountDatabasesTab,
   GamingAccountSchedulesTab,
 } from '@/components/gaming-accounts'
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 
 type ServerOverview = {
   status?: string
@@ -510,6 +511,10 @@ const props = withDefaults(
     cloudResourcesUpdateUrl?: string | null
     canManageCollaborators?: boolean
     phpmyadminAvailable?: boolean
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
+    allowedSharePermissions?: string[]
+    storeInvitationUrl?: string | null
   }>(),
   {
     userEmail: '',
@@ -525,6 +530,10 @@ const props = withDefaults(
     cloudResourcesUpdateUrl: null,
     canManageCollaborators: false,
     phpmyadminAvailable: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
   },
 )
 

@@ -1,12 +1,15 @@
 <template>
     <Link href="/" class="logo-dark">
-        <img src="/images/logo-black.png" alt="dark logo" />
+        <img :src="logoForLightBg" alt="Logo" />
     </Link>
     <Link href="/" class="logo-light">
-        <img src="/images/logo.png" alt="logo" />
+        <img :src="logoForDarkBg" alt="Logo" />
     </Link>
 </template>
 
 <script lang="ts" setup>
 import { Link } from '@inertiajs/vue3';
+import { useBrandLogos } from '@/composables/useBrandLogos';
+
+const { logoForDarkBg, logoForLightBg } = useBrandLogos();
 </script>

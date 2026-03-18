@@ -91,7 +91,7 @@
     :title="editorFileName ? `Bearbeiten: ${editorFileName}` : 'Datei bearbeiten'"
     size="xl"
     body-class="p-0"
-    hide-footer
+    no-footer
     @hidden="editorVisible = false"
   >
     <div v-if="editorLoading" class="text-center py-5">

@@ -27,7 +27,7 @@
             </BButton>
           </template>
         </BTable>
-        <BModal v-model="credentialsModalOpen" title="Zugangsdaten" hide-footer>
+        <BModal v-model="credentialsModalOpen" title="Zugangsdaten" no-footer>
           <template v-if="credentialsModalDb">
             <p class="small text-muted">{{ credentialsModalDb.name }} – {{ hostPort(credentialsModalDb) }}</p>
             <div v-if="credentialsLoading" class="text-center py-3">

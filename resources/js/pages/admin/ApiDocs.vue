@@ -479,6 +479,7 @@ const endpoints: EndpointSpec[] = [
     "key": "default",
     "logo_url": "https://...",
     "logo_collapsed_url": null,
+    "auth_card_bg_url": null,
     "features": { "webspace": true, "gaming": true, "domains_shop": true },
     "seo": { "meta_description": "...", "og_title": "...", "og_image": null }
   }

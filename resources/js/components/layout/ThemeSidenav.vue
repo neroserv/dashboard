@@ -5,13 +5,16 @@
  */
 import { Link, router } from '@inertiajs/vue3';
 import { useMediaQuery } from '@vueuse/core';
-import { ref, computed, onMounted, inject } from 'vue';
 import { Lock, LogOut, Settings, User } from 'lucide-vue-next';
+import { ref, onMounted, inject } from 'vue';
+import { useBrandLogos } from '@/composables/useBrandLogos';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { logout } from '@/routes';
 import { toUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { logout } from '@/routes';
 import type { NavItem } from '@/types';
+
+const { logoForDarkBg, logoForLightBg, logoCollapsed } = useBrandLogos();
 
 interface Props {
     items: NavItem[];
@@ -38,11 +41,6 @@ const emit = defineEmits<{
 
 const { isCurrentUrl } = useCurrentUrl();
 const isMobile = useMediaQuery('(max-width: 1023px)');
-
-const collapsed = computed({
-    get: () => props.collapsed,
-    set: (v) => emit('update:collapsed', v),
-});
 
 function closeMobile() {
     emit('close-mobile');
@@ -161,21 +159,46 @@ function toggleNestedOpen(parentSlug: string, childSlug: string) {
         :class="{
             'translate-x-0': !isMobile || mobileOpen,
             '-translate-x-full': isMobile && !mobileOpen,
+            'sidebar-collapsed': collapsed,
         }"
         aria-label="Hauptnavigation"
     >
         <!-- Logo: exact classes and structure from .new Sidenav/index.tsx + AppLogo -->
         <Link
             href="/"
-            class="logo-box min-h-[var(--topbar-height)] sticky top-0 flex items-center justify-start px-6 backdrop-blur-xs"
+            class="logo-box sticky top-0 z-[1] flex w-full flex-col items-center justify-center px-3 py-5 backdrop-blur-xs sm:px-4"
         >
-            <span class="logo logo-light hidden">
-                <span class="logo-lg"><img alt="Logo" src="/images/logo.png" class="h-6" /></span>
-                <span class="logo-sm"><img alt="Logo" src="/images/logo-sm.png" class="h-6" /></span>
+            <span class="logo logo-light hidden w-full shrink-0">
+                <span v-show="!collapsed" class="logo-lg flex w-full justify-center">
+                    <img
+                        alt="Logo"
+                        :src="logoForDarkBg"
+                        class="mx-auto h-11 max-h-12 w-auto max-w-[min(100%,220px)] object-contain object-center sm:h-12"
+                    />
+                </span>
+                <span v-show="collapsed" class="logo-sm flex w-full justify-center">
+                    <img
+                        alt="Logo"
+                        :src="logoCollapsed"
+                        class="mx-auto size-11 object-contain object-center sm:size-12"
+                    />
+                </span>
             </span>
-            <span class="logo logo-dark">
-                <span class="logo-lg"><img alt="Logo" src="/images/logo-black.png" class="h-6" /></span>
-                <span class="logo-sm"><img alt="Logo" src="/images/logo-sm.png" class="h-6" /></span>
+            <span class="logo logo-dark flex w-full shrink-0 flex-col items-center">
+                <span v-show="!collapsed" class="logo-lg flex w-full justify-center">
+                    <img
+                        alt="Logo"
+                        :src="logoForLightBg"
+                        class="mx-auto h-11 max-h-12 w-auto max-w-[min(100%,220px)] object-contain object-center sm:h-12"
+                    />
+                </span>
+                <span v-show="collapsed" class="logo-sm flex w-full justify-center">
+                    <img
+                        alt="Logo"
+                        :src="logoCollapsed"
+                        class="mx-auto size-11 object-contain object-center sm:size-12"
+                    />
+                </span>
             </span>
         </Link>
 
@@ -194,7 +217,7 @@ function toggleNestedOpen(parentSlug: string, childSlug: string) {
                     v-if="showUserBlock && user"
                     id="user-profile-settings"
                     class="sidenav-user p-5"
-                    :style="{ backgroundImage: 'url(\"/images/user-bg-pattern.svg\")' }"
+                    :style="{ backgroundImage: 'url(/images/user-bg-pattern.svg)' }"
                 >
                     <div class="flex items-center justify-between">
                         <div>

@@ -536,7 +536,7 @@ const serversTableFields = [
                 <BModal
                     v-model="resourcesDialogOpen"
                     title="Ressourcen anpassen"
-                    hide-footer
+                    no-footer
                     @hidden="editingAccount = null"
                 >
                     <p class="text-muted small mb-3">

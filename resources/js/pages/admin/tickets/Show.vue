@@ -1,30 +1,30 @@
-<!-- Admin: Support-Ticket (Detail) -->
+<!-- Admin: Ticket (Detail) -->
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import {
-    BRow,
-    BCol,
+    BBadge,
+    BButton,
     BCard,
-    BCardHeader,
-    BCardTitle,
     BCardBody,
     BCardFooter,
-    BNav,
-    BNavItem,
-    BModal,
+    BCardHeader,
+    BCardTitle,
+    BCol,
     BForm,
+    BFormCheckbox,
     BFormGroup,
     BFormSelect,
-    BFormCheckbox,
-    BButton,
-    BBadge,
+    BModal,
+    BNav,
+    BNavItem,
+    BRow,
 } from 'bootstrap-vue-next';
 import InputError from '@/components/InputError.vue';
-import Icon from '@/components/wrappers/Icon.vue';
 import TicketReplyEditor from '@/components/TicketReplyEditor.vue';
+import Icon from '@/components/wrappers/Icon.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { sanitizeHtml, isHtml } from '@/lib/sanitize';
+import { isHtml, sanitizeHtml } from '@/lib/sanitize';
 import { dashboard } from '@/routes';
 import adminCustomers from '@/routes/admin/customers';
 import adminSites from '@/routes/admin/sites';
@@ -321,28 +321,33 @@ onMounted(() => {
 
         <BRow>
             <BCol>
-                <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
-                    <Link
-                        :href="adminTickets.index().url"
-                        class="text-body rounded p-1 d-inline-flex"
-                        aria-label="Zurück"
-                    >
-                        <Icon icon="arrow-left" class="flex-shrink-0" />
-                    </Link>
-                    <h4 class="mb-0 flex-grow-1 text-truncate">Ticket #{{ ticket.id }} » {{ ticket.subject }}</h4>
+                <div class="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <Link
+                            :href="adminTickets.index().url"
+                            class="text-body rounded p-1 d-inline-flex align-items-center"
+                            aria-label="Zurück"
+                        >
+                            <Icon icon="arrow-left" class="flex-shrink-0" />
+                        </Link>
+                        <div>
+                            <h4 class="mb-1 text-truncate">Ticket #{{ ticket.id }} » {{ ticket.subject }}</h4>
+                            <p class="text-muted small mb-0">Support-Ticket: Verlauf, Antworten und Einstellungen</p>
+                        </div>
+                    </div>
                     <Link :href="adminTickets.index().url">
                         <BButton variant="outline-primary" size="sm">Zurück zur Liste</BButton>
                     </Link>
                 </div>
-                <p class="text-muted small mb-3">Support-Ticket-Detail: Verlauf, Antworten und Einstellungen</p>
             </BCol>
         </BRow>
 
         <BRow>
-            <!-- Sidebar: Infos, Bearbeiten, Aktionen -->
+            <!-- Sidebar: Informationen, Bearbeiten, Aktionen -->
             <BCol cols="12" xl="3" class="mb-4">
                 <BCard no-body>
                     <BCardHeader class="py-3">
+                        <BCardTitle class="mb-2">Ticket</BCardTitle>
                         <BNav tabs class="card-header-tabs mb-0 flex-wrap">
                             <BNavItem :active="sidebarTab === 'info'" @click="sidebarTab = 'info'">
                                 <Icon icon="info" class="me-1" /> Informationen
@@ -356,7 +361,7 @@ onMounted(() => {
                         </BNav>
                     </BCardHeader>
                     <BCardBody class="py-4">
-                        <!-- Tab: Informationen (read-only) -->
+                        <!-- Tab: Informationen -->
                         <div v-show="sidebarTab === 'info'" class="space-y-3">
                             <div>
                                 <p class="mb-1 fw-semibold small">Betroffener Dienst</p>
@@ -406,7 +411,10 @@ onMounted(() => {
                                 <p class="mb-1 fw-semibold small">Letzte Tickets</p>
                                 <ul class="list-unstyled small mb-0">
                                     <li v-for="t in recentTickets" :key="t.id">
-                                        <Link :href="adminTickets.show(t.id).url" class="d-block rounded px-2 py-1 text-truncate text-body text-decoration-none hover-bg-light">
+                                        <Link
+                                            :href="adminTickets.show(t.uuid).url"
+                                            class="d-block rounded px-2 py-1 text-body text-decoration-none text-truncate hover-bg-light"
+                                        >
                                             #{{ t.id }} – {{ t.subject.length > 35 ? t.subject.slice(0, 35) + '…' : t.subject }}
                                         </Link>
                                     </li>
@@ -469,13 +477,13 @@ onMounted(() => {
                 </BCard>
             </BCol>
 
-            <!-- Hauptbereich: Timeline + Antwort -->
+            <!-- Hauptbereich: Verlauf und Antwort -->
             <BCol cols="12" xl="9">
                 <div v-if="lastMessageFromCustomer" class="mb-3">
                     <BBadge variant="primary">Kunde hat geantwortet</BBadge>
                 </div>
 
-                    <!-- Timeline -->
+                <!-- Timeline -->
                     <div ref="ticketMessagesRef" class="ticket_messages relative space-y-6">
                     <div
                         v-for="(item, _idx) in timeline"
@@ -554,8 +562,8 @@ onMounted(() => {
                     </div>
                 </div>
 
-                    <!-- Reply form (wie Support: Icon + Card mit orange Border) -->
-                    <div class="mt-6 pb-24">
+                <!-- Antwort-Formular -->
+                <div class="mt-6 pb-24">
                         <div class="flex gap-4">
                             <div class="relative hidden shrink-0 md:block md:w-12">
                                 <div
@@ -628,8 +636,8 @@ onMounted(() => {
             </BCol>
         </BRow>
 
-        <!-- Modals -->
-        <BModal v-model="noteDialogOpen" title="Interne Notiz hinzufügen" hide-footer>
+        <!-- Modals: Notiz, Merge -->
+        <BModal v-model="noteDialogOpen" title="Interne Notiz hinzufügen" no-footer>
             <p class="text-muted small mb-3">Diese Notiz ist nur für Mitarbeiter sichtbar. Der Kunde sieht sie nicht.</p>
             <BForm @submit.prevent="submitNote()">
                 <BFormGroup label="Notiz" label-for="note_body">
@@ -650,7 +658,7 @@ onMounted(() => {
                 </div>
             </BForm>
         </BModal>
-        <BModal v-model="mergeDialogOpen" title="Ticket zusammenführen" hide-footer>
+        <BModal v-model="mergeDialogOpen" title="Ticket zusammenführen" no-footer>
             <p class="text-muted small mb-3">
                 Dieses Ticket (#{{ ticket.id }}) wird in ein Ziel-Ticket verschoben. Alle Nachrichten werden dem Ziel-Ticket zugeordnet; dieses Ticket wird geschlossen.
             </p>

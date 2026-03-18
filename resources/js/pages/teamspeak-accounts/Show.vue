@@ -52,6 +52,7 @@
           <BNavItem :active="activeTab === 'access'" @click="activeTab = 'access'">Zugang</BNavItem>
           <BNavItem :active="activeTab === 'tokens'" @click="activeTab = 'tokens'">Tokens</BNavItem>
           <BNavItem :active="activeTab === 'backups'" @click="activeTab = 'backups'">Backups</BNavItem>
+          <BNavItem v-if="canManageCollaborators" :active="activeTab === 'sharing'" @click="activeTab = 'sharing'">Teilen</BNavItem>
         </BNav>
 
         <BCard v-if="activeTab === 'overview'" no-body>
@@ -117,6 +118,14 @@
           </BCardBody>
         </BCard>
 
+        <ProductSharingCard
+          v-else-if="activeTab === 'sharing' && canManageCollaborators"
+          :product-shares="productShares ?? []"
+          :product-invitations="productInvitations ?? []"
+          :allowed-share-permissions="allowedSharePermissions ?? []"
+          :store-invitation-url="storeInvitationUrl ?? ''"
+        />
+
         <BCard v-else-if="activeTab === 'backups'" no-body>
           <BCardHeader class="d-flex align-items-center justify-content-between">
             <h6 class="mb-0">Backups</h6>
@@ -141,7 +150,7 @@
       </BCol>
     </BRow>
 
-    <BModal v-model="tokenModalOpen" title="Neuen Token erstellen" hide-footer>
+    <BModal v-model="tokenModalOpen" title="Neuen Token erstellen" no-footer>
       <div class="mb-3">
         <label class="form-label">Beschreibung (optional)</label>
         <BFormInput v-model="newTokenDescription" placeholder="z. B. für Bot" />
@@ -173,6 +182,7 @@ import {
 } from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type TeamSpeakServerAccount = {
@@ -197,15 +207,29 @@ type ServerInfo = {
 type TokenRow = { token: string; group: string; description: string }
 type SnapshotRow = { id: number; created_at: string }
 
-const props = defineProps<{
-  teamSpeakServerAccount: TeamSpeakServerAccount | null
-  serverInfo: ServerInfo | null
-  tokens: TokenRow[]
-  snapshots: SnapshotRow[]
-  renewUrl?: string
-  isSuspendedOrExpired?: boolean
-  connectDomainShowUrl?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    teamSpeakServerAccount: TeamSpeakServerAccount | null
+    serverInfo: ServerInfo | null
+    tokens: TokenRow[]
+    snapshots: SnapshotRow[]
+    renewUrl?: string
+    isSuspendedOrExpired?: boolean
+    connectDomainShowUrl?: string
+    canManageCollaborators?: boolean
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
+    allowedSharePermissions?: string[]
+    storeInvitationUrl?: string | null
+  }>(),
+  {
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
+  },
+)
 
 const activeTab = ref('overview')
 const tokenModalOpen = ref(false)

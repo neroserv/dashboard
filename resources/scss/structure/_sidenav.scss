@@ -16,6 +16,32 @@
     [data-simplebar] {
         height: calc(100% - $topbar-height);
     }
+
+    /* Brand link: center, padding (do not force display on span.logo — breaks light/dark swap) */
+    > a.logo {
+        display: block !important;
+        box-sizing: border-box;
+        width: 100%;
+        flex-shrink: 0;
+        padding: 1.25rem 0.75rem !important;
+        line-height: 1 !important;
+        text-align: center;
+        text-decoration: none;
+
+        .logo-lg img,
+        .logo-sm img {
+            height: 3rem;
+            width: auto;
+            max-width: min(100%, 13.75rem);
+            object-fit: contain;
+            vertical-align: middle;
+        }
+
+        .logo-sm img {
+            height: 2.75rem;
+            max-width: 2.75rem;
+        }
+    }
 }
 
 // Side-nav
@@ -230,6 +256,10 @@ html[data-sidenav-size='condensed'] {
             }
         }
 
+        > a.logo {
+            padding: 0.875rem 0.35rem !important;
+        }
+
         .side-nav {
             gap: 0;
 
@@ -420,6 +450,10 @@ html[data-sidenav-size='on-hover'] {
             .logo-lg {
                 display: none;
             }
+        }
+
+        > a.logo {
+            padding: 0.875rem 0.35rem !important;
         }
 
         .side-nav-item {

@@ -2,6 +2,7 @@
 import { usePage } from '@inertiajs/vue3';
 import { computed, inject } from 'vue';
 import type { Ref } from 'vue';
+import { brandMainLogoRaw, resolveBrandAssetUrl } from '@/composables/useBrandLogos';
 import MobileNav from '@/templates/praxisemerald/components/MobileNav.vue';
 import Button from '@/templates/praxisemerald/components/ui/Button.vue';
 import type { HeaderComponentData, NavLink } from '@/types/layout-components';
@@ -29,7 +30,16 @@ const baseUrl = computed(() => {
 });
 
 const links = computed<NavLink[]>(() => props.data.links ?? []);
-const logoUrl = computed(() => props.data.logoUrl ?? '/images/logo.png');
+const logoUrl = computed(() => {
+    if (props.data.logoUrl) {
+        return props.data.logoUrl as string;
+    }
+    const fromBrand = resolveBrandAssetUrl(
+        brandMainLogoRaw(page.props.brand as { logoUrl?: string; logo_url?: string } | null),
+    );
+
+    return fromBrand ?? '/images/logo.png';
+});
 const logoAlt = computed(() => props.data.logoAlt ?? 'Logo');
 const siteName = computed(() => props.data.siteName ?? '');
 const ctaButtonText = computed(() => props.data.ctaButtonText ?? 'Termin vereinbaren');

@@ -385,7 +385,7 @@ onMounted(() => {
             </BCol>
         </BRow>
 
-        <BModal v-model="balanceModalOpen" title="Guthaben" hide-footer>
+        <BModal v-model="balanceModalOpen" title="Guthaben" no-footer>
             <p class="text-muted small mb-3">Aktuelles Guthaben und Transaktionen; Guthaben aufladen</p>
             <div class="mb-3">
                 <span class="small text-muted">Aktuelles Guthaben:</span>
@@ -428,7 +428,7 @@ onMounted(() => {
             </div>
         </BModal>
 
-        <BModal v-model="aiTokensModalOpen" title="AI Tokens" hide-footer>
+        <BModal v-model="aiTokensModalOpen" title="AI Tokens" no-footer>
             <p class="text-muted small mb-3">Aktueller Token-Stand und manuelle Anpassung (hinzufügen oder abziehen)</p>
             <div class="mb-3">
                 <span class="small text-muted">Aktueller Token-Stand:</span>

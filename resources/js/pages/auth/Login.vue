@@ -1,10 +1,10 @@
 <template>
     <div class="position-absolute top-0 end-0">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
 
     <div class="position-absolute start-0 bottom-0" style="transform: rotate(180deg)">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
 
     <div class="auth-box overflow-hidden align-items-center d-flex">
@@ -116,7 +116,6 @@
 
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
 import {
     BAlert,
     BButton,
@@ -128,9 +127,11 @@ import {
     BCard,
     BSpinner,
 } from 'bootstrap-vue-next';
-import AuthLogo from '@/components/AuthLogo.vue';
-import { currentYear, META_DATA } from '@/config/constants';
+import { computed } from 'vue';
 import AuthenticatedSessionController from '@/actions/Laravel/Fortify/Http/Controllers/AuthenticatedSessionController';
+import AuthLogo from '@/components/AuthLogo.vue';
+import { useAuthCardBgUrl } from '@/composables/useBrandLogos';
+import { currentYear, META_DATA } from '@/config/constants';
 
 defineProps<{
     status?: string;
@@ -139,6 +140,7 @@ defineProps<{
     canRegister: boolean;
 }>();
 
+const authCardBgSrc = useAuthCardBgUrl();
 const loginStore = AuthenticatedSessionController.store;
 
 const page = usePage();

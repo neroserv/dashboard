@@ -53,7 +53,7 @@
         </BTable>
       </div>
 
-      <BModal v-model="createModalOpen" title="Neuer Schedule" hide-footer>
+      <BModal v-model="createModalOpen" title="Neuer Schedule" no-footer>
         <BForm @submit.prevent="submitCreate">
           <div class="mb-3">
             <label class="form-label">Name</label>

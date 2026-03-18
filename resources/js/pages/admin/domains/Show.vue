@@ -309,7 +309,7 @@ onMounted(() => {
         <BModal
             v-model="authcodeDialogOpen"
             title="Auth-Code (Transfer)"
-            hide-footer
+            no-footer
         >
             <p class="text-muted small mb-3">
                 Dieser Code wird beim Domain-Transfer beim neuen Anbieter benötigt.

@@ -284,7 +284,7 @@ const copyGroupOptions = computed(() => [
                 <BModal
                     v-model="copyFromModalOpen"
                     title="Berechtigungen von Rolle übernehmen"
-                    hide-footer
+                    no-footer
                     @hidden="selectedGroupIdForCopy = ''"
                 >
                     <p class="text-muted small mb-3">

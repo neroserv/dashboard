@@ -17,8 +17,8 @@ import {
     BFormCheckbox,
     BButton,
 } from 'bootstrap-vue-next';
-import AdminLayout from '@/layouts/AdminLayout.vue';
 import InputError from '@/components/InputError.vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
@@ -31,6 +31,7 @@ type Brand = {
     is_default: boolean;
     logo_url: string | null;
     logo_collapsed_url: string | null;
+    auth_card_bg_url: string | null;
     seo: Record<string, string> | null;
     theme_colors: Record<string, string> | null;
     features: Record<string, boolean | number> | null;
@@ -85,6 +86,7 @@ const form = useForm({
     is_default: props.brand.is_default ?? false,
     logo_url: props.brand.logo_url ?? '',
     logo_collapsed_url: props.brand.logo_collapsed_url ?? '',
+    auth_card_bg_url: props.brand.auth_card_bg_url ?? '',
     seo: {
         ...defaultSeo,
         ...(props.brand.seo ?? {}),
@@ -124,6 +126,7 @@ const submit = () => {
         is_default: data.is_default,
         logo_url: data.logo_url,
         logo_collapsed_url: data.logo_collapsed_url,
+        auth_card_bg_url: data.auth_card_bg_url,
         seo: data.seo,
         theme_colors: data.theme_colors,
         features: {
@@ -235,6 +238,18 @@ const salutationOptions = [
                                     placeholder="URL für kleines Logo (z. B. Icon), sonst wird das normale Logo verkleinert"
                                 />
                                 <InputError :message="form.errors.logo_collapsed_url" />
+                            </BFormGroup>
+                            <BFormGroup label="Login-Hintergrund (Auth-Card)" label-for="auth_card_bg_url">
+                                <BFormInput
+                                    id="auth_card_bg_url"
+                                    v-model="form.auth_card_bg_url"
+                                    placeholder="/images/auth-card-bg.svg oder Pfad im Storage"
+                                />
+                                <InputError :message="form.errors.auth_card_bg_url" />
+                                <p class="text-muted small mb-0 mt-1">
+                                    Dekor im Hintergrund von Login, Registrierung, Passwort vergessen usw. Standard:
+                                    <code>/images/auth-card-bg.svg</code>
+                                </p>
                             </BFormGroup>
                         </BCardBody>
                     </BCard>

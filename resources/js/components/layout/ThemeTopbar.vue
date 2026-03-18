@@ -20,11 +20,14 @@ import { inject, watch } from 'vue';
 import type { Ref } from 'vue';
 import { Avatar } from '@/components/ui/avatar';
 import { useAppearance } from '@/composables/useAppearance';
+import { useBrandLogos } from '@/composables/useBrandLogos';
 import { logout } from '@/routes';
 import { index as billingIndex } from '@/routes/billing';
 import profile from '@/routes/profile';
 import { create as supportCreate } from '@/routes/support';
 import type { BreadcrumbItem } from '@/types';
+
+const { logoForDarkBg, logoForLightBg, logoCollapsed } = useBrandLogos();
 
 interface Props {
     breadcrumbs?: BreadcrumbItem[];
@@ -43,7 +46,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isMobile = useMediaQuery('(max-width: 1023px)');
 const openMobileSidebar = inject<() => void>('openMobileSidebar', () => {});
-const isSidebarCollapsed = inject<Ref<boolean> | null>('isSidebarCollapsed', null);
+const _isSidebarCollapsed = inject<Ref<boolean> | null>('isSidebarCollapsed', null);
 const toggleSidebarCollapsed = inject<() => void>('toggleSidebarCollapsed', () => {});
 
 const { appearance, updateAppearance } = useAppearance();
@@ -77,12 +80,12 @@ function openCustomizer() {
                 <div class="logo-topbar hidden md:block">
                     <Link class="logo-box flex items-center gap-2" href="/">
                         <div class="logo-light hidden">
-                            <img alt="Logo" class="logo-lg h-7" src="/images/logo.png" />
-                            <img alt="Logo" class="logo-sm h-7" src="/images/logo-sm.png" />
+                            <img alt="Logo" class="logo-lg h-7" :src="logoForDarkBg" />
+                            <img alt="Logo" class="logo-sm h-7" :src="logoCollapsed" />
                         </div>
                         <div class="logo-dark flex items-center">
-                            <img alt="Logo" class="logo-lg h-7" src="/images/logo.png" />
-                            <img alt="Logo" class="logo-sm h-7 hidden" src="/images/logo-sm.png" />
+                            <img alt="Logo" class="logo-lg h-7" :src="logoForLightBg" />
+                            <img alt="Logo" class="logo-sm h-7 hidden" :src="logoCollapsed" />
                         </div>
                     </Link>
                 </div>

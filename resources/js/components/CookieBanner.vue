@@ -6,6 +6,7 @@ import Button from '@/components/ui/button/Button.vue';
 import Modal from '@/components/ui/modal/Modal.vue';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Switch from '@/components/ui/switch/Switch.vue';
+import { brandMainLogoRaw, resolveBrandAssetUrl } from '@/composables/useBrandLogos';
 
 const COOKIE_CONSENT_NAME = 'cookie_consent';
 const COOKIE_MAX_AGE_DAYS = 365;
@@ -23,6 +24,7 @@ const settingsOpen = ref(false);
 const brand = computed(
     () => page.props.brand as { logoUrl?: string; name?: string; themeColors?: Record<string, string> } | null,
 );
+const brandLogoSrc = computed(() => resolveBrandAssetUrl(brandMainLogoRaw(brand.value as { logoUrl?: string; logo_url?: string } | null)));
 const privacyUrl = computed(() => (page.props.privacyUrl as string) ?? '#');
 
 const preferences = ref(true);
@@ -165,9 +167,9 @@ onMounted(() => {
             :style="brandThemeStyle"
         >
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                <div v-if="brand?.logoUrl" class="shrink-0 self-start sm:self-center">
+                <div v-if="brandLogoSrc" class="shrink-0 self-start sm:self-center">
                     <img
-                        :src="brand.logoUrl"
+                        :src="brandLogoSrc"
                         :alt="brand.name ?? ''"
                         class="h-8 max-h-8 w-auto object-contain object-left"
                     />
@@ -202,9 +204,9 @@ onMounted(() => {
 
     <Modal v-model="settingsOpen" size="lg" class="bg-card text-card-foreground">
         <div class="p-5" :style="brandThemeStyle">
-            <div v-if="brand?.logoUrl" class="mb-4">
+            <div v-if="brandLogoSrc" class="mb-4">
                 <img
-                    :src="brand.logoUrl"
+                    :src="brandLogoSrc"
                     :alt="brand.name ?? ''"
                     class="h-10 w-auto object-contain object-left"
                 />

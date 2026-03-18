@@ -1,9 +1,9 @@
 <template>
     <div class="position-absolute top-0 end-0">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
     <div class="position-absolute start-0 bottom-0" style="transform: rotate(180deg)">
-        <img src="/images/auth-card-bg.svg" class="auth-card-bg-img" alt="auth-card-bg" />
+        <img :src="authCardBgSrc" class="auth-card-bg-img" alt="" />
     </div>
     <div class="auth-box overflow-hidden align-items-center d-flex">
         <Head title="Passwort bestätigen" />
@@ -53,5 +53,8 @@
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { BContainer, BRow, BCol, BCard, BFormInput, BButton, BSpinner } from 'bootstrap-vue-next';
 import AuthLogo from '@/components/AuthLogo.vue';
+import { useAuthCardBgUrl } from '@/composables/useBrandLogos';
 import { store as confirmStore } from '@/routes/password/confirm';
+
+const authCardBgSrc = useAuthCardBgUrl();
 </script>

@@ -162,6 +162,14 @@
               <div class="d-flex justify-content-between"><span class="text-muted">Läuft ab</span><span>{{ formatDate(subscription.current_period_ends_at) }}</span></div>
             </BCardBody>
           </BCard>
+          <ProductSharingCard
+            v-if="canManageCollaborators"
+            class="mb-4"
+            :product-shares="productShares ?? []"
+            :product-invitations="productInvitations ?? []"
+            :allowed-share-permissions="allowedSharePermissions ?? []"
+            :store-invitation-url="storeInvitationUrl ?? ''"
+          />
           <Link href="/gaming/cloud/subscriptions" class="btn btn-outline-secondary w-100">Zur Cloud-Abos</Link>
         </BCol>
       </BRow>
@@ -175,6 +183,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { BAlert, BBadge, BButton, BCard, BCardBody, BCardHeader, BCol, BForm, BFormInput, BFormSelect, BRow } from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type GameServerAccount = {
@@ -209,10 +218,24 @@ type Subscription = {
   game_server_accounts: GameServerAccount[]
 }
 
-const props = defineProps<{
-  subscription: Subscription | null
-  renewUrl?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    subscription: Subscription | null
+    renewUrl?: string
+    canManageCollaborators?: boolean
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
+    allowedSharePermissions?: string[]
+    storeInvitationUrl?: string | null
+  }>(),
+  {
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
+  },
+)
 
 const page = usePage()
 const flash = computed(() => (page.props.flash as { error?: string; success?: string }) ?? {})

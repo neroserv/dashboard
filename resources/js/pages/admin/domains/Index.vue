@@ -313,7 +313,7 @@ function dismissHint() {
         <BModal
             v-model="importDialogOpen"
             title="Skrime-Domain importieren"
-            hide-footer
+            no-footer
             @hidden="importForm.reset()"
         >
             <p class="text-muted small mb-3">

@@ -91,21 +91,23 @@
           </BCardBody>
         </BCard>
 
-        <BCard v-show="activeTab === 'sharing' && canManageCollaborators" no-body>
-          <BCardBody>
-            <p class="text-muted small">Produktfreigaben und Einladungen können hier verwaltet werden.</p>
-          </BCardBody>
-        </BCard>
+        <ProductSharingCard
+          v-show="activeTab === 'sharing' && canManageCollaborators"
+          :product-shares="productShares ?? []"
+          :product-invitations="productInvitations ?? []"
+          :allowed-share-permissions="allowedSharePermissions ?? []"
+          :store-invitation-url="storeInvitationUrl ?? ''"
+        />
       </div>
     </div>
 
-    <BModal v-model="authcodeDialogOpen" title="Authcode" hide-footer>
+    <BModal v-model="authcodeDialogOpen" title="Authcode" no-footer>
       <BSpinner v-if="authcodeLoading" />
       <p v-else-if="authcodeError" class="text-danger">{{ authcodeError }}</p>
       <code v-else class="d-block p-2 bg-light rounded">{{ authcodeValue || '–' }}</code>
     </BModal>
 
-    <BModal v-model="nameserverDialogOpen" title="Nameserver ändern" hide-footer>
+    <BModal v-model="nameserverDialogOpen" title="Nameserver ändern" no-footer>
       <BForm @submit.prevent="submitNameserver">
         <div v-for="(ns, idx) in nameserverForm.nameservers" :key="idx" class="mb-2 d-flex gap-2">
           <BFormInput v-model="nameserverForm.nameservers[idx]" :placeholder="`Nameserver ${idx + 1}`" />
@@ -120,7 +122,7 @@
       </BForm>
     </BModal>
 
-    <BModal v-model="renewDialogOpen" title="Domain verlängern" hide-footer>
+    <BModal v-model="renewDialogOpen" title="Domain verlängern" no-footer>
       <p>Verlängerung für <strong>{{ domain.renew_price }} €</strong> pro Jahr.</p>
       <BButton variant="primary" class="w-100" @click="renew">Kostenpflichtig verlängern</BButton>
     </BModal>
@@ -148,6 +150,7 @@ import {
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 import { countriesSortedByName } from '@/lib/countries'
 
 const props = withDefaults(
@@ -155,8 +158,18 @@ const props = withDefaults(
     domain: { uuid: string; domain: string; status: string; expires_at: string | null; auto_renew: boolean; nameservers: string[]; renew_price: number | null }
     domains_index_url: string
     canManageCollaborators?: boolean
+    productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
+    productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
+    allowedSharePermissions?: string[]
+    storeInvitationUrl?: string | null
   }>(),
-  { canManageCollaborators: false },
+  {
+    canManageCollaborators: false,
+    productShares: () => [],
+    productInvitations: () => [],
+    allowedSharePermissions: () => [],
+    storeInvitationUrl: null,
+  },
 )
 
 const baseUrl = () => `/domains/${props.domain.uuid}`

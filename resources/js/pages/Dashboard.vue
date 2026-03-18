@@ -250,7 +250,12 @@
                             >
                                 <div>
                                     <p class="fw-medium mb-0">{{ inv.invoice_date }} – {{ inv.number }}</p>
-                                    <small class="text-muted">{{ inv.status }}</small>
+                                    <span
+                                        class="mt-1 d-inline-block"
+                                        :class="invoiceStatusBadgeClass(inv.status)"
+                                    >
+                                        {{ invoiceStatusLabelDe(inv.status) }}
+                                    </span>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="fw-semibold">{{ inv.amount }}</span>
@@ -270,7 +275,14 @@
 
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import {
+    BCard,
+    BCardBody,
+    BCardHeader,
+    BCardTitle,
+    BCol,
+    BRow,
+} from 'bootstrap-vue-next';
 import {
     Activity,
     Wallet,
@@ -289,17 +301,10 @@ import {
     KeyRound,
     Layout,
 } from 'lucide-vue-next';
-import {
-    BCard,
-    BCardBody,
-    BCardHeader,
-    BCardTitle,
-    BCol,
-    BRow,
-} from 'bootstrap-vue-next';
-import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import { computed } from 'vue';
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
-import { dashboard } from '@/routes';
+import DefaultLayout from '@/layouts/DefaultLayout.vue';
+import { invoiceStatusBadgeClass, invoiceStatusLabelDe } from '@/lib/invoiceStatus';
 import billing from '@/routes/billing';
 import postfach from '@/routes/postfach';
 
