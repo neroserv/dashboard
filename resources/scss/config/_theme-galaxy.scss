@@ -102,7 +102,7 @@ $theme-galaxy-colors: (
 
         // Image Menu
         &[data-menu-color='image'] {
-            --#{$prefix}sidenav-bg: #{linear-gradient(to bottom right, rgba(16, 16, 30, 0.85), #262c3a), url('../../images/sidenav-bg.jpg') center/cover no-repeat};
+            --#{$prefix}sidenav-bg: #{linear-gradient(to bottom right, rgba(16, 16, 30, 0.85), #262c3a), url('/images/sidenav-bg.jpg') center/cover no-repeat};
             --#{$prefix}sidenav-border-color: null;
             --#{$prefix}sidenav-item-color: #799cb7;
             --#{$prefix}sidenav-item-hover-color: #bccee4;
@@ -271,7 +271,7 @@ html[data-skin='galaxy'] {
 
 html[data-skin='galaxy'][data-bs-theme='dark'] {
     body {
-        background: #{linear-gradient(to bottom right, rgba(16, 16, 30, 0.85), #0a142b), url('../../images/galaxy.jpg') center/cover no-repeat};
+        background: #{linear-gradient(to bottom right, rgba(16, 16, 30, 0.85), #0a142b), url('/images/galaxy.jpg') center/cover no-repeat};
         background-attachment: fixed;
     }
 

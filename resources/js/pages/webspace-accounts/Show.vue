@@ -36,11 +36,25 @@
                 Zum Plesk-Panel
               </a>
               <a v-else class="btn btn-secondary disabled">Gesperrt – bitte verlängern</a>
-              <a v-if="renewUrl && !isSuspendedOrExpired" :href="renewUrl" class="btn btn-outline-primary">
+              <BButton
+                v-if="showRenewButton && !isSuspendedOrExpired"
+                variant="outline-primary"
+                class="text-start"
+                @click="renewModalOpen = true"
+              >
                 <Icon icon="calendar-plus" class="me-2" />
                 Verlängern
-              </a>
-              <Link href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
+              </BButton>
+              <BButton
+                v-if="showAutoRenewButton && !isSuspendedOrExpired"
+                variant="outline-secondary"
+                class="text-start"
+                @click="autoRenewModalOpen = true"
+              >
+                <Icon icon="refresh-ccw" class="me-2" />
+                Auto Renew
+              </BButton>
+              <Link v-if="showAboVerwalten" href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
               <Link v-if="connectDomainShowUrl && !isSuspendedOrExpired" :href="connectDomainShowUrl" class="btn btn-outline-secondary">
                 <Icon icon="globe" class="me-2" />
                 Domain verbinden
@@ -148,11 +162,50 @@
         </BCard>
       </BCol>
     </BRow>
+
+    <BModal v-model="renewModalOpen" title="Verlängern" no-footer>
+      <p class="text-muted small">
+        Verlängerung für <strong>{{ renewalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €</strong> pro Monat
+        <template v-if="renewPeriodMonths > 1"> ({{ totalRenewAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € gesamt)</template>.
+      </p>
+      <div class="mb-3">
+        <label class="form-label">Laufzeit (Monate)</label>
+        <BFormSelect v-model.number="renewPeriodMonths" :options="periodMonthOptions" />
+      </div>
+      <div v-if="canPayWithBalance" class="mb-3">
+        <label class="form-label">Zahlungsart</label>
+        <div class="d-flex flex-column gap-2">
+          <BFormRadio v-model="paymentMethod" value="mollie">Mollie (Karte, PayPal, …)</BFormRadio>
+          <BFormRadio v-model="paymentMethod" value="balance" :disabled="customerBalance < totalRenewAmount">
+            Guthaben ({{ customerBalance.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € verfügbar)
+          </BFormRadio>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <BButton variant="secondary" @click="renewModalOpen = false">Abbrechen</BButton>
+        <BButton
+          :disabled="paymentMethod === 'balance' && customerBalance < totalRenewAmount"
+          @click="submitRenew"
+        >
+          Verlängern
+        </BButton>
+      </div>
+    </BModal>
+
+    <AutoRenewModal
+      v-if="showAutoRenewButton"
+      :open="autoRenewModalOpen"
+      :balance-url="autoRenewBalanceUrl"
+      :mollie-url="autoRenewMollieUrl"
+      :auto-renew-with-balance="autoRenewWithBalance"
+      :has-mollie-subscription="hasMollieSubscription"
+      @update:open="autoRenewModalOpen = $event"
+    />
   </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import {
   BBadge,
@@ -161,14 +214,18 @@ import {
   BButton,
   BCol,
   BFormInput,
+  BFormRadio,
+  BFormSelect,
   BNav,
   BNavItem,
   BRow,
   BTable,
+  BModal,
 } from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
+import AutoRenewModal from '@/components/AutoRenewModal.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type WebspaceAccount = {
@@ -201,6 +258,12 @@ const props = withDefaults(
     webmailUrl: string
     resourceUsage: ResourceUsage | null
     renewUrl?: string
+    canRenew?: boolean
+    renewalAmount?: number
+    canPayWithBalance?: boolean
+    customerBalance?: number
+    auto_renew_with_balance?: boolean
+    has_mollie_subscription?: boolean
     isSuspendedOrExpired?: boolean
     connectDomainShowUrl?: string
     canManageCollaborators?: boolean
@@ -210,6 +273,12 @@ const props = withDefaults(
     storeInvitationUrl?: string | null
   }>(),
   {
+    canRenew: false,
+    renewalAmount: 0,
+    canPayWithBalance: false,
+    customerBalance: 0,
+    auto_renew_with_balance: false,
+    has_mollie_subscription: false,
     canManageCollaborators: false,
     productShares: () => [],
     productInvitations: () => [],
@@ -218,8 +287,48 @@ const props = withDefaults(
   },
 )
 
+const page = usePage()
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {})
+
+const showAboVerwalten = computed(
+  () => !brandFeatures.value?.prepaid_balance && !props.canRenew,
+)
+const showRenewButton = computed(
+  () => !!props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+)
+const showAutoRenewButton = computed(
+  () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
+)
+
+const renewalAmount = computed(() => props.renewalAmount ?? 0)
+const canPayWithBalance = computed(() => props.canPayWithBalance ?? false)
+const customerBalance = computed(() => props.customerBalance ?? 0)
+const autoRenewWithBalance = computed(() => props.auto_renew_with_balance ?? false)
+const hasMollieSubscription = computed(() => props.has_mollie_subscription ?? false)
+
+const autoRenewBalanceUrl = computed(
+  () => `/webspace-accounts/${props.webspaceAccount?.uuid ?? ''}/auto-renew-balance`,
+)
+const autoRenewMollieUrl = computed(
+  () => `/webspace-accounts/${props.webspaceAccount?.uuid ?? ''}/auto-renew-mollie-subscription`,
+)
+
 const activeTab = ref('overview')
 const showPassword = ref(false)
+const renewModalOpen = ref(false)
+const autoRenewModalOpen = ref(false)
+const renewPeriodMonths = ref(1)
+const paymentMethod = ref<'balance' | 'mollie'>('mollie')
+
+const periodMonthOptions = [
+  { value: 1, text: '1 Monat' },
+  { value: 2, text: '2 Monate' },
+  { value: 3, text: '3 Monate' },
+]
+
+const totalRenewAmount = computed(
+  () => Math.round(renewalAmount.value * renewPeriodMonths.value * 100) / 100,
+)
 
 const isSuspendedOrExpired = computed(() => props.isSuspendedOrExpired ?? false)
 const pleskLoginUrl = computed(() => {
@@ -282,5 +391,22 @@ function resourcePercent(used: number, limit: number): number {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
+}
+
+function submitRenew() {
+  if (!props.renewUrl) return
+  router.post(
+    props.renewUrl,
+    {
+      payment_method: canPayWithBalance.value ? paymentMethod.value : 'mollie',
+      period_months: renewPeriodMonths.value,
+    },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        renewModalOpen.value = false
+      },
+    },
+  )
 }
 </script>

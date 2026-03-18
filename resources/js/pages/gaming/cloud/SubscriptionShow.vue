@@ -29,9 +29,24 @@
               </p>
             </div>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex flex-wrap gap-2">
             <Link href="/gaming/cloud/subscriptions" class="btn btn-outline-secondary btn-sm">Zurück</Link>
-            <a v-if="subscription.status === 'active' && renewUrl" :href="renewUrl" class="btn btn-primary btn-sm">Verlängern</a>
+            <BButton
+              v-if="showRenewButton"
+              size="sm"
+              variant="primary"
+              @click="renewModalOpen = true"
+            >
+              Verlängern
+            </BButton>
+            <BButton
+              v-if="showAutoRenewButton"
+              size="sm"
+              variant="outline-secondary"
+              @click="autoRenewModalOpen = true"
+            >
+              Auto Renew
+            </BButton>
           </div>
         </BCardBody>
       </BCard>
@@ -173,6 +188,45 @@
           <Link href="/gaming/cloud/subscriptions" class="btn btn-outline-secondary w-100">Zur Cloud-Abos</Link>
         </BCol>
       </BRow>
+
+      <BModal v-model="renewModalOpen" title="Verlängern" no-footer>
+        <p class="text-muted small">
+          Verlängerung für <strong>{{ renewalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €</strong> pro Monat
+          <template v-if="renewPeriodMonths > 1"> ({{ totalRenewAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € gesamt)</template>.
+        </p>
+        <div class="mb-3">
+          <label class="form-label">Laufzeit (Monate)</label>
+          <BFormSelect v-model.number="renewPeriodMonths" :options="cloudPeriodOptions" />
+        </div>
+        <div v-if="canPayWithBalance" class="mb-3">
+          <label class="form-label">Zahlungsart</label>
+          <div class="d-flex flex-column gap-2">
+            <BFormRadio v-model="paymentMethod" value="mollie">Mollie (Karte, PayPal, …)</BFormRadio>
+            <BFormRadio v-model="paymentMethod" value="balance" :disabled="customerBalance < totalRenewAmount">
+              Guthaben ({{ customerBalance.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € verfügbar)
+            </BFormRadio>
+          </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+          <BButton variant="secondary" @click="renewModalOpen = false">Abbrechen</BButton>
+          <BButton
+            :disabled="paymentMethod === 'balance' && customerBalance < totalRenewAmount"
+            @click="submitRenew"
+          >
+            Verlängern
+          </BButton>
+        </div>
+      </BModal>
+
+      <AutoRenewModal
+        v-if="showAutoRenewButton"
+        :open="autoRenewModalOpen"
+        :balance-url="balanceUrl ?? ''"
+        :mollie-url="mollieUrl ?? ''"
+        :auto-renew-with-balance="autoRenewWithBalance"
+        :has-mollie-subscription="hasMollieSubscription"
+        @update:open="autoRenewModalOpen = $event"
+      />
     </template>
   </DefaultLayout>
 </template>
@@ -180,10 +234,25 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch, onMounted } from 'vue'
-import { BAlert, BBadge, BButton, BCard, BCardBody, BCardHeader, BCol, BForm, BFormInput, BFormSelect, BRow } from 'bootstrap-vue-next'
+import {
+  BAlert,
+  BBadge,
+  BButton,
+  BCard,
+  BCardBody,
+  BCardHeader,
+  BCol,
+  BForm,
+  BFormInput,
+  BFormRadio,
+  BFormSelect,
+  BModal,
+  BRow,
+} from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
+import AutoRenewModal from '@/components/AutoRenewModal.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type GameServerAccount = {
@@ -222,6 +291,14 @@ const props = withDefaults(
   defineProps<{
     subscription: Subscription | null
     renewUrl?: string
+    renewalAmount?: number
+    canRenew?: boolean
+    canPayWithBalance?: boolean
+    customerBalance?: number
+    auto_renew_with_balance?: boolean
+    has_mollie_subscription?: boolean
+    balanceUrl?: string
+    mollieUrl?: string
     canManageCollaborators?: boolean
     productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
     productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
@@ -229,6 +306,14 @@ const props = withDefaults(
     storeInvitationUrl?: string | null
   }>(),
   {
+    renewalAmount: 0,
+    canRenew: false,
+    canPayWithBalance: false,
+    customerBalance: 0,
+    auto_renew_with_balance: false,
+    has_mollie_subscription: false,
+    balanceUrl: '',
+    mollieUrl: '',
     canManageCollaborators: false,
     productShares: () => [],
     productInvitations: () => [],
@@ -238,8 +323,58 @@ const props = withDefaults(
 )
 
 const page = usePage()
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {})
 const flash = computed(() => (page.props.flash as { error?: string; success?: string }) ?? {})
 const formErrors = computed(() => (page.props.errors as Record<string, string>) ?? {})
+
+const renewalAmount = computed(() => props.renewalAmount ?? 0)
+const canPayWithBalance = computed(() => props.canPayWithBalance ?? false)
+const customerBalance = computed(() => props.customerBalance ?? 0)
+const autoRenewWithBalance = computed(() => props.auto_renew_with_balance ?? false)
+const hasMollieSubscription = computed(() => props.has_mollie_subscription ?? false)
+
+const showRenewButton = computed(
+  () =>
+    !!props.renewUrl &&
+    props.subscription?.status === 'active' &&
+    (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+)
+const showAutoRenewButton = computed(
+  () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
+)
+
+const renewModalOpen = ref(false)
+const autoRenewModalOpen = ref(false)
+const renewPeriodMonths = ref(1)
+const paymentMethod = ref<'balance' | 'mollie'>('mollie')
+
+const cloudPeriodOptions = [
+  { value: 1, text: '1 Monat' },
+  { value: 3, text: '3 Monate' },
+  { value: 6, text: '6 Monate' },
+  { value: 12, text: '12 Monate' },
+]
+
+const totalRenewAmount = computed(
+  () => Math.round(renewalAmount.value * renewPeriodMonths.value * 100) / 100,
+)
+
+function submitRenew() {
+  if (!props.renewUrl) return
+  router.post(
+    props.renewUrl,
+    {
+      payment_method: canPayWithBalance.value ? paymentMethod.value : 'mollie',
+      period_months: renewPeriodMonths.value,
+    },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        renewModalOpen.value = false
+      },
+    },
+  )
+}
 
 const showAddServerForm = ref(false)
 const createServer = ref({

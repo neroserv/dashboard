@@ -6,11 +6,39 @@
     <div class="row g-4">
       <aside class="col-lg-3">
         <BCard no-body>
-          <BCardBody class="text-center border-bottom">
-            <Icon icon="server" class="fs-1 text-muted" />
-            <h5 class="mt-2 mb-0">Domain</h5>
-            <p class="text-muted small mb-3">{{ domain.domain }}</p>
-            <BBadge variant="success">Aktiv</BBadge>
+          <BCardBody class="border-bottom">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+              <div class="text-start flex-grow-1">
+                <BButton
+                  v-if="domain.auto_renew"
+                  variant="secondary"
+                  size="sm"
+                  class="text-start"
+                  :disabled="autorenewSubmitting"
+                  @click="setAutoRenew(false)"
+                >
+                  <Icon icon="shield-check" class="me-1" />
+                  Auto. Verlängerung
+                </BButton>
+                <BButton
+                  v-else
+                  variant="outline-warning"
+                  size="sm"
+                  class="text-start text-warning-emphasis"
+                  :disabled="autorenewSubmitting"
+                  @click="setAutoRenew(true)"
+                >
+                  <Icon icon="shield-x" class="me-1" />
+                  Manuelle Verlängerung
+                </BButton>
+              </div>
+              <BBadge variant="success" class="shrink-0">Aktiv</BBadge>
+            </div>
+            <div class="text-center">
+              <Icon icon="server" class="fs-1 text-muted" />
+              <h5 class="mt-2 mb-0">Domain</h5>
+              <p class="text-muted small mb-0">{{ domain.domain }}</p>
+            </div>
           </BCardBody>
           <BCardBody>
             <div class="d-grid gap-2">
@@ -22,7 +50,14 @@
                 <Icon icon="shield-check" class="me-2" />
                 DNSSEC verwalten
               </BButton>
-              <BButton v-if="domain.renew_price != null" variant="outline-primary" size="sm" class="text-start" @click="renewDialogOpen = true">
+              <BButton
+                v-if="domain.renew_price != null"
+                variant="outline-primary"
+                size="sm"
+                class="text-start"
+                @click="renewDialogOpen = true"
+              >
+                <Icon icon="calendar-plus" class="me-2" />
                 Verlängern
               </BButton>
             </div>
@@ -122,9 +157,14 @@
       </BForm>
     </BModal>
 
-    <BModal v-model="renewDialogOpen" title="Domain verlängern" no-footer>
-      <p>Verlängerung für <strong>{{ domain.renew_price }} €</strong> pro Jahr.</p>
-      <BButton variant="primary" class="w-100" @click="renew">Kostenpflichtig verlängern</BButton>
+    <BModal v-model="renewDialogOpen" title="Verlängern" no-footer>
+      <p class="text-muted small">
+        Verlängerung für <strong>{{ domain.renew_price != null ? Number(domain.renew_price).toLocaleString('de-DE', { minimumFractionDigits: 2 }) : '0,00' }} €</strong> pro Jahr.
+      </p>
+      <div class="d-flex justify-content-end gap-2">
+        <BButton variant="secondary" @click="renewDialogOpen = false">Abbrechen</BButton>
+        <BButton variant="primary" @click="renew">Verlängern</BButton>
+      </div>
     </BModal>
   </DefaultLayout>
 </template>
@@ -232,9 +272,25 @@ function fetchAuthcode() {
 const dnssecDialogOpen = ref(false)
 
 const renewDialogOpen = ref(false)
+const autorenewSubmitting = ref(false)
+
 function renew() {
   renewDialogOpen.value = false
   router.post(`${baseUrl()}/renew`)
+}
+
+function setAutoRenew(enabled: boolean) {
+  autorenewSubmitting.value = true
+  router.post(
+    `${baseUrl()}/autorenew`,
+    { auto_renew: enabled },
+    {
+      preserveScroll: true,
+      onFinish: () => {
+        autorenewSubmitting.value = false
+      },
+    },
+  )
 }
 
 const dnsRecords = ref<{ name: string; type: string; data: string }[]>([])

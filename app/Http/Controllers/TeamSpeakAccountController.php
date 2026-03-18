@@ -43,6 +43,28 @@ class TeamSpeakAccountController extends Controller
         $this->authorize('view', $account);
     }
 
+    /**
+     * @return array{address: string, connection_uri: string}|null
+     */
+    protected function buildTeamSpeakConnectionPreview(TeamSpeakServerAccount $account): ?array
+    {
+        $hostingServer = $account->hostingServer;
+        $port = (int) ($account->port ?? 0);
+        if (! $hostingServer || $port < 1 || $port > 65535) {
+            return null;
+        }
+        $config = is_array($hostingServer->config) ? $hostingServer->config : [];
+        $hostAddr = trim((string) ($config['host'] ?? $hostingServer->hostname ?? $hostingServer->ip_address ?? ''));
+        if ($hostAddr === '') {
+            return null;
+        }
+
+        return [
+            'address' => $hostAddr.':'.$port,
+            'connection_uri' => 'ts3server://'.$hostAddr.'?port='.$port,
+        ];
+    }
+
     public function index(Request $request): Response|RedirectResponse
     {
         $redirect = $this->ensureTeamSpeakFeature($request);
@@ -132,10 +154,12 @@ class TeamSpeakAccountController extends Controller
         }
 
         $isSuspendedOrExpired = $teamSpeakServerAccount->isSuspendedOrExpired();
+        $connectionPreview = $this->buildTeamSpeakConnectionPreview($teamSpeakServerAccount);
 
         return Inertia::render('teamspeak-accounts/Show', [
             'teamSpeakServerAccount' => $teamSpeakServerAccount,
             'serverInfo' => $serverInfo,
+            'connection_preview' => $connectionPreview,
             'tokens' => $tokens,
             'snapshots' => $snapshots,
             'viewerTree' => $viewerTree,
@@ -318,7 +342,13 @@ class TeamSpeakAccountController extends Controller
             }
         }
 
-        return response()->json(['serverInfo' => $serverInfo, 'viewerTree' => $viewerTree]);
+        $connectionPreview = $this->buildTeamSpeakConnectionPreview($teamSpeakServerAccount);
+
+        return response()->json([
+            'serverInfo' => $serverInfo,
+            'viewerTree' => $viewerTree,
+            'connection_preview' => $connectionPreview,
+        ]);
     }
 
     public function power(Request $request, TeamSpeakServerAccount $teamSpeakServerAccount): RedirectResponse

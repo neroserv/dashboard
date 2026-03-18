@@ -41,11 +41,25 @@
                 <Icon icon="external-link" class="me-2" />
                 Zum Panel verbinden
               </a>
-              <a v-if="renewUrl && !isSuspendedOrExpired" :href="renewUrl" class="btn btn-outline-primary">
+              <BButton
+                v-if="showRenewButton && !isSuspendedOrExpired"
+                variant="outline-primary"
+                class="text-start"
+                @click="renewModalOpen = true"
+              >
                 <Icon icon="calendar-plus" class="me-2" />
                 Verlängern
-              </a>
-              <Link href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
+              </BButton>
+              <BButton
+                v-if="showAutoRenewButton && !isSuspendedOrExpired"
+                variant="outline-secondary"
+                class="text-start"
+                @click="autoRenewModalOpen = true"
+              >
+                <Icon icon="refresh-ccw" class="me-2" />
+                Auto Renew
+              </BButton>
+              <Link v-if="showAboVerwalten" href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
               <Link v-if="connectDomainShowUrl && !isSuspendedOrExpired" :href="connectDomainShowUrl" class="btn btn-outline-secondary">
                 <Icon icon="globe" class="me-2" />
                 Domain verbinden
@@ -55,6 +69,71 @@
         </BCard>
       </BCol>
       <BCol lg="8">
+        <BCard class="mb-3" no-body>
+          <BCardBody>
+            <h6 class="mb-3 text-muted text-uppercase small">Übersicht</h6>
+            <BTable :items="overviewRows" :fields="overviewFields" small stacked>
+              <template #cell(value)="{ item }">
+                <span v-if="item.key === 'allocation'" class="d-flex align-items-center gap-1">
+                  <code class="small">{{ item.value }}</code>
+                  <BButton v-if="item.value" size="sm" variant="outline-secondary" class="py-0 px-1" @click="copyToClipboard(item.value)">
+                    <Icon icon="copy" />
+                  </BButton>
+                </span>
+                <span v-else>{{ item.value }}</span>
+              </template>
+            </BTable>
+            <div v-if="displayOverviewUsage" class="row g-3 mt-2 mb-3">
+              <div class="col-6 col-md">
+                <div class="rounded border bg-light p-2">
+                  <span class="text-muted small">CPU</span>
+                  <div class="fw-semibold small">{{ formatCpu(displayOverviewUsage.cpu_absolute) }}</div>
+                </div>
+              </div>
+              <div class="col-6 col-md">
+                <div class="rounded border bg-light p-2">
+                  <span class="text-muted small">RAM</span>
+                  <div class="fw-semibold small">{{ formatBytes(displayOverviewUsage.memory_bytes) }}</div>
+                </div>
+              </div>
+              <div class="col-6 col-md">
+                <div class="rounded border bg-light p-2">
+                  <span class="text-muted small">Disk</span>
+                  <div class="fw-semibold small">{{ formatBytes(displayOverviewUsage.disk_bytes) }}</div>
+                </div>
+              </div>
+              <div class="col-6 col-md" v-if="displayOverviewNetwork">
+                <div class="rounded border bg-light p-2">
+                  <span class="text-muted small">Network</span>
+                  <div class="fw-semibold small">↓ {{ formatBytes(displayOverviewNetwork.rx) }} / ↑ {{ formatBytes(displayOverviewNetwork.tx) }}</div>
+                </div>
+              </div>
+              <div class="col-6 col-md" v-if="displayOverviewPlayers">
+                <div class="rounded border bg-light p-2">
+                  <span class="text-muted small">Spieler</span>
+                  <div class="fw-semibold small">{{ displayOverviewPlayers }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-if="!isSuspendedOrExpired" class="d-flex flex-wrap gap-2 mt-3">
+              <BButton size="sm" variant="success" :disabled="isOnline || powerLoading !== null" @click="sendPower('start')">
+                <Icon icon="power" class="me-1" />
+                Start
+              </BButton>
+              <BButton size="sm" variant="outline-warning" :disabled="powerLoading !== null" @click="sendPower('restart')">
+                Restart
+              </BButton>
+              <BButton size="sm" variant="danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('stop')">
+                <Icon icon="power-off" class="me-1" />
+                Stop
+              </BButton>
+              <BButton size="sm" variant="outline-danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('kill')">
+                Kill
+              </BButton>
+            </div>
+          </BCardBody>
+        </BCard>
+
         <BNav tabs class="mb-3 flex-wrap">
           <BNavItem :active="activeTab === 'console'" @click="activeTab = 'console'">
             <Icon icon="terminal" class="me-1" /> Konsole
@@ -70,9 +149,6 @@
           </BNavItem>
           <BNavItem :active="activeTab === 'schedules'" @click="activeTab = 'schedules'">
             <Icon icon="calendar" class="me-1" /> Schedules
-          </BNavItem>
-          <BNavItem :active="activeTab === 'overview'" @click="activeTab = 'overview'">
-            <Icon icon="layout-dashboard" class="me-1" /> Übersicht
           </BNavItem>
           <BNavItem :active="activeTab === 'access'" @click="activeTab = 'access'">
             <Icon icon="external-link" class="me-1" /> Zugang
@@ -173,71 +249,6 @@
             <a v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
               <Icon icon="external-link" class="me-1" /> Zum Panel (Schedules)
             </a>
-          </BCardBody>
-        </BCard>
-
-        <!-- Übersicht -->
-        <BCard v-else-if="activeTab === 'overview'" no-body>
-          <BCardBody>
-            <BTable :items="overviewRows" :fields="overviewFields" small stacked>
-              <template #cell(value)="{ item }">
-                <span v-if="item.key === 'allocation'" class="d-flex align-items-center gap-1">
-                  <code class="small">{{ item.value }}</code>
-                  <BButton v-if="item.value" size="sm" variant="outline-secondary" class="py-0 px-1" @click="copyToClipboard(item.value)">
-                    <Icon icon="copy" />
-                  </BButton>
-                </span>
-                <span v-else>{{ item.value }}</span>
-              </template>
-            </BTable>
-            <div v-if="displayOverviewUsage" class="row g-3 mt-2 mb-3">
-              <div class="col-6 col-md">
-                <div class="rounded border bg-light p-2">
-                  <span class="text-muted small">CPU</span>
-                  <div class="fw-semibold small">{{ formatCpu(displayOverviewUsage.cpu_absolute) }}</div>
-                </div>
-              </div>
-              <div class="col-6 col-md">
-                <div class="rounded border bg-light p-2">
-                  <span class="text-muted small">RAM</span>
-                  <div class="fw-semibold small">{{ formatBytes(displayOverviewUsage.memory_bytes) }}</div>
-                </div>
-              </div>
-              <div class="col-6 col-md">
-                <div class="rounded border bg-light p-2">
-                  <span class="text-muted small">Disk</span>
-                  <div class="fw-semibold small">{{ formatBytes(displayOverviewUsage.disk_bytes) }}</div>
-                </div>
-              </div>
-              <div class="col-6 col-md" v-if="displayOverviewNetwork">
-                <div class="rounded border bg-light p-2">
-                  <span class="text-muted small">Network</span>
-                  <div class="fw-semibold small">↓ {{ formatBytes(displayOverviewNetwork.rx) }} / ↑ {{ formatBytes(displayOverviewNetwork.tx) }}</div>
-                </div>
-              </div>
-              <div class="col-6 col-md" v-if="displayOverviewPlayers">
-                <div class="rounded border bg-light p-2">
-                  <span class="text-muted small">Spieler</span>
-                  <div class="fw-semibold small">{{ displayOverviewPlayers }}</div>
-                </div>
-              </div>
-            </div>
-            <div v-if="!isSuspendedOrExpired" class="d-flex flex-wrap gap-2 mt-3">
-              <BButton size="sm" variant="success" :disabled="isOnline || powerLoading !== null" @click="sendPower('start')">
-                <Icon icon="power" class="me-1" />
-                Start
-              </BButton>
-              <BButton size="sm" variant="outline-warning" :disabled="powerLoading !== null" @click="sendPower('restart')">
-                Restart
-              </BButton>
-              <BButton size="sm" variant="danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('stop')">
-                <Icon icon="power-off" class="me-1" />
-                Stop
-              </BButton>
-              <BButton size="sm" variant="outline-danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('kill')">
-                Kill
-              </BButton>
-            </div>
           </BCardBody>
         </BCard>
 
@@ -435,6 +446,45 @@
         />
       </BCol>
     </BRow>
+
+    <BModal v-model="renewModalOpen" title="Verlängern" no-footer>
+      <p class="text-muted small">
+        Verlängerung für <strong>{{ renewalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €</strong> pro Monat
+        <template v-if="renewPeriodMonths > 1"> ({{ totalRenewAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € gesamt)</template>.
+      </p>
+      <div class="mb-3">
+        <label class="form-label">Laufzeit (Monate)</label>
+        <BFormSelect v-model.number="renewPeriodMonths" :options="periodMonthOptions" />
+      </div>
+      <div v-if="canPayWithBalance" class="mb-3">
+        <label class="form-label">Zahlungsart</label>
+        <div class="d-flex flex-column gap-2">
+          <BFormRadio v-model="paymentMethod" value="mollie">Mollie (Karte, PayPal, …)</BFormRadio>
+          <BFormRadio v-model="paymentMethod" value="balance" :disabled="customerBalance < totalRenewAmount">
+            Guthaben ({{ customerBalance.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € verfügbar)
+          </BFormRadio>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <BButton variant="secondary" @click="renewModalOpen = false">Abbrechen</BButton>
+        <BButton
+          :disabled="paymentMethod === 'balance' && customerBalance < totalRenewAmount"
+          @click="submitRenew"
+        >
+          Verlängern
+        </BButton>
+      </div>
+    </BModal>
+    <AutoRenewModal
+      v-if="showAutoRenewButton && gameServerAccount"
+      :open="autoRenewModalOpen"
+      :balance-url="`/gaming-accounts/${gameServerAccount.uuid}/auto-renew-balance`"
+      :mollie-url="`/gaming-accounts/${gameServerAccount.uuid}/auto-renew-mollie-subscription`"
+      :mollie-cancel-url="`/gaming-accounts/${gameServerAccount.uuid}/subscription/cancel`"
+      :auto-renew-with-balance="autoRenewWithBalance"
+      :has-mollie-subscription="hasMollieSubscription"
+      @update:open="autoRenewModalOpen = $event"
+    />
   </DefaultLayout>
 </template>
 
@@ -449,6 +499,9 @@ import {
   BCol,
   BForm,
   BFormInput,
+  BFormRadio,
+  BFormSelect,
+  BModal,
   BNav,
   BNavItem,
   BRow,
@@ -466,6 +519,7 @@ import {
   GamingAccountSchedulesTab,
 } from '@/components/gaming-accounts'
 import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
+import AutoRenewModal from '@/components/AutoRenewModal.vue'
 
 type ServerOverview = {
   status?: string
@@ -499,7 +553,13 @@ const props = withDefaults(
     loginUrl: string | null
     userEmail?: string
     serverOverview: ServerOverview | null
+    canRenew?: boolean
+    renewalAmount?: number
+    canPayWithBalance?: boolean
+    customerBalance?: number
     renewUrl?: string
+    autoRenewWithBalance?: boolean
+    hasMollieSubscription?: boolean
     isSuspendedOrExpired?: boolean
     connectDomainShowUrl?: string
     domainsSearchUrl?: string | null
@@ -518,7 +578,13 @@ const props = withDefaults(
   }>(),
   {
     userEmail: '',
+    canRenew: false,
+    renewalAmount: 0,
+    canPayWithBalance: false,
+    customerBalance: 0,
     renewUrl: '',
+    autoRenewWithBalance: false,
+    hasMollieSubscription: false,
     isSuspendedOrExpired: false,
     connectDomainShowUrl: '',
     domainsSearchUrl: null,
@@ -537,7 +603,53 @@ const props = withDefaults(
   },
 )
 
-const activeTab = ref('overview')
+const page = usePage()
+
+const activeTab = ref('console')
+const renewModalOpen = ref(false)
+const autoRenewModalOpen = ref(false)
+
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {})
+const showAboVerwalten = computed(
+  () => !brandFeatures.value?.prepaid_balance && !props.canRenew,
+)
+const showRenewButton = computed(
+  () => !!props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+)
+const showAutoRenewButton = computed(
+  () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
+)
+
+const renewalAmount = computed(() => props.renewalAmount ?? 0)
+const renewPeriodMonths = ref(1)
+const paymentMethod = ref<'balance' | 'mollie'>('mollie')
+const periodMonthOptions = [
+  { value: 1, text: '1 Monat' },
+  { value: 3, text: '3 Monate' },
+  { value: 6, text: '6 Monate' },
+  { value: 12, text: '12 Monate' },
+]
+const totalRenewAmount = computed(
+  () => Math.round(renewalAmount.value * renewPeriodMonths.value * 100) / 100,
+)
+
+function submitRenew() {
+  if (!props.renewUrl) return
+  router.post(
+    props.renewUrl,
+    {
+      payment_method: props.canPayWithBalance ? paymentMethod.value : 'mollie',
+      period_months: renewPeriodMonths.value,
+    },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        renewModalOpen.value = false
+      },
+    },
+  )
+}
+
 const powerLoading = ref<string | null>(null)
 const liveOverview = ref<ServerOverview | null>(props.serverOverview ?? null)
 const subdomainPart = ref(props.currentSubdomainPart ?? '')
@@ -547,7 +659,6 @@ const subdomainUpdateLoading = ref(false)
 const resourcesForm = ref({ cpu: 0, memory_mb: 512, disk_mb: 1024 })
 const resourcesSubmitting = ref(false)
 const copyFeedback = ref(false)
-const page = usePage()
 const flash = computed(() => (page.props.flash as { error?: string; success?: string }) ?? {})
 
 const currentAllocation = computed(() => {

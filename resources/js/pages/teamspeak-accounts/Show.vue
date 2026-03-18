@@ -24,8 +24,8 @@
             </div>
             <div class="d-flex flex-column gap-2 mt-3">
               <a
-                v-if="displayInfo?.connection_uri && isOnline && !isSuspendedOrExpired"
-                :href="displayInfo.connection_uri"
+                v-if="mergedDisplay?.connection_uri && !isSuspendedOrExpired"
+                :href="mergedDisplay.connection_uri"
                 target="_blank"
                 rel="noopener"
                 class="btn btn-primary"
@@ -33,11 +33,25 @@
                 <Icon icon="external-link" class="me-2" />
                 Zum Server verbinden
               </a>
-              <a v-if="renewUrl && !isSuspendedOrExpired" :href="renewUrl" class="btn btn-outline-primary">
+              <BButton
+                v-if="showRenewButton && !isSuspendedOrExpired"
+                variant="outline-primary"
+                class="text-start"
+                @click="renewModalOpen = true"
+              >
                 <Icon icon="calendar-plus" class="me-2" />
                 Verlängern
-              </a>
-              <Link href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
+              </BButton>
+              <BButton
+                v-if="showAutoRenewButton && !isSuspendedOrExpired"
+                variant="outline-secondary"
+                class="text-start"
+                @click="autoRenewModalOpen = true"
+              >
+                <Icon icon="refresh-ccw" class="me-2" />
+                Auto Renew
+              </BButton>
+              <Link v-if="showAboVerwalten" href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
               <Link v-if="connectDomainShowUrl && !isSuspendedOrExpired" :href="connectDomainShowUrl" class="btn btn-outline-secondary">
                 <Icon icon="globe" class="me-2" />
                 Domain verbinden
@@ -61,7 +75,13 @@
               <template #cell(value)="{ item }">
                 <span v-if="item.key === 'address'" class="d-flex align-items-center gap-1">
                   <code class="small">{{ item.value }}</code>
-                  <BButton v-if="item.value" size="sm" variant="outline-secondary" class="py-0 px-1" @click="copyToClipboard(displayInfo?.connection_uri ?? '')">
+                  <BButton
+                    v-if="item.value && item.value !== '–'"
+                    size="sm"
+                    variant="outline-secondary"
+                    class="py-0 px-1"
+                    @click="copyToClipboard(mergedDisplay?.connection_uri ?? '')"
+                  >
                     <Icon icon="copy" />
                   </BButton>
                 </span>
@@ -86,8 +106,8 @@
             <div class="mb-3">
               <label class="form-label small">Adresse (IP:Port)</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="displayInfo?.address ?? '–'" readonly class="font-monospace" />
-                <BButton v-if="displayInfo?.address" size="sm" variant="outline-secondary" @click="copyToClipboard(displayInfo!.address!)">
+                <BFormInput :value="mergedDisplay?.address ?? '–'" readonly class="font-monospace" />
+                <BButton v-if="mergedDisplay?.address" size="sm" variant="outline-secondary" @click="copyToClipboard(mergedDisplay!.address!)">
                   <Icon icon="copy" />
                 </BButton>
               </div>
@@ -95,8 +115,13 @@
             <div class="mb-0">
               <label class="form-label small">Verbindung (ts3server://)</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="displayInfo?.connection_uri ?? '–'" readonly class="font-monospace" />
-                <BButton v-if="displayInfo?.connection_uri" size="sm" variant="outline-secondary" @click="copyToClipboard(displayInfo!.connection_uri!)">
+                <BFormInput :value="mergedDisplay?.connection_uri ?? '–'" readonly class="font-monospace" />
+                <BButton
+                  v-if="mergedDisplay?.connection_uri"
+                  size="sm"
+                  variant="outline-secondary"
+                  @click="copyToClipboard(mergedDisplay!.connection_uri!)"
+                >
                   <Icon icon="copy" />
                 </BButton>
               </div>
@@ -160,12 +185,51 @@
         <BButton @click="createToken">Erstellen</BButton>
       </div>
     </BModal>
+
+    <BModal v-model="renewModalOpen" title="Verlängern" no-footer>
+      <p class="text-muted small">
+        Verlängerung für <strong>{{ renewalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} €</strong> pro Monat
+        <template v-if="renewPeriodMonths > 1"> ({{ totalRenewAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € gesamt)</template>.
+      </p>
+      <div class="mb-3">
+        <label class="form-label">Laufzeit (Monate)</label>
+        <BFormSelect v-model.number="renewPeriodMonths" :options="periodMonthOptions" />
+      </div>
+      <div v-if="canPayWithBalance" class="mb-3">
+        <label class="form-label">Zahlungsart</label>
+        <div class="d-flex flex-column gap-2">
+          <BFormRadio v-model="paymentMethod" value="mollie">Mollie (Karte, PayPal, …)</BFormRadio>
+          <BFormRadio v-model="paymentMethod" value="balance" :disabled="customerBalance < totalRenewAmount">
+            Guthaben ({{ customerBalance.toLocaleString('de-DE', { minimumFractionDigits: 2 }) }} € verfügbar)
+          </BFormRadio>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <BButton variant="secondary" @click="renewModalOpen = false">Abbrechen</BButton>
+        <BButton
+          :disabled="paymentMethod === 'balance' && customerBalance < totalRenewAmount"
+          @click="submitRenew"
+        >
+          Verlängern
+        </BButton>
+      </div>
+    </BModal>
+
+    <AutoRenewModal
+      v-if="showAutoRenewButton"
+      :open="autoRenewModalOpen"
+      :balance-url="autoRenewBalanceUrl"
+      :mollie-url="autoRenewMollieUrl"
+      :auto-renew-with-balance="autoRenewWithBalance"
+      :has-mollie-subscription="hasMollieSubscription"
+      @update:open="autoRenewModalOpen = $event"
+    />
   </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   BButton,
   BCard,
@@ -173,6 +237,8 @@ import {
   BCardHeader,
   BCol,
   BFormInput,
+  BFormRadio,
+  BFormSelect,
   BNav,
   BNavItem,
   BRow,
@@ -183,6 +249,7 @@ import {
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
+import AutoRenewModal from '@/components/AutoRenewModal.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 
 type TeamSpeakServerAccount = {
@@ -204,6 +271,7 @@ type ServerInfo = {
   virtualserver_version?: string
   virtualserver_status?: string
 }
+type ConnectionPreview = { address: string; connection_uri: string }
 type TokenRow = { token: string; group: string; description: string }
 type SnapshotRow = { id: number; created_at: string }
 
@@ -211,9 +279,16 @@ const props = withDefaults(
   defineProps<{
     teamSpeakServerAccount: TeamSpeakServerAccount | null
     serverInfo: ServerInfo | null
+    connection_preview?: ConnectionPreview | null
     tokens: TokenRow[]
     snapshots: SnapshotRow[]
     renewUrl?: string
+    canRenew?: boolean
+    renewalAmount?: number
+    canPayWithBalance?: boolean
+    customerBalance?: number
+    autoRenewWithBalance?: boolean
+    hasMollieSubscription?: boolean
     isSuspendedOrExpired?: boolean
     connectDomainShowUrl?: string
     canManageCollaborators?: boolean
@@ -223,6 +298,13 @@ const props = withDefaults(
     storeInvitationUrl?: string | null
   }>(),
   {
+    connection_preview: null,
+    canRenew: false,
+    renewalAmount: 0,
+    canPayWithBalance: false,
+    customerBalance: 0,
+    autoRenewWithBalance: false,
+    hasMollieSubscription: false,
     canManageCollaborators: false,
     productShares: () => [],
     productInvitations: () => [],
@@ -231,17 +313,81 @@ const props = withDefaults(
   },
 )
 
+const page = usePage()
+const brandFeatures = computed(() => (page.props.brandFeatures as Record<string, boolean> | undefined) ?? {})
+
+const showAboVerwalten = computed(
+  () => !brandFeatures.value?.prepaid_balance && !props.canRenew,
+)
+const showRenewButton = computed(
+  () => !!props.renewUrl && (props.canRenew || brandFeatures.value?.prepaid_balance === true),
+)
+const showAutoRenewButton = computed(
+  () => showRenewButton.value && brandFeatures.value?.prepaid_balance === true,
+)
+
 const activeTab = ref('overview')
 const tokenModalOpen = ref(false)
+const renewModalOpen = ref(false)
+const autoRenewModalOpen = ref(false)
 const newTokenDescription = ref('')
+const renewPeriodMonths = ref(1)
+const paymentMethod = ref<'balance' | 'mollie'>('mollie')
 
-const displayInfo = computed(() => props.serverInfo ?? null)
-const isOnline = computed(() => (displayInfo.value?.virtualserver_status ?? '') === 'online')
+const periodMonthOptions = Array.from({ length: 12 }, (_, i) => ({
+  value: i + 1,
+  text: `${i + 1} Monat${i > 0 ? 'e' : ''}`,
+}))
+
+const totalRenewAmount = computed(() =>
+  Math.round(props.renewalAmount * renewPeriodMonths.value * 100) / 100,
+)
+
+const liveServerInfo = ref<ServerInfo | null>(props.serverInfo)
+
+watch(
+  () => props.serverInfo,
+  (v) => {
+    if (v) {
+      liveServerInfo.value = v
+    }
+  },
+  { immediate: true },
+)
+
+const mergedDisplay = computed((): ServerInfo | null => {
+  const live = liveServerInfo.value
+  const initial = props.serverInfo
+  const prev = props.connection_preview
+  const base = live ?? initial
+  if (base && (base.address || base.connection_uri)) {
+    return base
+  }
+  if (base && prev) {
+    return { ...prev, ...base }
+  }
+  if (prev) {
+    return {
+      ...prev,
+      virtualserver_status: base?.virtualserver_status ?? props.teamSpeakServerAccount?.status,
+    }
+  }
+  return base
+})
+
+const isOnline = computed(() => (mergedDisplay.value?.virtualserver_status ?? '') === 'online')
 const isSuspendedOrExpired = computed(() => props.isSuspendedOrExpired ?? false)
+
+const autoRenewBalanceUrl = computed(
+  () => `/teamspeak-accounts/${props.teamSpeakServerAccount?.uuid ?? ''}/auto-renew-balance`,
+)
+const autoRenewMollieUrl = computed(
+  () => `/teamspeak-accounts/${props.teamSpeakServerAccount?.uuid ?? ''}/auto-renew-mollie-subscription`,
+)
 
 const displayStatus = computed(() => {
   if (isSuspendedOrExpired.value) return 'Gesperrt'
-  const s = displayInfo.value?.virtualserver_status ?? props.teamSpeakServerAccount?.status ?? ''
+  const s = mergedDisplay.value?.virtualserver_status ?? props.teamSpeakServerAccount?.status ?? ''
   if (s === 'online') return 'Online'
   if (s === 'offline' || s === 'stopped') return 'Offline'
   return s || '–'
@@ -249,19 +395,25 @@ const displayStatus = computed(() => {
 
 const statusVariant = computed((): 'success' | 'secondary' | 'danger' => {
   if (isSuspendedOrExpired.value) return 'danger'
-  const s = displayInfo.value?.virtualserver_status ?? ''
+  const s = mergedDisplay.value?.virtualserver_status ?? ''
   if (s === 'online') return 'success'
   return 'secondary'
 })
 
 const overviewRows = computed(() => {
-  const d = displayInfo.value
+  const d = mergedDisplay.value
   const acc = props.teamSpeakServerAccount
   const uptime = d?.virtualserver_uptime != null ? formatUptime(d.virtualserver_uptime) : '–'
   return [
     { key: 'address', label: 'Adresse', value: d?.address ?? '–' },
     { key: 'uptime', label: 'Online-Zeit', value: uptime },
-    { key: 'clients', label: 'User online', value: d != null ? `${d.virtualserver_clientsonline ?? 0} / ${d.virtualserver_maxclients ?? 0}` : '–' },
+    {
+      key: 'clients',
+      label: 'User online',
+      value: d != null && (d.virtualserver_clientsonline != null || d.virtualserver_maxclients != null)
+        ? `${d.virtualserver_clientsonline ?? 0} / ${d.virtualserver_maxclients ?? 0}`
+        : '–',
+    },
     { key: 'version', label: 'Version', value: d?.virtualserver_version ?? '–' },
     { key: 'node', label: 'Node', value: acc?.hosting_server?.name ?? '–' },
   ]
@@ -300,9 +452,71 @@ function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
 }
 
+function fetchOverview() {
+  if (!props.teamSpeakServerAccount || isSuspendedOrExpired.value) return
+  fetch(`/teamspeak-accounts/${props.teamSpeakServerAccount.uuid}/overview`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+  })
+    .then((res) => res.json())
+    .then((data: { serverInfo?: ServerInfo | null; connection_preview?: ConnectionPreview | null }) => {
+      if (data.serverInfo) {
+        liveServerInfo.value = data.serverInfo
+      } else if (data.connection_preview) {
+        liveServerInfo.value = {
+          ...data.connection_preview,
+          virtualserver_status: liveServerInfo.value?.virtualserver_status ?? props.teamSpeakServerAccount?.status,
+        }
+      }
+    })
+    .catch(() => {})
+}
+
+let pollInterval: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  fetchOverview()
+  pollInterval = setInterval(fetchOverview, 10000)
+})
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
+})
+
 function sendPower(action: 'start' | 'stop') {
   if (!props.teamSpeakServerAccount) return
-  router.post(`/teamspeak-accounts/${props.teamSpeakServerAccount.uuid}/power`, { action }, { preserveScroll: true })
+  const cur = liveServerInfo.value ?? mergedDisplay.value
+  if (action === 'stop') {
+    liveServerInfo.value = cur ? { ...cur, virtualserver_status: 'offline' } : { virtualserver_status: 'offline' }
+  } else {
+    liveServerInfo.value = cur ? { ...cur, virtualserver_status: 'online' } : { virtualserver_status: 'online' }
+  }
+  router.post(`/teamspeak-accounts/${props.teamSpeakServerAccount.uuid}/power`, { action }, {
+    preserveScroll: true,
+    onSuccess: () => { fetchOverview() },
+    onError: () => {
+      liveServerInfo.value = props.serverInfo
+        ?? (props.connection_preview
+          ? { ...props.connection_preview, virtualserver_status: props.teamSpeakServerAccount?.status }
+          : null)
+    },
+  })
+}
+
+function submitRenew() {
+  if (!props.renewUrl) return
+  router.post(
+    props.renewUrl,
+    {
+      payment_method: props.canPayWithBalance ? paymentMethod.value : 'mollie',
+      period_months: renewPeriodMonths.value,
+    },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        renewModalOpen.value = false
+      },
+    },
+  )
 }
 
 function createToken() {

@@ -57,9 +57,22 @@ beforeEach(function () {
     ]);
 });
 
+test('cloud subscription show inertia includes uuid renewal amount and can renew', function () {
+    $this->actingAs($this->user);
+
+    $this->get(route('gaming.cloud.subscriptions.show', $this->subscription))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('gaming/cloud/SubscriptionShow')
+            ->where('subscription.uuid', $this->subscription->uuid)
+            ->where('renewalAmount', 10)
+            ->where('canRenew', true)
+        );
+});
+
 test('guest cannot update cloud server resources', function () {
     $response = $this->put(
-        route('gaming.cloud.subscriptions.servers.resources.update', [$this->subscription->id, $this->account->id]),
+        route('gaming.cloud.subscriptions.servers.resources.update', [$this->subscription, $this->account]),
         ['cpu' => 50, 'memory_mb' => 1024, 'disk_mb' => 2048]
     );
 
@@ -71,7 +84,7 @@ test('owner gets validation error when requesting more than quota', function () 
     $this->actingAs($this->user);
 
     $response = $this->put(
-        route('gaming.cloud.subscriptions.servers.resources.update', [$this->subscription->id, $this->account->id]),
+        route('gaming.cloud.subscriptions.servers.resources.update', [$this->subscription, $this->account]),
         ['cpu' => 999, 'memory_mb' => 1024, 'disk_mb' => 2048]
     );
 
