@@ -31,8 +31,6 @@
           <Icon icon="menu-4" />
         </button>
 
-        <SearchBoxRounded />
-
         <MegamenuColumns />
 
         <MegamenuApps />
@@ -40,8 +38,6 @@
 
       <div class="d-flex align-items-center gap-2">
         <ThemeDropdown />
-
-        <NotificationDropdownPeople />
 
         <FullscreenToggler />
 
