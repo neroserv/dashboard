@@ -681,41 +681,42 @@ const tableFields = [
     vertical-align: middle;
 }
 
-.ticket-row-last-from-customer td {
+/* Zeilenklassen sitzen auf <tr> innerhalb von BTable — :deep nötig, sonst greift scoped CSS nicht auf <td>. */
+:deep(tr.ticket-row-last-from-customer > td) {
     background-color: rgba(253, 186, 116, 0.38);
 }
 
-:root.dark .ticket-row-last-from-customer td {
+:root.dark :deep(tr.ticket-row-last-from-customer > td) {
     background-color: rgba(251, 146, 60, 0.22);
 }
 
-.ticket-row-assigned-to-me td {
+:deep(tr.ticket-row-assigned-to-me > td) {
     background-color: rgba(79, 70, 229, 0.06);
     box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
-.ticket-row-assigned-to-me.ticket-row-last-from-customer td {
+:deep(tr.ticket-row-assigned-to-me.ticket-row-last-from-customer > td) {
     background-color: rgba(251, 191, 36, 0.28);
     box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
-:root.dark .ticket-row-assigned-to-me td {
+:root.dark :deep(tr.ticket-row-assigned-to-me > td) {
     background-color: rgba(129, 140, 248, 0.1);
     box-shadow: inset 3px 0 0 0 #818cf8;
 }
 
-:root.dark .ticket-row-assigned-to-me.ticket-row-last-from-customer td {
+:root.dark :deep(tr.ticket-row-assigned-to-me.ticket-row-last-from-customer > td) {
     background-color: rgba(251, 146, 60, 0.18);
     box-shadow: inset 3px 0 0 0 #818cf8;
 }
 
-/* Kürzlich geschlossene (noch in der Liste sichtbar): dezent zurücktreten */
-.ticket-row-closed-muted td {
+/* Geschlossene Tickets: leicht durchsichtig */
+:deep(tr.ticket-row-closed-muted > td) {
     opacity: 0.62;
 }
 
-.ticket-row-closed-muted:hover td {
-    opacity: 0.85;
+:deep(tr.ticket-row-closed-muted:hover > td) {
+    opacity: 0.88;
 }
 
 .ticket-assignee-row-name {
