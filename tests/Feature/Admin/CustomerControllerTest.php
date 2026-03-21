@@ -36,6 +36,8 @@ test('admin users can view customer detail', function () {
         ->has('customer')
         ->where('can_impersonate', true)
         ->where('can_be_impersonated', true)
+        ->where('customer.prioritized_support', false)
+        ->where('customer.has_active_partner_prioritized_support', false)
         ->has('customer.invoices')
         ->has('customer.tickets')
         ->has('customer.reseller_domains')
@@ -79,6 +81,21 @@ test('admin users can update customer stammdaten', function () {
     expect($customer->name)->toBe('New Name')
         ->and($customer->company)->toBe('Test GmbH')
         ->and($customer->country)->toBe('DE');
+});
+
+test('admin users can enable direct prioritized support on customer', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $customer = User::factory()->create(['prioritized_support' => false]);
+    $this->actingAs($admin);
+
+    $response = $this->put(route('admin.customers.update', $customer), [
+        'name' => $customer->name,
+        'email' => $customer->email,
+        'prioritized_support' => true,
+    ]);
+    $response->assertRedirect(route('admin.customers.show', $customer));
+    $customer->refresh();
+    expect($customer->prioritized_support)->toBeTrue();
 });
 
 test('admin users can update customer is_admin and rank', function () {

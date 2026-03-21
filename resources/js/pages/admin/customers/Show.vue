@@ -18,6 +18,7 @@ import {
     BButton,
     BBadge,
     BTable,
+    BAlert,
 } from 'bootstrap-vue-next';
 import InputError from '@/components/InputError.vue';
 import Icon from '@/components/wrappers/Icon.vue';
@@ -131,6 +132,8 @@ type Customer = {
     mollie_customer_id?: string | null;
     support_pin?: string;
     support_pin_valid_until?: string;
+    prioritized_support?: boolean;
+    has_active_partner_prioritized_support?: boolean;
 };
 
 type ActivityLogEntry = {
@@ -205,6 +208,23 @@ const rankLabel = computed(() => {
     return r ? (RANK_LABELS[r] ?? r) : null;
 });
 
+const showPrioritizedSupportAlert = computed(
+    () =>
+        !!(props.customer.prioritized_support || props.customer.has_active_partner_prioritized_support),
+);
+
+const prioritizedSupportAlertText = computed(() => {
+    const direct = props.customer.prioritized_support;
+    const partner = props.customer.has_active_partner_prioritized_support;
+    if (direct && partner) {
+        return 'Für diesen Kunden ist priorisierter Support aktiv (direkt am Konto und über einen aktiven Partner-Eintrag).';
+    }
+    if (direct) {
+        return 'Für diesen Kunden ist priorisierter Support direkt am Kundenkonto aktiviert.';
+    }
+    return 'Für diesen Kunden gilt priorisierter Support über einen aktiven Partner-Eintrag.';
+});
+
 const impersonateUrl = computed(() => impersonate.url({ id: props.customer.id }));
 const showImpersonateButton = computed(
     () => props.can_impersonate && props.can_be_impersonated,
@@ -275,6 +295,15 @@ onMounted(() => {
 <template>
     <AdminLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Kunde: ${customer.name}`" />
+
+        <BRow v-if="showPrioritizedSupportAlert" class="mb-3">
+            <BCol>
+                <BAlert variant="warning" show class="mb-0">
+                    <strong>Priorisierter Support</strong>
+                    <p class="mb-0 small">{{ prioritizedSupportAlertText }}</p>
+                </BAlert>
+            </BCol>
+        </BRow>
 
         <BRow>
             <BCol>

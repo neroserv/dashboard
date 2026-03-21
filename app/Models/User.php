@@ -37,6 +37,7 @@ class User extends Authenticatable
         'discord_id',
         'is_admin',
         'rank',
+        'prioritized_support',
         'pin_hash',
         'pin_length',
         'inactivity_lock_minutes',
@@ -81,6 +82,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_admin' => 'boolean',
+            'prioritized_support' => 'boolean',
             'pin_lockout_until' => 'datetime',
             'admin_dashboard_layout' => 'array',
             'notification_preferences' => 'array',
@@ -427,6 +429,22 @@ class User extends Authenticatable
                     ->orWhere('expires_at', '>', now());
             })
             ->exists();
+    }
+
+    /**
+     * Whether this user has prioritized support set directly on the account (admin).
+     */
+    public function hasDirectPrioritizedSupport(): bool
+    {
+        return (bool) $this->prioritized_support;
+    }
+
+    /**
+     * Whether new support tickets should snapshot prioritized support for this user.
+     */
+    public function qualifiesForPrioritizedSupportOnTickets(): bool
+    {
+        return $this->hasDirectPrioritizedSupport() || $this->hasActivePartnerPrioritizedSupport();
     }
 
     /**

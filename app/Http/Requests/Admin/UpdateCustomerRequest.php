@@ -29,6 +29,7 @@ class UpdateCustomerRequest extends FormRequest
             'city' => ['nullable', 'string', 'max:255'],
             'country' => ['nullable', 'string', 'max:2', Rule::in(array_keys(config('countries', [])))],
             'is_admin' => ['boolean'],
+            'prioritized_support' => ['boolean'],
             'rank' => ['nullable', 'string', 'max:50'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['integer', 'exists:groups,id'],

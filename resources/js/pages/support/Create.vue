@@ -64,7 +64,7 @@
                         Neues Support-Ticket erstellen
                     </BCardHeader>
                     <BCardBody>
-                        <BAlert v-if="props.hasPartnerPrioritizedSupport" variant="info" show class="mb-3">
+                        <BAlert v-if="props.hasPrioritizedSupport" variant="info" show class="mb-3">
                             Über deinen Partner-Status erhältst du für dieses neue Ticket automatisch
                             <strong>Priorisierten Support</strong> (zusätzlich zur gewählten Ticket-Priorität).
                         </BAlert>
@@ -239,7 +239,7 @@ const props = defineProps<{
     services: ServicesPayload;
     categories: Category[];
     priorities: Priority[];
-    hasPartnerPrioritizedSupport?: boolean;
+    hasPrioritizedSupport?: boolean;
 }>();
 
 type AffectedService = { type: string; id: number };

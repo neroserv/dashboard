@@ -35,6 +35,18 @@ test('customers can view support ticket create page', function () {
     $response->assertOk();
 });
 
+test('support create page passes hasPrioritizedSupport when user has direct flag', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false, 'prioritized_support' => true]);
+    $this->actingAs($user);
+
+    $this->get(route('support.create'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('support/Create')
+            ->where('hasPrioritizedSupport', true));
+});
+
 test('customers can create ticket', function () {
     Setting::set('support_enabled', '1');
     $user = User::factory()->create(['is_admin' => false]);
@@ -103,6 +115,25 @@ test('customers can view and reply to own ticket', function () {
     $response = $this->post(route('support.messages.store', $ticket), ['body' => 'Customer reply']);
     $response->assertRedirect(route('support.show', $ticket));
     $this->assertDatabaseHas('ticket_messages', ['ticket_id' => $ticket->id, 'body' => 'Customer reply']);
+});
+
+test('support ticket sets prioritized_support when user has direct admin flag', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false, 'prioritized_support' => true]);
+    $category = TicketCategory::factory()->create(['is_active' => true]);
+    $this->actingAs($user);
+
+    $this->post(route('support.store'), [
+        'subject' => 'Direct prio ticket',
+        'body' => 'Body',
+        'ticket_category_id' => $category->id,
+        'ticket_priority_id' => '',
+        'affected_services' => [],
+    ])->assertRedirect();
+
+    $ticket = Ticket::query()->where('user_id', $user->id)->where('subject', 'Direct prio ticket')->first();
+    expect($ticket)->not->toBeNull();
+    expect($ticket->prioritized_support)->toBeTrue();
 });
 
 test('support ticket sets prioritized_support when user has active partner with flag', function () {

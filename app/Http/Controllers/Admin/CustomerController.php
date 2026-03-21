@@ -30,7 +30,7 @@ class CustomerController extends Controller
         $userRanks = config('app.user_ranks', []);
 
         return Inertia::render('admin/customers/Edit', [
-            'customer' => array_merge($customer->only(['id', 'name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'is_admin', 'rank']), [
+            'customer' => array_merge($customer->only(['id', 'name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'is_admin', 'rank', 'prioritized_support']), [
                 'brand_id' => $customer->brand_id,
                 'brand' => $customer->brand ? ['id' => $customer->brand->id, 'key' => $customer->brand->key, 'name' => $customer->brand->name] : null,
                 'group_ids' => $customer->groups->pluck('id')->values()->all(),
@@ -158,6 +158,7 @@ class CustomerController extends Controller
 
         $customerArray['support_pin'] = $customer->getSupportPin();
         $customerArray['support_pin_valid_until'] = $customer->getSupportPinValidUntil()->toIso8601String();
+        $customerArray['has_active_partner_prioritized_support'] = $customer->hasActivePartnerPrioritizedSupport();
 
         $aiTokenBalance = AiTokenBalance::where('user_id', $customer->id)->first();
         $aiTokenTransactions = AiTokenTransaction::where('user_id', $customer->id)

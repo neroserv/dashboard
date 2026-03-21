@@ -98,7 +98,7 @@ class SupportController extends Controller
             'services' => $services,
             'categories' => $categories,
             'priorities' => $priorities,
-            'hasPartnerPrioritizedSupport' => $user->hasActivePartnerPrioritizedSupport(),
+            'hasPrioritizedSupport' => $user->qualifiesForPrioritizedSupportOnTickets(),
         ]);
     }
 
@@ -120,7 +120,7 @@ class SupportController extends Controller
             'user_id' => $request->user()->id,
             'ticket_category_id' => $validated['ticket_category_id'],
             'ticket_priority_id' => $validated['ticket_priority_id'] ?? null,
-            'prioritized_support' => $request->user()->hasActivePartnerPrioritizedSupport(),
+            'prioritized_support' => $request->user()->qualifiesForPrioritizedSupportOnTickets(),
             'subject' => $validated['subject'],
             'status' => 'open',
         ]);

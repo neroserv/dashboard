@@ -41,6 +41,7 @@ type Customer = {
     brand_id?: number | null;
     brand?: Brand | null;
     is_admin?: boolean;
+    prioritized_support?: boolean;
     rank?: string | null;
     group_ids?: number[];
 };
@@ -138,6 +139,14 @@ function submit() {
                                 <BFormCheckbox id="is_admin" v-model="form.is_admin">
                                     Administrator
                                 </BFormCheckbox>
+                            </BFormGroup>
+                            <BFormGroup>
+                                <BFormCheckbox id="prioritized_support" v-model="form.prioritized_support">
+                                    Priorisierter Support (direkt für diesen Kunden)
+                                </BFormCheckbox>
+                                <p class="text-muted small mb-0 mt-1">
+                                    Zusätzlich zu Partner-Plänen: neue Tickets erhalten das Flag „priorisierter Support“.
+                                </p>
                             </BFormGroup>
                             <BFormGroup label="Marke" label-for="brand_id">
                                 <BFormSelect
