@@ -117,7 +117,7 @@
                 Noch keine Server. Klicken Sie auf „Server erstellen“.
               </div>
               <BRow v-else class="g-3">
-                <BCol v-for="acc in subscription.game_server_accounts" :key="acc.uuid" md="6">
+                <BCol v-for="acc in subscription.game_server_accounts" :key="acc.uuid ?? acc.id" md="6">
                   <BCard no-body class="h-100">
                     <BCardBody>
                       <div class="d-flex justify-content-between align-items-start mb-2">
@@ -127,40 +127,48 @@
                         </BBadge>
                       </div>
                       <p class="small text-muted mb-2">{{ acc.nest_name ?? '–' }} · {{ acc.egg_name ?? '–' }}</p>
-                      <div class="d-flex flex-wrap gap-1 justify-content-between align-items-center">
-                        <div class="d-flex gap-1">
+                      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                        <div
+                          v-if="acc.identifier"
+                          class="d-flex align-items-center gap-2"
+                          role="group"
+                          :aria-label="`Server ${acc.name || 'Server'} steuern`"
+                        >
                           <BButton
-                            v-if="acc.identifier"
                             size="sm"
                             variant="outline-success"
-                            class="py-0 px-1"
+                            class="d-inline-flex align-items-center justify-content-center px-2 py-1"
                             title="Start"
                             @click="sendPower(acc, 'start')"
                           >
-                            <Icon icon="play" />
+                            <Icon icon="player-play" class="fs-6" />
                           </BButton>
                           <BButton
-                            v-if="acc.identifier"
                             size="sm"
                             variant="outline-warning"
-                            class="py-0 px-1"
+                            class="d-inline-flex align-items-center justify-content-center px-2 py-1"
                             title="Neustart"
                             @click="sendPower(acc, 'restart')"
                           >
-                            <Icon icon="rotate-cw" />
+                            <Icon icon="refresh" class="fs-6" />
                           </BButton>
                           <BButton
-                            v-if="acc.identifier"
                             size="sm"
                             variant="outline-danger"
-                            class="py-0 px-1"
+                            class="d-inline-flex align-items-center justify-content-center px-2 py-1"
                             title="Stoppen"
                             @click="sendPower(acc, 'stop')"
                           >
-                            <Icon icon="square" />
+                            <Icon icon="square" class="fs-6" />
                           </BButton>
                         </div>
-                        <Link :href="`/gaming-accounts/${acc.uuid}`" class="btn btn-sm btn-primary">Verwalten</Link>
+                        <Link
+                          v-if="acc.uuid"
+                          :href="`/gaming-accounts/${acc.uuid}`"
+                          class="btn btn-sm btn-primary"
+                        >
+                          Verwalten
+                        </Link>
                       </div>
                     </BCardBody>
                   </BCard>
@@ -466,7 +474,7 @@ function isServerOnline(acc: GameServerAccount): boolean {
 }
 
 function sendPower(acc: GameServerAccount, action: 'start' | 'stop' | 'restart') {
-  if (!acc.identifier || !props.subscription) return
+  if (!acc.identifier || !props.subscription || !acc.uuid) return
   router.post(
     `/gaming/cloud/subscriptions/${props.subscription.uuid}/servers/${acc.uuid}/power`,
     { action },

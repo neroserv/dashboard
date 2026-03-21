@@ -925,7 +925,7 @@ class GameserverCloudSubscriptionController extends Controller
     /**
      * @param  \Illuminate\Support\Collection<int, GameServerAccount>  $accounts
      * @param  array<int, array{id: int, name: string, eggs: array<int, array{id: int, name: string}>}>  $nests
-     * @return array<int, array{id: int, name: string, status: string, identifier: string|null, allocation: array|null, nest_name: string, egg_name: string, server_status: string}>
+     * @return array<int, array{uuid: string, id: int, name: string, status: string, identifier: string|null, allocation: array|null, nest_name: string, egg_name: string, server_status: string}>
      */
     protected function mapGameServerAccountsForShow($accounts, array $nests): array
     {
@@ -969,6 +969,7 @@ class GameserverCloudSubscriptionController extends Controller
             $eggName = $eggNames[$nestId.'_'.$eggId] ?? '—';
 
             $result[] = [
+                'uuid' => $a->uuid,
                 'id' => $a->id,
                 'name' => $a->name,
                 'status' => $a->status,

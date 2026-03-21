@@ -65,6 +65,7 @@ test('cloud subscription show inertia includes uuid renewal amount and can renew
         ->assertInertia(fn ($page) => $page
             ->component('gaming/cloud/SubscriptionShow')
             ->where('subscription.uuid', $this->subscription->uuid)
+            ->where('subscription.game_server_accounts.0.uuid', $this->account->uuid)
             ->where('renewalAmount', 10)
             ->where('canRenew', true)
         );
