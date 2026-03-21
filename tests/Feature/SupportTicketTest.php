@@ -22,6 +22,15 @@ test('customers can view support index', function () {
     $response->assertOk();
 });
 
+test('customers can view support ticket create page', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false]);
+    $this->actingAs($user);
+
+    $response = $this->get(route('support.create'));
+    $response->assertOk();
+});
+
 test('customers can create ticket', function () {
     Setting::set('support_enabled', '1');
     $user = User::factory()->create(['is_admin' => false]);

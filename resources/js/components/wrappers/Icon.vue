@@ -1,11 +1,20 @@
 <template>
-    <IconifyIcon v-bind="$props" :icon="`tabler:${icon}`" />
+    <IconifyIcon v-bind="iconifyAttrs" />
 </template>
 
 <script setup lang="ts">
 import { Icon as IconifyIcon } from '@iconify/vue';
+import { computed, useAttrs } from 'vue';
+
+defineOptions({ inheritAttrs: false });
 
 type Props = { icon: string };
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const attrs = useAttrs();
+
+const iconifyAttrs = computed(() => ({
+    ...attrs,
+    icon: `tabler:${props.icon}`,
+}));
 </script>

@@ -14,7 +14,7 @@
                         <h4 class="mb-1">Support Tickets</h4>
                         <p class="text-muted small mb-0">Deine Support-Anfragen und Nachrichtenverlauf</p>
                     </div>
-                    <Link :href="supportCreate.url">
+                    <Link :href="supportCreate.url()">
                         <BButton variant="primary">
                             <Icon icon="plus" class="me-2" />
                             Ticket erstellen

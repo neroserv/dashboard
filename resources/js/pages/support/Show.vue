@@ -27,7 +27,7 @@
                             style="width: 2.75rem; height: 2.75rem"
                         >
                             <span class="d-inline-flex align-items-center justify-content-center lh-0 text-danger">
-                                <Icon icon="home" />
+                                <Icon icon="moon-stars" width="22" height="22" />
                             </span>
                         </div>
                         <div>
