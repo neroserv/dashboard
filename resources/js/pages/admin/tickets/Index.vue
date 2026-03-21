@@ -692,22 +692,18 @@ const tableFields = [
 
 :deep(tr.ticket-row-assigned-to-me > td) {
     background-color: rgba(79, 70, 229, 0.06);
-    box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
 :deep(tr.ticket-row-assigned-to-me.ticket-row-last-from-customer > td) {
     background-color: rgba(251, 191, 36, 0.28);
-    box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
 :root.dark :deep(tr.ticket-row-assigned-to-me > td) {
     background-color: rgba(129, 140, 248, 0.1);
-    box-shadow: inset 3px 0 0 0 #818cf8;
 }
 
 :root.dark :deep(tr.ticket-row-assigned-to-me.ticket-row-last-from-customer > td) {
     background-color: rgba(251, 146, 60, 0.18);
-    box-shadow: inset 3px 0 0 0 #818cf8;
 }
 
 /* Geschlossene Tickets: leicht durchsichtig */

@@ -255,6 +255,39 @@ test('admin tickets index sets last_message_from_customer when newest message is
                 && ($data[0]['last_message_from_customer'] ?? false) === true));
 });
 
+test('admin tickets index still flags customer reply when a newer internal admin note exists', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $customer = User::factory()->create(['is_admin' => false]);
+    $category = TicketCategory::factory()->create();
+    $needle = 'LMFC-INT-'.uniqid();
+    $ticket = Ticket::factory()->create([
+        'ticket_category_id' => $category->id,
+        'user_id' => $customer->id,
+        'subject' => $needle,
+    ]);
+    TicketMessage::factory()->create([
+        'ticket_id' => $ticket->id,
+        'user_id' => $customer->id,
+        'is_internal' => false,
+        'created_at' => now()->subHour(),
+    ]);
+    TicketMessage::factory()->create([
+        'ticket_id' => $ticket->id,
+        'user_id' => $admin->id,
+        'is_internal' => true,
+        'created_at' => now(),
+    ]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index', ['search' => $needle]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('tickets.data', fn ($data) => count($data) === 1
+                && (int) ($data[0]['id'] ?? 0) === $ticket->id
+                && ($data[0]['last_message_from_customer'] ?? false) === true));
+});
+
 test('admin tickets index sets last_message_from_customer false when newest message is from admin', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $customer = User::factory()->create(['is_admin' => false]);
@@ -284,6 +317,36 @@ test('admin tickets index sets last_message_from_customer false when newest mess
             ->where('tickets.data', fn ($data) => count($data) === 1
                 && (int) ($data[0]['id'] ?? 0) === $ticket->id
                 && ($data[0]['last_message_from_customer'] ?? false) === false));
+});
+
+test('admin ticket show flags last public message from customer even when internal note is newer', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $customer = User::factory()->create(['is_admin' => false]);
+    $category = TicketCategory::factory()->create();
+    $ticket = Ticket::factory()->create([
+        'ticket_category_id' => $category->id,
+        'user_id' => $customer->id,
+    ]);
+    TicketMessage::factory()->create([
+        'ticket_id' => $ticket->id,
+        'user_id' => $customer->id,
+        'is_internal' => false,
+        'created_at' => now()->subHour(),
+    ]);
+    TicketMessage::factory()->create([
+        'ticket_id' => $ticket->id,
+        'user_id' => $admin->id,
+        'is_internal' => true,
+        'created_at' => now(),
+    ]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.show', $ticket))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/tickets/Show')
+            ->where('lastMessageFromCustomer', true));
 });
 
 test('admin ticket show exposes assigned_to id for the assignee', function () {

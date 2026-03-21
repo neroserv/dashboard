@@ -84,6 +84,19 @@ class Ticket extends Model
     }
 
     /**
+     * Newest non-internal message in the public thread (excludes staff-only notes).
+     *
+     * @return HasOne<TicketMessage>
+     */
+    public function latestPublicMessage(): HasOne
+    {
+        return $this->hasOne(TicketMessage::class)->ofMany(
+            ['created_at' => 'max', 'id' => 'max'],
+            fn ($query) => $query->where('is_internal', false),
+        );
+    }
+
+    /**
      * @return BelongsToMany<Tag>
      */
     public function tags(): BelongsToMany

@@ -569,8 +569,19 @@ onMounted(() => {
 
             <!-- Hauptbereich: Verlauf und Antwort -->
             <BCol cols="12" xl="9">
-                <div v-if="lastMessageFromCustomer" class="mb-3">
-                    <BBadge variant="primary">Kunde hat geantwortet</BBadge>
+                <div
+                    v-if="lastMessageFromCustomer"
+                    class="mb-3 rounded-2 border border-orange-300 bg-orange-50 px-3 py-2 text-orange-950 dark:border-orange-600 dark:bg-orange-950/45 dark:text-orange-100"
+                    role="status"
+                >
+                    <div class="d-flex align-items-start gap-2">
+                        <Icon icon="message-circle" width="20" height="20" class="mt-1 flex-shrink-0" />
+                        <p class="small mb-0">
+                            <strong>Neue Kundenantwort</strong>
+                            — die letzte öffentliche Nachricht stammt vom Kunden (interne Notizen zählen nicht). Bitte antworten,
+                            wenn du noch nicht reagiert hast.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Timeline -->

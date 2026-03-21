@@ -77,7 +77,7 @@ class TicketController extends Controller
                 'ticketPriority:id,name,slug,color',
                 'ticketServices',
                 'assignedTo:id,name,avatar_path',
-                'latestMessage' => fn ($q) => $q->with('user:id,is_admin'),
+                'latestPublicMessage' => fn ($q) => $q->with('user:id,is_admin'),
             ]);
 
         $this->applyAdminTicketIndexClosedVisibility($query, $request);
@@ -113,10 +113,10 @@ class TicketController extends Controller
                 : $ticket->ticketServices->map(fn (TicketService $ts) => $ts->resolveLabel())->join(', ');
             $ticket->setAttribute('service_display', $summary);
 
-            $last = $ticket->latestMessage;
+            $last = $ticket->latestPublicMessage;
             $fromCustomer = $last !== null && ! $last->user?->is_admin;
             $ticket->setAttribute('last_message_from_customer', $fromCustomer);
-            $ticket->unsetRelation('latestMessage');
+            $ticket->unsetRelation('latestPublicMessage');
 
             return $ticket;
         });
@@ -277,8 +277,8 @@ class TicketController extends Controller
             'tags:id,name,slug,color',
             'messages' => fn ($q) => $q->with(['user:id,name,is_admin,avatar_path', 'attachments'])->orderBy('created_at'),
         ]);
-        $lastMessage = $ticket->messages->last();
-        $lastMessageFromCustomer = $lastMessage !== null && ! $lastMessage->user?->is_admin;
+        $lastPublicMessage = $ticket->messages->filter(fn (TicketMessage $m) => ! $m->is_internal)->last();
+        $lastMessageFromCustomer = $lastPublicMessage !== null && ! $lastPublicMessage->user?->is_admin;
         $categories = \App\Models\TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
         $priorities = \App\Models\TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
         $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name', 'avatar_path']);
