@@ -314,17 +314,6 @@ onMounted(() => {
 
         <BRow class="mb-4">
             <BCol cols="6" md="4" lg="2" class="mb-3">
-                <Link :href="`#sites`" class="text-decoration-none">
-                    <BCard class="h-100 hover-shadow">
-                        <BCardBody class="py-3 d-flex align-items-center gap-2">
-                            <Icon icon="world" class="text-muted" />
-                            <span class="fs-4 fw-semibold">{{ customer.sites?.length ?? 0 }}</span>
-                        </BCardBody>
-                        <BCardBody class="py-2 pt-0 small text-muted">Sites</BCardBody>
-                    </BCard>
-                </Link>
-            </BCol>
-            <BCol cols="6" md="4" lg="2" class="mb-3">
                 <Link :href="`/admin/invoices?user_id=${customer.id}`" class="text-decoration-none">
                     <BCard class="h-100 hover-shadow">
                         <BCardBody class="py-3 d-flex align-items-center gap-2">

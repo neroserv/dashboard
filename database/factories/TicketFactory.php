@@ -22,7 +22,6 @@ class TicketFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'site_id' => null,
             'ticket_category_id' => TicketCategory::factory(),
             'ticket_priority_id' => TicketPriority::factory(),
             'subject' => fake()->sentence(),

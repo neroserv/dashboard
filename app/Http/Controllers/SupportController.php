@@ -31,7 +31,7 @@ class SupportController extends Controller
         }
         $tickets = $request->user()
             ->tickets()
-            ->with(['ticketCategory', 'ticketPriority', 'site:uuid,name,slug'])
+            ->with(['ticketCategory', 'ticketPriority'])
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -57,14 +57,6 @@ class SupportController extends Controller
             'teamspeak' => [],
         ];
 
-        if (! empty($features['sites_editor'])) {
-            $services['websites'] = $user->sites()
-                ->orderBy('name')
-                ->get(['id', 'uuid', 'name', 'slug'])
-                ->map(fn ($s) => ['type' => 'site', 'id' => $s->id, 'label' => $s->name])
-                ->values()
-                ->all();
-        }
         if (! empty($features['domains_shop'])) {
             $services['domains'] = $user->resellerDomains()
                 ->orderBy('domain')
@@ -122,16 +114,8 @@ class SupportController extends Controller
         }
         $validated = $request->validated();
         $affectedServices = $validated['affected_services'] ?? [];
-        $siteId = null;
-        foreach ($affectedServices as $item) {
-            if (($item['type'] ?? '') === 'site' && ! empty($item['id'])) {
-                $siteId = (int) $item['id'];
-                break;
-            }
-        }
         $ticket = Ticket::create([
             'user_id' => $request->user()->id,
-            'site_id' => $siteId,
             'ticket_category_id' => $validated['ticket_category_id'],
             'ticket_priority_id' => $validated['ticket_priority_id'] ?? null,
             'subject' => $validated['subject'],
@@ -163,7 +147,6 @@ class SupportController extends Controller
         $ticket->load([
             'ticketCategory',
             'ticketPriority',
-            'site:id,name,slug',
             'ticketServices',
             'messages' => fn ($q) => $q->with(['user:id,name', 'attachments'])->orderBy('created_at'),
         ]);
@@ -222,13 +205,12 @@ class SupportController extends Controller
 
         $serviceName = $affectedServices !== []
             ? implode(', ', array_column($affectedServices, 'label'))
-            : ($ticket->site?->name ?? 'Allgemein / Kein Dienst');
+            : 'Allgemein / Kein Dienst';
 
         return Inertia::render('support/Show', [
-            'ticket' => $ticket->only(['id', 'uuid', 'subject', 'status', 'created_at', 'updated_at', 'ticket_category_id', 'ticket_priority_id', 'site_id']),
+            'ticket' => $ticket->only(['id', 'uuid', 'subject', 'status', 'created_at', 'updated_at', 'ticket_category_id', 'ticket_priority_id']),
             'ticketCategory' => $ticket->ticketCategory?->only(['id', 'name', 'slug']),
             'ticketPriority' => $ticket->ticketPriority?->only(['id', 'name', 'slug', 'color']),
-            'site' => $ticket->site?->only(['uuid', 'name', 'slug']),
             'statusLabel' => $statusLabels[$ticket->status] ?? $ticket->status,
             'serviceName' => $serviceName,
             'affectedServices' => $affectedServices,
@@ -301,7 +283,6 @@ class SupportController extends Controller
     private function resolveServiceLabel(string $serviceType, int $serviceId): string
     {
         return match ($serviceType) {
-            'site' => \App\Models\Site::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
             'reseller_domain' => \App\Models\ResellerDomain::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
             'webspace_account' => \App\Models\WebspaceAccount::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
             'game_server_account' => \App\Models\GameServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",

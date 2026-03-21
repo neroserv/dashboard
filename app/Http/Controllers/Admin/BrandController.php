@@ -38,7 +38,6 @@ class BrandController extends Controller
             'theme_colors' => ['nullable', 'array'],
             'theme_colors.*' => ['nullable', 'string', 'max:50'],
             'features' => ['nullable', 'array'],
-            'features.sites_editor' => ['boolean'],
             'features.webspace' => ['boolean'],
             'features.domains_shop' => ['boolean'],
             'features.ai_tokens' => ['boolean'],

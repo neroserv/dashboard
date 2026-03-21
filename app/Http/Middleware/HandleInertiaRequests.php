@@ -6,7 +6,6 @@ use App\Models\CustomerBalance;
 use App\Models\Setting;
 use App\Models\Ticket;
 use App\Services\MolliePaymentMethodsService;
-use App\Services\SiteRenderService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -61,11 +60,6 @@ class HandleInertiaRequests extends Middleware
                 $adminOpenTicketsCount = Ticket::whereIn('status', ['open', 'in_progress', 'waiting_customer'])
                     ->count();
             }
-        }
-
-        $activeUserModules = [];
-        if ($user) {
-            $activeUserModules = app(SiteRenderService::class)->getActiveModulesForUser($user);
         }
 
         $flash = array_filter([
@@ -129,7 +123,7 @@ class HandleInertiaRequests extends Middleware
             'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,
             'openTicketsCount' => $openTicketsCount,
             'adminOpenTicketsCount' => $adminOpenTicketsCount,
-            'activeUserModules' => $activeUserModules,
+            'activeUserModules' => [],
             'impersonating' => $impersonating,
             'group_labels' => $groupLabels,
             'group_labels_with_colors' => $groupLabelsWithColors,

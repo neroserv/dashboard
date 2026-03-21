@@ -82,10 +82,8 @@
                     <td class="py-4 pr-4 text-gray-700">
                         @if($invoice->type === 'ai_tokens')
                             AI-Token-Paket ({{ number_format(($invoice->metadata ?? [])['token_amount'] ?? 0, 0, ',', '.') }} Tokens)
-                        @elseif($invoice->siteSubscription && $invoice->siteSubscription->site)
-                            Abonnement „Meine Seiten“ – {{ $invoice->siteSubscription->site->name }}
                         @else
-                            Abonnement „Meine Seiten“
+                            Abonnement
                         @endif
                         @if($invoice->type !== 'ai_tokens' && $invoice->billing_period_start && $invoice->billing_period_end)
                             <span class="text-gray-500">({{ $invoice->billing_period_start->format('d.m.Y') }} – {{ $invoice->billing_period_end->format('d.m.Y') }})</span>

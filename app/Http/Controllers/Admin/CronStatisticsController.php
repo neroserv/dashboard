@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CronDailyStats;
 use App\Models\Invoice;
-use App\Models\SiteSubscription;
 use App\Models\Ticket;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -43,9 +42,7 @@ class CronStatisticsController extends Controller
                 ->where('status', 'paid')
                 ->whereDate('updated_at', $dateStr)
                 ->count();
-            $servicesOrdered = (int) SiteSubscription::query()
-                ->whereDate('created_at', $dateStr)
-                ->count();
+            $servicesOrdered = 0;
             $servicesRenewed = (int) Invoice::query()
                 ->where('type', 'subscription_renewal')
                 ->where('status', 'paid')

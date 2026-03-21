@@ -22,7 +22,6 @@ type Customer = {
     id: number;
     name: string;
     email: string;
-    sites_count: number;
     brand?: { id: number; key: string; name: string } | null;
 };
 
@@ -44,7 +43,6 @@ const tableFields = [
     { key: 'name', label: 'Name', sortable: false },
     { key: 'email', label: 'E-Mail', sortable: false },
     { key: 'brand_name', label: 'Marke', sortable: false },
-    { key: 'sites_count', label: 'Anzahl Sites', sortable: false },
     { key: 'actions', label: 'Aktionen', sortable: false, thClass: 'text-end' },
 ];
 
@@ -81,9 +79,6 @@ const tableFields = [
                                     {{ row.item.brand.name }}
                                 </BBadge>
                                 <span v-else class="text-muted">–</span>
-                            </template>
-                            <template #cell(sites_count)="row">
-                                <BBadge variant="info">{{ row.item.sites_count }}</BBadge>
                             </template>
                             <template #cell(actions)="row">
                                 <Link :href="customersShow({ customer: row.item.id }).url">

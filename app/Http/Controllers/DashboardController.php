@@ -7,7 +7,6 @@ use App\Models\CustomerBalance;
 use App\Models\GameServerAccount;
 use App\Models\Invoice;
 use App\Models\ResellerDomain;
-use App\Models\Site;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\Ticket;
 use App\Models\UserEmailLog;
@@ -162,16 +161,11 @@ class DashboardController extends Controller
      */
     private function defaultFavorites(Request $request): array
     {
-        $base = [
+        return [
             ['name' => 'Guthaben / Rechnungen', 'href' => route('billing.index')],
             ['name' => 'Postfach', 'href' => route('postfach.index')],
             ['name' => 'Support-Tickets', 'href' => route('support.index')],
         ];
-        if (($request->attributes->get('current_brand') ?? Brand::getDefault())?->getFeaturesArray()['sites_editor'] ?? true) {
-            $base[] = ['name' => 'Meine Sites', 'href' => route('sites.index')];
-        }
-
-        return $base;
     }
 
     /**
@@ -183,12 +177,6 @@ class DashboardController extends Controller
     private function countActiveServices($user, array $brandFeatures): int
     {
         $count = 0;
-        if ($brandFeatures['sites_editor'] ?? true) {
-            $count += Site::query()
-                ->where('user_id', $user->id)
-                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('mollie_subscription_id'))
-                ->count();
-        }
         if ($brandFeatures['domains_shop'] ?? true) {
             $count += ResellerDomain::query()
                 ->where('user_id', $user->id)
@@ -227,20 +215,6 @@ class DashboardController extends Controller
     {
         $list = [];
         $brandFeatures = ($request->attributes->get('current_brand') ?? Brand::getDefault())?->getFeaturesArray() ?? [];
-
-        if ($brandFeatures['sites_editor'] ?? true) {
-            $sites = Site::query()
-                ->where('user_id', $user->id)
-                ->whereHas('siteSubscription', fn ($q) => $q->whereNotNull('mollie_subscription_id'))
-                ->get(['id', 'uuid', 'name']);
-            foreach ($sites as $site) {
-                $list[] = [
-                    'name' => $site->name ?: 'Site',
-                    'url' => route('sites.show', $site),
-                    'type' => 'site',
-                ];
-            }
-        }
 
         if ($brandFeatures['domains_shop'] ?? true) {
             $domains = ResellerDomain::query()

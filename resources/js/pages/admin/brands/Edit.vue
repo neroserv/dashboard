@@ -95,7 +95,6 @@ const form = useForm({
         ...defaultThemeColors,
         ...(props.brand.theme_colors ?? {}),
     } as ThemeColors,
-    feature_sites_editor: props.brand.features?.sites_editor ?? true,
     feature_webspace: props.brand.features?.webspace ?? true,
     feature_domains_shop: props.brand.features?.domains_shop ?? true,
     feature_ai_tokens: props.brand.features?.ai_tokens ?? true,
@@ -130,7 +129,6 @@ const submit = () => {
         seo: data.seo,
         theme_colors: data.theme_colors,
         features: {
-            sites_editor: data.feature_sites_editor,
             webspace: data.feature_webspace,
             domains_shop: data.feature_domains_shop,
             ai_tokens: data.feature_ai_tokens,
@@ -300,11 +298,6 @@ const salutationOptions = [
                             </p>
                         </BCardHeader>
                         <BCardBody>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_sites" v-model="form.feature_sites_editor">
-                                    Webseiten-Editor (Meine Sites)
-                                </BFormCheckbox>
-                            </BFormGroup>
                             <BFormGroup class="mb-2">
                                 <BFormCheckbox id="feat_webspace" v-model="form.feature_webspace">
                                     Webspace

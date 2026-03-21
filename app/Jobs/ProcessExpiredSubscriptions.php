@@ -6,14 +6,11 @@ use App\Models\CronDailyStats;
 use App\Models\GameServerAccount;
 use App\Models\GameserverCloudSubscription;
 use App\Models\Setting;
-use App\Models\SiteSubscription;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\WebspaceAccount;
 use App\Notifications\GameserverCloudSubscriptionDeletedAfterGraceNotification;
 use App\Notifications\GameServerDeletedAfterGraceNotification;
 use App\Notifications\GameServerSuspendedNotification;
-use App\Notifications\SiteDeletedAfterGraceNotification;
-use App\Notifications\SiteSuspendedNotification;
 use App\Notifications\TeamSpeakDeletedAfterGraceNotification;
 use App\Notifications\TeamSpeakSuspendedNotification;
 use App\Notifications\WebspaceDeactivatedNotification;
@@ -45,56 +42,10 @@ class ProcessExpiredSubscriptions implements ShouldQueue
             'grace_cutoff' => $graceCutoff->toIso8601String(),
         ]);
 
-        $this->processSiteSubscriptions($now, $gracePeriodDays, $graceCutoff);
         $this->processWebspaceAccounts($now, $graceCutoff);
         $this->processGameServerAccounts($now, $graceCutoff);
         $this->processGameserverCloudSubscriptions($now, $graceCutoff);
         $this->processTeamSpeakServerAccounts($now, $graceCutoff);
-    }
-
-    protected function processSiteSubscriptions(Carbon $now, int $gracePeriodDays, Carbon $graceCutoff): void
-    {
-        $toSuspend = SiteSubscription::query()
-            ->with('site.user')
-            ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'active'))
-            ->whereNotNull('current_period_ends_at')
-            ->where('current_period_ends_at', '<', $now)
-            ->get();
-
-        foreach ($toSuspend as $sub) {
-            $site = $sub->site;
-            $site->update(['status' => 'suspended']);
-            $site->user?->notify(new SiteSuspendedNotification($site));
-        }
-
-        if ($toSuspend->isNotEmpty()) {
-            CronDailyStats::incrementMetric('services_suspended', $toSuspend->count());
-        }
-
-        $toTerminate = SiteSubscription::query()
-            ->with('site.user')
-            ->whereHas('site', fn ($q) => $q->where('is_legacy', false)->where('status', 'suspended'))
-            ->whereNotNull('current_period_ends_at')
-            ->where('current_period_ends_at', '<', $graceCutoff->format('Y-m-d H:i:s'))
-            ->get();
-
-        foreach ($toTerminate as $sub) {
-            $site = $sub->site;
-            $siteName = $site->name;
-            $user = $site->user;
-            $sub->delete();
-            $site->update(['published_version_id' => null, 'draft_version_id' => null]);
-            $site->domains()->delete();
-            $site->versions()->delete();
-            $site->invitations()->delete();
-            $site->collaborators()->detach();
-            $site->delete();
-            $user?->notify(new SiteDeletedAfterGraceNotification($siteName));
-        }
-
-        if ($toTerminate->isNotEmpty()) {
-            CronDailyStats::incrementMetric('services_terminated', $toTerminate->count());
-        }
     }
 
     protected function processWebspaceAccounts(Carbon $now, Carbon $graceCutoff): void

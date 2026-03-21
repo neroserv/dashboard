@@ -4,8 +4,6 @@ import {
     BookOpen,
     Folder,
     Headphones,
-    LayoutGrid,
-    Globe,
     LayoutList,
     Package,
     Server,
@@ -28,8 +26,6 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { index as adminCustomersIndex } from '@/routes/admin/customers';
-import { index as adminTemplatesIndex } from '@/routes/admin/templates';
-import { index as sitesIndex } from '@/routes/sites';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
@@ -40,7 +36,6 @@ const brandFeatures = computed(() => (page.props.brandFeatures as Record<string,
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
         { title: 'Dashboard', href: dashboard().url, icon: DashboardIcon },
-        { title: 'Meine Sites', href: sitesIndex().url, icon: Globe },
         { title: 'Webspace', href: '/webspace', icon: Server },
         { title: 'Meine Webspace-Accounts', href: '/webspace-accounts', icon: Package },
     ];
@@ -52,7 +47,6 @@ const mainNavItems = computed<NavItem[]>(() => {
     }
     if (isAdmin.value) {
         items.push(
-            { title: 'Templates', href: adminTemplatesIndex().url, icon: LayoutGrid },
             { title: 'Kunden', href: adminCustomersIndex().url, icon: Users },
             { title: 'Produkte', href: '/admin/products', icon: ShoppingBag },
             { title: 'Hosting-Server', href: '/admin/hosting-servers', icon: Server },

@@ -20,7 +20,6 @@ class Ticket extends Model
     protected $fillable = [
         'uuid',
         'user_id',
-        'site_id',
         'ticket_category_id',
         'ticket_priority_id',
         'subject',
@@ -42,11 +41,6 @@ class Ticket extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function site(): BelongsTo
-    {
-        return $this->belongsTo(Site::class);
     }
 
     public function ticketCategory(): BelongsTo

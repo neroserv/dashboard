@@ -8,9 +8,6 @@ use App\Models\DiscountCode;
 use App\Models\EmailTemplate;
 use App\Models\Invoice;
 use App\Models\Partner;
-use App\Models\Site;
-use App\Models\Template;
-use App\Models\TemplatePage;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\TicketPriority;
@@ -49,22 +46,15 @@ class ActivityLogController extends Controller
         $activityLog = $query->paginate(20)->withQueryString();
         $ticketIds = $activityLog->getCollection()->filter(fn ($log) => $log->model_type === Ticket::class && $log->model_id)->pluck('model_id')->unique()->values()->all();
         $invoiceIds = $activityLog->getCollection()->filter(fn ($log) => $log->model_type === Invoice::class && $log->model_id)->pluck('model_id')->unique()->values()->all();
-        $siteIds = $activityLog->getCollection()->filter(fn ($log) => $log->model_type === Site::class && $log->model_id)->pluck('model_id')->unique()->values()->all();
         $ticketUuids = $ticketIds !== [] ? Ticket::whereIn('id', $ticketIds)->pluck('uuid', 'id')->all() : [];
         $invoiceUuids = $invoiceIds !== [] ? Invoice::whereIn('id', $invoiceIds)->pluck('uuid', 'id')->all() : [];
-        $siteUuids = $siteIds !== [] ? Site::whereIn('id', $siteIds)->pluck('uuid', 'id')->all() : [];
 
         $activityLog = $activityLog->through(fn (AdminActivityLog $log) => array_merge($log->toArray(), [
             'created_at' => $log->created_at->format('d.m.Y H:i'),
-            'model_uuid' => $log->model_type === Ticket::class ? ($ticketUuids[$log->model_id] ?? null) : ($log->model_type === Invoice::class ? ($invoiceUuids[$log->model_id] ?? null) : ($log->model_type === Site::class ? ($siteUuids[$log->model_id] ?? null) : null)),
+            'model_uuid' => $log->model_type === Ticket::class ? ($ticketUuids[$log->model_id] ?? null) : ($log->model_type === Invoice::class ? ($invoiceUuids[$log->model_id] ?? null) : null),
         ]));
 
         $actionOptions = [
-            'site_status_updated' => 'Site-Status geändert',
-            'site_subscription_period_updated' => 'Laufzeitende geändert',
-            'site_subscription_cancelled' => 'Abo gekündigt',
-            'site_subscription_reactivated' => 'Kündigung zurückgenommen',
-            'site_subscription_synced' => 'Abo mit Mollie abgeglichen',
             'customer_updated' => 'Kunden-Stammdaten geändert',
             'customer_note_added' => 'Kunden-Notiz hinzugefügt',
             'customer_balance_added' => 'Guthaben aufgeladen',
@@ -94,18 +84,9 @@ class ActivityLogController extends Controller
             'partner_deleted' => 'Partner gelöscht',
             'voucher_created' => 'Gutschein erstellt',
             'voucher_updated' => 'Gutschein aktualisiert',
-            'template_created' => 'Template erstellt',
-            'template_updated' => 'Template aktualisiert',
-            'template_deleted' => 'Template gelöscht',
-            'template_design_updated' => 'Template-Design aktualisiert',
-            'template_page_created' => 'Template-Seite erstellt',
-            'template_page_updated' => 'Template-Seite aktualisiert',
-            'template_page_deleted' => 'Template-Seite gelöscht',
-            'template_page_data_updated' => 'Template-Seitendaten aktualisiert',
         ];
 
         $modelTypeOptions = [
-            Site::class => 'Site',
             User::class => 'Kunde',
             Ticket::class => 'Ticket',
             TicketCategory::class => 'Ticket-Kategorie',
@@ -116,8 +97,6 @@ class ActivityLogController extends Controller
             DiscountCode::class => 'Rabattcode',
             Partner::class => 'Partner',
             Voucher::class => 'Gutschein',
-            Template::class => 'Template',
-            TemplatePage::class => 'Template-Seite',
             'system' => 'System',
         ];
 

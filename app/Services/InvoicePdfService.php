@@ -19,7 +19,7 @@ class InvoicePdfService
      */
     public function generate(Invoice $invoice): ?string
     {
-        $invoice->load(['user.brand', 'siteSubscription.site', 'lineItems']);
+        $invoice->load(['user.brand', 'lineItems']);
 
         $year = $invoice->invoice_date->format('Y');
         $filename = str_replace(['/', ' '], ['-', '_'], $invoice->number).'.pdf';

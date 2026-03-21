@@ -128,7 +128,6 @@ class Brand extends Model
     public function getFeaturesArray(): array
     {
         $defaults = [
-            'sites_editor' => true,
             'webspace' => true,
             'domains_shop' => true,
             'ai_tokens' => true,
@@ -140,7 +139,7 @@ class Brand extends Model
             'balance_period_months' => 1,
         ];
         $features = $this->features ?? [];
-        $boolKeys = ['sites_editor', 'webspace', 'domains_shop', 'ai_tokens', 'gaming', 'gameserver_cloud', 'teamspeak', 'prepaid_balance', 'balance_topup'];
+        $boolKeys = ['webspace', 'domains_shop', 'ai_tokens', 'gaming', 'gameserver_cloud', 'teamspeak', 'prepaid_balance', 'balance_topup'];
         foreach ($boolKeys as $key) {
             if (array_key_exists($key, $features)) {
                 $defaults[$key] = (bool) $features[$key];

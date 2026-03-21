@@ -27,12 +27,10 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { isHtml, sanitizeHtml } from '@/lib/sanitize';
 import { dashboard } from '@/routes';
 import adminCustomers from '@/routes/admin/customers';
-import adminSites from '@/routes/admin/sites';
 import adminTickets from '@/routes/admin/tickets';
 import type { BreadcrumbItem } from '@/types';
 
 type UserType = { id: number; name: string; email?: string; is_admin?: boolean; avatar?: string };
-type Site = { uuid: string; name: string; slug: string };
 type TicketCategory = { id: number; name: string; slug: string };
 type TicketPriority = { id: number; name: string; slug: string; color: string | null };
 type MessageAttachment = { id: number; name: string; download_url: string };
@@ -60,7 +58,6 @@ type Ticket = {
     subject: string;
     status: string;
     user_id: number;
-    site_id: number | null;
     ticket_category_id: number;
     ticket_priority_id: number | null;
     assigned_to: number | null;
@@ -68,7 +65,6 @@ type Ticket = {
     user?: UserType;
     ticket_category?: TicketCategory;
     ticket_priority?: TicketPriority | null;
-    site?: Site | null;
     assignedTo?: UserType | null;
     tags?: TagType[];
     messages?: Message[];
@@ -83,7 +79,6 @@ type Props = {
     categories: TicketCategory[];
     priorities: TicketPriority[];
     admins: UserType[];
-    customerSites: Site[];
     recentTickets: RecentTicket[];
     lastMessageFromCustomer: boolean;
     allTags: TagType[];
@@ -168,10 +163,6 @@ const assignedOptions = computed(() => [
     { value: '', text: '–' },
     ...props.admins.map((a) => ({ value: String(a.id), text: a.name })),
 ]);
-const siteOptions = computed(() => [
-    { value: '', text: '–' },
-    ...props.customerSites.map((s) => ({ value: s.uuid, text: s.name })),
-]);
 const mergeTargetOptions = computed(() =>
     props.recentTickets
         .filter((rt) => rt.uuid !== props.ticket.uuid)
@@ -242,7 +233,6 @@ const updateForm = useForm({
     ticket_category_id: String(props.ticket.ticket_category_id),
     ticket_priority_id: props.ticket.ticket_priority_id != null ? String(props.ticket.ticket_priority_id) : '',
     assigned_to: ticketAssignedToId(),
-    site_uuid: props.ticket.site?.uuid ?? '',
     tag_ids: (props.ticket.tags ?? []).map((t) => t.id),
 });
 
@@ -258,7 +248,6 @@ function submitTicketUpdate() {
             if (typeof v === 'object' && v !== null && 'id' in v) return (v as { id: number }).id;
             return Number(v);
         })(),
-        site_uuid: updateForm.site_uuid === '' ? null : updateForm.site_uuid,
         tag_ids: Array.isArray(updateForm.tag_ids) ? updateForm.tag_ids : [],
     };
     updateSubmitting.value = true;
@@ -402,9 +391,6 @@ onMounted(() => {
                                     <span v-else>–</span>
                                     <span v-if="ticket.user?.email" class="d-block text-muted">{{ ticket.user.email }}</span>
                                     <span v-if="affectedServices?.length" class="d-block">Produkt/Site: {{ serviceName }}</span>
-                                    <span v-else-if="ticket.site" class="d-block">
-                                        Produkt/Site: <Link :href="adminSites.show(ticket.site.uuid).url">{{ ticket.site.name }}</Link>
-                                    </span>
                                 </div>
                             </div>
                             <div v-if="recentTickets.length">
@@ -436,9 +422,6 @@ onMounted(() => {
                                 </BFormGroup>
                                 <BFormGroup label="Zugewiesen an" label-for="assigned_to">
                                     <BFormSelect id="assigned_to" v-model="updateForm.assigned_to" :options="assignedOptions" />
-                                </BFormGroup>
-                                <BFormGroup v-if="customerSites.length" label="Produkt/Site" label-for="site_uuid">
-                                    <BFormSelect id="site_uuid" v-model="updateForm.site_uuid" :options="siteOptions" />
                                 </BFormGroup>
                                 <BFormGroup v-if="allTags.length" label="Tags" label-for="tag_ids">
                                     <select

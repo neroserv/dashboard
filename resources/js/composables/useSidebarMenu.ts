@@ -85,29 +85,6 @@ function buildDefaultMenuItems(
           url: '/dashboard',
           icon: 'layout-dashboard',
         },
-        ...(brandFeatures.sites_editor !== false
-          ? [
-              {
-                slug: 'pages',
-                label: 'Seiten',
-                icon: 'world',
-                children: [
-                  {
-                    slug: 'sites-create',
-                    label: 'Seite bestellen',
-                    url: '/sites/create',
-                    icon: 'package',
-                  },
-                  {
-                    slug: 'sites-index',
-                    label: 'Meine Seiten',
-                    url: '/sites',
-                    icon: 'world',
-                  },
-                ],
-              } as MenuItemType,
-            ]
-          : []),
         {
           slug: 'domains',
           label: 'Domains',
@@ -277,13 +254,6 @@ function buildAdminMenuItems(
     items.push({ slug: 'admin-hosting', label: 'Hosting', icon: 'server', children: hostingChildren })
   }
 
-  if (hp('admin.sites') || hp('admin.templates')) {
-    const inhalte: MenuItemType[] = []
-    if (hp('admin.sites')) inhalte.push({ slug: 'admin-sites', label: 'Sites', url: '/admin/sites', icon: 'world' })
-    if (hp('admin.templates')) inhalte.push({ slug: 'admin-templates', label: 'Templates', url: '/admin/templates', icon: 'layout-dashboard' })
-    if (inhalte.length > 0) items.push({ slug: 'admin-inhalte', label: 'Inhalte', icon: 'world', children: inhalte })
-  }
-
   if (hp('admin.discount-codes') || hp('admin.vouchers') || hp('admin.partners') || hp('admin.emails')) {
     const marketing: MenuItemType[] = []
     if (hp('admin.discount-codes')) marketing.push({ slug: 'admin-discount-codes', label: 'Rabattcodes', url: '/admin/discount-codes', icon: 'package' })
@@ -317,7 +287,6 @@ function buildAdminMenuItems(
     hp('admin.customers') ||
     hp('admin.groups') ||
     hp('admin.permissions') ||
-    hp('admin.legacy-migration') ||
     hp('admin.update')
   ) {
     const system: MenuItemType[] = []
@@ -329,7 +298,6 @@ function buildAdminMenuItems(
     if (hp('admin.customers')) system.push({ slug: 'admin-customers', label: 'Kunden', url: '/admin/customers', icon: 'users' })
     if (hp('admin.groups')) system.push({ slug: 'admin-groups', label: 'Gruppen', url: '/admin/groups', icon: 'users' })
     if (hp('admin.permissions')) system.push({ slug: 'admin-permissions', label: 'Berechtigungen', url: '/admin/permissions', icon: 'settings-2' })
-    if (hp('admin.legacy-migration')) system.push({ slug: 'admin-legacy', label: 'Legacy-Migration', url: '/admin/legacy-migration', icon: 'archive' })
     if (system.length > 0) items.push({ slug: 'admin-system', label: 'System', icon: 'settings-2', children: system })
   }
 

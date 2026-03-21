@@ -15,7 +15,6 @@ class Invoice extends Model
     protected $fillable = [
         'uuid',
         'user_id',
-        'site_subscription_id',
         'mollie_payment_id',
         'number',
         'type',
@@ -50,11 +49,6 @@ class Invoice extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function siteSubscription(): BelongsTo
-    {
-        return $this->belongsTo(SiteSubscription::class);
     }
 
     /**

@@ -45,9 +45,6 @@ class TicketController extends Controller
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->query('user_id'));
         }
-        if ($request->filled('site_id')) {
-            $query->where('site_id', $request->query('site_id'));
-        }
         if ($request->filled('assigned_to')) {
             $query->where('assigned_to', $request->query('assigned_to'));
         }
@@ -72,7 +69,6 @@ class TicketController extends Controller
             'user:id,name,email',
             'ticketCategory',
             'ticketPriority',
-            'site:uuid,name,slug',
             'ticketServices',
             'assignedTo:id,name',
             'tags:id,name,slug,color',
@@ -83,7 +79,7 @@ class TicketController extends Controller
         $categories = \App\Models\TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
         $priorities = \App\Models\TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
         $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name']);
-        $customerSites = $ticket->user->sites()->orderBy('name')->get(['uuid', 'name', 'slug']);
+        $customerSites = [];
         $recentTickets = Ticket::query()
             ->where('user_id', $ticket->user_id)
             ->where('id', '!=', $ticket->id)
@@ -156,11 +152,6 @@ class TicketController extends Controller
                 $descriptions[] = $assigned ? 'Zugewiesen an '.$assigned->name : 'Zuweisung entfernt';
                 $actionType = 'assigned_change';
             }
-            if (array_key_exists('site_id', $new) && ($old['site_id'] ?? null) != $new['site_id']) {
-                $descriptions[] = 'Betroffener Dienst geändert';
-                $actionType = 'site_change';
-            }
-
             if ($descriptions === []) {
                 return null;
             }
@@ -189,7 +180,7 @@ class TicketController extends Controller
 
         $serviceName = $affectedServices !== []
             ? implode(', ', array_column($affectedServices, 'label'))
-            : ($ticket->site?->name ?? 'Allgemein / Kein Dienst');
+            : 'Allgemein / Kein Dienst';
 
         return Inertia::render('admin/tickets/Show', [
             'ticket' => $ticketArray,
@@ -210,7 +201,6 @@ class TicketController extends Controller
     private function resolveServiceLabel(string $serviceType, int $serviceId): string
     {
         return match ($serviceType) {
-            'site' => \App\Models\Site::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
             'reseller_domain' => \App\Models\ResellerDomain::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
             'webspace_account' => \App\Models\WebspaceAccount::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
             'game_server_account' => \App\Models\GameServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
@@ -226,11 +216,6 @@ class TicketController extends Controller
     {
         try {
             return match ($serviceType) {
-                'site' => (function () use ($serviceId) {
-                    $site = \App\Models\Site::find($serviceId);
-
-                    return $site ? route('admin.sites.show', $site) : null;
-                })(),
                 'reseller_domain' => (function () use ($serviceId) {
                     $model = \App\Models\ResellerDomain::find($serviceId);
 
@@ -274,13 +259,8 @@ class TicketController extends Controller
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse
     {
         $validated = $request->validated();
-        $allowed = ['status', 'ticket_category_id', 'ticket_priority_id', 'assigned_to', 'site_id', 'due_at'];
+        $allowed = ['status', 'ticket_category_id', 'ticket_priority_id', 'assigned_to', 'due_at'];
         $update = array_intersect_key($validated, array_flip($allowed));
-        if (isset($validated['site_uuid'])) {
-            $update['site_id'] = $validated['site_uuid']
-                ? \App\Models\Site::where('uuid', $validated['site_uuid'])->value('id')
-                : null;
-        }
         if (array_key_exists('due_at', $update) && $update['due_at'] === '') {
             $update['due_at'] = null;
         }

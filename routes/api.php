@@ -9,9 +9,7 @@ use App\Http\Controllers\Api\V1\HostingServerController;
 use App\Http\Controllers\Api\V1\PartnerController;
 use App\Http\Controllers\Api\V1\PterodactylController;
 use App\Http\Controllers\Api\V1\StatsController;
-use App\Http\Controllers\ModuleSubmissionController;
 use App\Models\Brand;
-use App\Models\Domain;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -32,17 +30,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->prefix('v1')->group(functio
 });
 
 Route::middleware(['web', 'auth', 'throttle:10,1'])->prefix('ai')->group(function () {
-    Route::post('seo-suggestions', [AiController::class, 'seoSuggestions'])->name('api.ai.seo-suggestions');
     Route::post('generate-text', [AiController::class, 'generateText'])->name('api.ai.generate-text');
     Route::get('balance', [AiController::class, 'balance'])->name('api.ai.balance');
-});
-
-Route::middleware(['web', 'throttle:module-submit'])->group(function () {
-    Route::post('sites/{site}/modules/submit', [ModuleSubmissionController::class, 'submit'])
-        ->name('api.sites.modules.submit');
-
-    Route::get('sites/{site}/modules/newsletter/status', [ModuleSubmissionController::class, 'newsletterStatus'])
-        ->name('api.sites.modules.newsletter.status');
 });
 
 // Caddy On-Demand TLS verification endpoint
@@ -55,11 +44,6 @@ Route::get('verify-domain', function (Request $request) {
 
     $domain = strtolower(trim($domain));
 
-    $verifiedSiteDomain = Domain::query()
-        ->where('domain', $domain)
-        ->where('is_verified', true)
-        ->exists();
-
     $allowedByBrand = Brand::query()
         ->whereNotNull('domains')
         ->whereJsonContains('domains', $domain)
@@ -67,7 +51,7 @@ Route::get('verify-domain', function (Request $request) {
 
     $allowedByAdminDomain = Brand::resolveByAdminHost($domain) !== null;
 
-    $allowed = $verifiedSiteDomain || $allowedByBrand || $allowedByAdminDomain;
+    $allowed = $allowedByBrand || $allowedByAdminDomain;
 
     return $allowed
         ? response('OK', 200)

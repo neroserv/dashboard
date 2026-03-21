@@ -212,7 +212,6 @@ function primaryColor(brand: Brand): string {
 }
 
 const FEATURE_LABELS: Record<string, string> = {
-    sites_editor: 'Sites',
     webspace: 'Webspace',
     domains_shop: 'Domains',
     ai_tokens: 'AI',
