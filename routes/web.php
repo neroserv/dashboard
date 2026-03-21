@@ -18,7 +18,6 @@ use App\Http\Controllers\Admin\HostingPlanController;
 use App\Http\Controllers\Admin\HostingServerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\JobsMonitorController;
-use App\Http\Controllers\Admin\LegacyMigrationController;
 use App\Http\Controllers\Admin\PanelUpdateController;
 use App\Http\Controllers\Admin\PartnerController;
 use App\Http\Controllers\Admin\PermissionController;
@@ -26,13 +25,10 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\PterodactylEggController;
 use App\Http\Controllers\Admin\ResellerDomainController;
 use App\Http\Controllers\Admin\SearchController;
-use App\Http\Controllers\Admin\SiteController as AdminSiteController;
 use App\Http\Controllers\Admin\SubdomainsController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\SystemSettingsController;
 use App\Http\Controllers\Admin\TeamSpeakAccountController as AdminTeamSpeakAccountController;
-use App\Http\Controllers\Admin\TemplateController;
-use App\Http\Controllers\Admin\TemplatePageController;
 use App\Http\Controllers\Admin\TicketCategoryController;
 use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\TicketMessageTemplateController;
@@ -46,7 +42,6 @@ use App\Http\Controllers\BillingPortalController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DashboardController as CustomerDashboardController;
 use App\Http\Controllers\DiscordWebhookController;
-use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\GameserverCloudSubscriptionController;
 use App\Http\Controllers\GamingAccountController;
 use App\Http\Controllers\GamingController;
@@ -57,18 +52,12 @@ use App\Http\Controllers\PostfachController;
 use App\Http\Controllers\ProductInvitationAcceptController;
 use App\Http\Controllers\ProductShareController;
 use App\Http\Controllers\RedeemVoucherController;
-use App\Http\Controllers\SiteCollaboratorController;
-use App\Http\Controllers\SiteController;
-use App\Http\Controllers\SiteInvitationAcceptController;
-use App\Http\Controllers\SiteRenderController;
-use App\Http\Controllers\SiteSubscriptionController;
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\TeamSpeakAccountController;
 use App\Http\Controllers\TeamSpeakController;
 use App\Http\Controllers\WebspaceAccountController;
 use App\Http\Controllers\WebspaceController;
 use App\Http\Controllers\WorkflowController;
-use App\Http\Middleware\DisableCacheForSiteRender;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -98,9 +87,6 @@ Route::post('webhooks/discord/interactions', [DiscordWebhookController::class, '
 Route::get('invitations/accept-product', ProductInvitationAcceptController::class)
     ->name('product-invitations.accept');
 
-Route::get('invitations/accept-site', SiteInvitationAcceptController::class)
-    ->name('site-invitations.accept');
-
 Route::get('/', function () {
     $isAdminDomain = request()->attributes->get('is_admin_domain', false);
     $user = Auth::user();
@@ -128,18 +114,6 @@ Route::get('dashboard', [CustomerDashboardController::class, 'index'])->middlewa
 Route::get('components', function () {
     return Inertia::render('components/Demo');
 })->middleware(['auth', 'verified'])->name('components.demo');
-
-Route::get('gallery', [GalleryController::class, 'index'])->name('gallery.index');
-Route::get('gallery/preview/{template}', [GalleryController::class, 'preview'])->name('gallery.preview');
-
-Route::get('site/{site:slug}/sitemap.xml', [\App\Http\Controllers\SiteSeoController::class, 'sitemap'])
-    ->name('site-render.sitemap');
-Route::get('site/{site:slug}/robots.txt', [\App\Http\Controllers\SiteSeoController::class, 'robotsTxt'])
-    ->name('site-render.robots');
-Route::get('site/{site:slug}/{pageSlug?}', [SiteRenderController::class, 'show'])
-    ->where('pageSlug', '[a-z0-9\-]+')
-    ->middleware(DisableCacheForSiteRender::class)
-    ->name('site-render.show');
 
 Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('domains', [\App\Http\Controllers\DomainShopController::class, 'index'])->name('domains.index');
@@ -321,42 +295,6 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('account/postfach', [PostfachController::class, 'index'])->name('postfach.index');
     Route::get('account/postfach/{postfach}', [PostfachController::class, 'show'])->name('postfach.show');
 
-    Route::middleware('brand.feature.sites')->group(function () {
-        Route::get('sites/{site}/design', [SiteController::class, 'design'])->name('sites.design');
-        Route::get('sites/{site}/preview/{pageSlug?}', [SiteRenderController::class, 'preview'])
-            ->name('sites.preview')
-            ->where('pageSlug', '[a-z0-9\-]+');
-        Route::resource('sites', SiteController::class);
-        Route::post('sites/{site}/subscription/cancel', [SiteSubscriptionController::class, 'cancel'])->name('sites.subscription.cancel');
-        Route::post('sites/{site}/preview', [SiteRenderController::class, 'storePreviewDraft'])->name('sites.preview.store');
-        Route::get('sites/{site}/designer/state', [\App\Http\Controllers\SiteDesignerController::class, 'state'])->name('sites.designer.state');
-        Route::post('sites/{site}/designer/draft', [\App\Http\Controllers\SiteDesignerController::class, 'draft'])->name('sites.designer.draft');
-        Route::post('sites/{site}/designer/publish', [\App\Http\Controllers\SiteDesignerController::class, 'publish'])->name('sites.designer.publish');
-        Route::patch('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'updateBlock'])->name('sites.designer.blocks.update')->where('blockId', '[a-zA-Z0-9_\-]+');
-        Route::post('sites/{site}/designer/blocks', [\App\Http\Controllers\SiteDesignerController::class, 'storeBlock'])->name('sites.designer.blocks.store');
-        Route::delete('sites/{site}/designer/blocks/{blockId}', [\App\Http\Controllers\SiteDesignerController::class, 'destroyBlock'])->name('sites.designer.blocks.destroy')->where('blockId', '[a-zA-Z0-9_\-]+');
-        Route::post('sites/{site}/designer/upload', [\App\Http\Controllers\SiteDesignerController::class, 'upload'])->name('sites.designer.upload');
-        Route::get('sites/{site}/images', [SiteController::class, 'indexImages'])->name('sites.images.index');
-        Route::post('sites/{site}/images', [SiteController::class, 'uploadImage'])->name('sites.images.store');
-        Route::delete('sites/{site}/images', [SiteController::class, 'destroyImage'])->name('sites.images.destroy');
-        Route::get('sites/{site}/collaborators', [SiteCollaboratorController::class, 'index'])->name('sites.collaborators.index');
-        Route::post('sites/{site}/collaborators', [SiteCollaboratorController::class, 'store'])->name('sites.collaborators.store');
-        Route::delete('sites/{site}/collaborators/{user}', [SiteCollaboratorController::class, 'destroy'])->name('sites.collaborators.destroy');
-        Route::delete('sites/{site}/invitations/{invitation}', [SiteCollaboratorController::class, 'destroyInvitation'])->name('sites.invitations.destroy');
-        Route::get('sites/{site}/versions', [\App\Http\Controllers\SiteVersionController::class, 'index'])->name('sites.versions.index');
-        Route::post('sites/{site}/versions/{version}/publish', [\App\Http\Controllers\SiteVersionController::class, 'publish'])->name('sites.versions.publish');
-        Route::post('sites/{site}/versions/{version}/rollback', [\App\Http\Controllers\SiteVersionController::class, 'rollback'])->name('sites.versions.rollback');
-        Route::get('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'index'])->name('sites.domains.index');
-        Route::post('sites/{site}/domains', [\App\Http\Controllers\SiteDomainController::class, 'store'])->name('sites.domains.store');
-        Route::post('sites/{site}/domains/{domain}/verify', [\App\Http\Controllers\SiteDomainController::class, 'verify'])->name('sites.domains.verify');
-        Route::post('sites/{site}/domains/{domain}/set-primary', [\App\Http\Controllers\SiteDomainController::class, 'setPrimary'])->name('sites.domains.set-primary');
-        Route::delete('sites/{site}/domains/{domain}', [\App\Http\Controllers\SiteDomainController::class, 'destroy'])->name('sites.domains.destroy');
-
-        Route::get('modules/newsletter/sites/{site}', [ModuleController::class, 'newsletterSite'])->name('modules.newsletter.site');
-        Route::post('modules/newsletter/sites/{site}/posts', [ModuleController::class, 'storePost'])->name('modules.newsletter.posts.store');
-        Route::get('modules/contact/sites/{site}', [ModuleController::class, 'contactSubmissions'])->name('modules.contact.submissions');
-    });
-
     Route::get('modules/newsletter', [ModuleController::class, 'newsletter'])->name('modules.newsletter.index');
     Route::get('modules/contact', [ModuleController::class, 'contact'])->name('modules.contact.index');
 
@@ -412,14 +350,6 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('dunning-letters', [DunningLetterController::class, 'index'])->name('dunning-letters.index');
 
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
-    Route::get('sites', [AdminSiteController::class, 'index'])->name('sites.index');
-    Route::get('sites/{site}', [AdminSiteController::class, 'show'])->name('sites.show');
-    Route::put('sites/{site}/status', [AdminSiteController::class, 'updateStatus'])->name('sites.status.update');
-    Route::put('sites/{site}/subscription', [AdminSiteController::class, 'updateSubscription'])->name('sites.subscription.update');
-    Route::post('sites/{site}/subscription/cancel', [AdminSiteController::class, 'cancelSubscription'])->name('sites.subscription.cancel');
-    Route::post('sites/{site}/subscription/reactivate', [AdminSiteController::class, 'reactivateSubscription'])->name('sites.subscription.reactivate');
-    Route::post('sites/{site}/subscription/sync', [AdminSiteController::class, 'syncSubscription'])->name('sites.subscription.sync');
-    Route::get('legacy-migration', [LegacyMigrationController::class, 'index'])->name('legacy-migration.index');
     Route::get('emails', [EmailController::class, 'index'])->name('emails.index');
     Route::get('emails/{emailTemplate:key}/edit', [EmailController::class, 'edit'])->name('emails.edit');
     Route::put('emails/{emailTemplate:key}', [EmailController::class, 'update'])->name('emails.update');
@@ -470,13 +400,6 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('teamspeak-accounts/{team_speak_server_account}/edit', [AdminTeamSpeakAccountController::class, 'edit'])->name('teamspeak-accounts.edit');
     Route::put('teamspeak-accounts/{team_speak_server_account}', [AdminTeamSpeakAccountController::class, 'update'])->name('teamspeak-accounts.update');
     Route::get('teamspeak-accounts/{team_speak_server_account}', [AdminTeamSpeakAccountController::class, 'show'])->name('teamspeak-accounts.show');
-    Route::resource('templates', TemplateController::class);
-    Route::get('templates/{template}/design', [\App\Http\Controllers\Admin\TemplateDesignController::class, 'design'])->name('templates.design');
-    Route::put('templates/{template}/design', [\App\Http\Controllers\Admin\TemplateDesignController::class, 'update'])->name('templates.design.update');
-    Route::resource('templates.pages', TemplatePageController::class)->except(['index']);
-    Route::get('templates/{template}/pages', [TemplatePageController::class, 'index'])->name('templates.pages.index');
-    Route::get('templates/{template}/pages/{page}/data', [\App\Http\Controllers\Admin\TemplatePageDataController::class, 'edit'])->name('templates.pages.data.edit');
-    Route::put('templates/{template}/pages/{page}/data', [\App\Http\Controllers\Admin\TemplatePageDataController::class, 'update'])->name('templates.pages.data.update');
     Route::get('domains', [ResellerDomainController::class, 'index'])->name('domains.index');
     Route::post('domains/sync', [ResellerDomainController::class, 'syncFromSkrime'])->name('domains.sync');
     Route::post('domains/import', [ResellerDomainController::class, 'import'])->name('domains.import');

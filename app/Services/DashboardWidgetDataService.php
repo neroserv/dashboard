@@ -10,10 +10,6 @@ use App\Models\HostingServer;
 use App\Models\Invoice;
 use App\Models\InvoiceDunningLetter;
 use App\Models\ResellerDomain;
-use App\Models\Site;
-use App\Models\SiteSubscription;
-use App\Models\Template;
-use App\Models\TemplatePage;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Voucher;
@@ -67,39 +63,6 @@ class DashboardWidgetDataService
             'last-mollie-webhook' => [
                 'minutesAgo' => $this->lastWebhookMinutesAgo(),
             ],
-            'active-subscriptions' => [
-                'count' => SiteSubscription::whereNotNull('mollie_subscription_id')->count(),
-            ],
-            'subscriptions-ending-week' => [
-                'count' => SiteSubscription::query()
-                    ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
-                    ->whereBetween('current_period_ends_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])
-                    ->count(),
-            ],
-            'cancellations-period-end' => [
-                'count' => SiteSubscription::where('cancel_at_period_end', true)->count(),
-            ],
-            'expiring-subscriptions' => [
-                'items' => SiteSubscription::query()
-                    ->with('site:uuid,name')
-                    ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
-                    ->whereBetween('current_period_ends_at', [now(), now()->addDays(7)])
-                    ->orderBy('current_period_ends_at')->limit(20)->get()
-                    ->map(fn ($sub) => [
-                        'site_uuid' => $sub->site?->uuid,
-                        'site_name' => $sub->site?->name,
-                        'current_period_ends_at' => $sub->current_period_ends_at?->format('d.m.Y'),
-                    ])->values()->all(),
-            ],
-            'sites-stats' => [
-                'total' => Site::count(),
-                'legacy' => Site::where('is_legacy', true)->count(),
-                'suspended' => Site::where('status', 'suspended')->count(),
-            ],
-            'sites-suspended' => [
-                'count' => Site::where('status', 'suspended')->count(),
-            ],
-            'subscriptions-chart-daily' => $this->subscriptionsChartDaily(),
             'customers-total' => ['count' => User::count()],
             'newest-customer' => $this->newestCustomer(),
             'last-purchase' => $this->lastPurchase(),
@@ -193,10 +156,6 @@ class DashboardWidgetDataService
                         'expires_at' => $d->expires_at?->format('d.m.Y'),
                     ])->values()->all(),
             ],
-            'templates-count' => [
-                'templates' => Template::count(),
-                'pages' => TemplatePage::count(),
-            ],
             default => [],
         };
     }
@@ -263,20 +222,6 @@ class DashboardWidgetDataService
             'sent' => (int) ($counts['sent'] ?? 0),
             'failed' => (int) ($counts['failed'] ?? 0),
         ];
-    }
-
-    private function subscriptionsChartDaily(): array
-    {
-        $days = 14;
-        $labels = [];
-        $values = [];
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $d = Carbon::today()->subDays($i);
-            $labels[] = $d->format('d.m.');
-            $values[] = SiteSubscription::whereDate('created_at', $d)->count();
-        }
-
-        return ['labels' => $labels, 'values' => $values];
     }
 
     private function newestCustomer(): array
@@ -422,7 +367,7 @@ class DashboardWidgetDataService
             $labels[] = $d->format('d.m.');
             $row = $rows->firstWhere(fn ($r) => $r->date->toDateString() === $d->toDateString());
             $invoices[] = $row?->invoices_created ?? 0;
-            $services[] = (int) SiteSubscription::whereDate('created_at', $d)->count();
+            $services[] = 0;
             $tickets[] = (int) Ticket::whereDate('created_at', $d)->count();
         }
 
@@ -431,18 +376,6 @@ class DashboardWidgetDataService
 
     private function actionItems(): array
     {
-        $endOfNextSeven = now()->addDays(7);
-        $expiringSubscriptions = SiteSubscription::query()
-            ->with('site:uuid,name')
-            ->whereNotNull('mollie_subscription_id')->where('mollie_status', 'active')
-            ->whereBetween('current_period_ends_at', [now(), $endOfNextSeven])
-            ->orderBy('current_period_ends_at')->limit(20)->get()
-            ->map(fn ($sub) => [
-                'site_uuid' => $sub->site?->uuid,
-                'site_name' => $sub->site?->name,
-                'current_period_ends_at' => $sub->current_period_ends_at?->format('d.m.Y'),
-            ])->values()->all();
-
         $overdueOrFailedInvoices = Invoice::query()
             ->with('user:id,name')
             ->where(fn ($q) => $q->where('status', 'failed')
@@ -469,7 +402,6 @@ class DashboardWidgetDataService
             ])->values()->all();
 
         return [
-            'expiringSubscriptions' => $expiringSubscriptions,
             'overdueOrFailedInvoices' => $overdueOrFailedInvoices,
             'openDunningInvoices' => $openDunningInvoices,
         ];

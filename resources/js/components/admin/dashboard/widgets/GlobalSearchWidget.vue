@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardDescription, CardContent } from '@/component
 <template>
     <CardHeader class="py-3">
         <CardTitle>Globale Suche</CardTitle>
-        <CardDescription>Sites, Kunden, Rechnungen, Abos (Mollie-ID) durchsuchen</CardDescription>
+        <CardDescription>Kunden, Rechnungen, Abos (Mollie-ID) durchsuchen</CardDescription>
     </CardHeader>
     <CardContent class="pt-0">
         <AdminSearch />

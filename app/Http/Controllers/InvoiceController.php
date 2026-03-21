@@ -27,7 +27,7 @@ class InvoiceController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        $invoice->load(['user.brand', 'siteSubscription.site', 'lineItems']);
+        $invoice->load(['user.brand', 'lineItems']);
         $brand = $invoice->user?->brand;
         $company = Setting::getInvoiceCompany($brand);
         $primaryColor = $this->brandPrimaryColor($brand);

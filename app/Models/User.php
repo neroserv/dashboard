@@ -149,11 +149,6 @@ class User extends Authenticatable
         return $this->belongsTo(Brand::class);
     }
 
-    public function sites(): HasMany
-    {
-        return $this->hasMany(Site::class);
-    }
-
     /**
      * Reseller domains assigned to this customer.
      *
@@ -212,18 +207,6 @@ class User extends Authenticatable
     public function productShares(): HasMany
     {
         return $this->hasMany(ProductShare::class);
-    }
-
-    /**
-     * Sites this user can edit as a collaborator.
-     *
-     * @return BelongsToMany<Site>
-     */
-    public function collaboratingSites(): BelongsToMany
-    {
-        return $this->belongsToMany(Site::class, 'site_user')
-            ->withPivot(['invited_by', 'invited_at'])
-            ->withTimestamps();
     }
 
     /**

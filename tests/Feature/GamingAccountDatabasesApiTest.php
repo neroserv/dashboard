@@ -176,13 +176,13 @@ test('owner gets redirect to signon URL with credentials_url using credentials_b
     expect($credentialsUrl)->toContain('phpmyadmin-signon-credentials');
 });
 
-test('non-owner cannot open phpMyAdmin and gets 404', function () {
+test('non-owner cannot open phpMyAdmin and gets 403', function () {
     $otherUser = User::factory()->create(['brand_id' => $this->brand->id]);
     actingAs($otherUser);
 
     $response = $this->get(route('gaming-accounts.api.databases.phpmyadmin', [$this->account, 's1_1']));
 
-    $response->assertNotFound();
+    $response->assertForbidden();
 });
 
 test('owner gets 502 when database credentials cannot be loaded for export', function () {

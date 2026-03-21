@@ -153,7 +153,7 @@ class BalancePaymentService
 
         $invoice->refresh();
         try {
-            $pdfPath = $this->invoicePdfService->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+            $pdfPath = $this->invoicePdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
             if ($pdfPath) {
                 $invoice->update(['pdf_path' => $pdfPath]);
             }

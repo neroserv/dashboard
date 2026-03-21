@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
-import { Search, Globe, Users, FileText, Repeat } from 'lucide-vue-next';
+import { Search, Users, FileText, Repeat } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import { Input } from '@/components/ui/input';
 
@@ -12,7 +12,6 @@ type SearchResult = {
 };
 
 type SearchResponse = {
-    sites: SearchResult[];
     customers: SearchResult[];
     invoices: SearchResult[];
     subscriptions: SearchResult[];
@@ -58,7 +57,7 @@ watch(query, () => {
             <Input
                 v-model="query"
                 type="search"
-                placeholder="Sites, Kunden, Rechnungen, Abos oder 6-stellige Support-PIN suchen… (min. 2 Zeichen)"
+                placeholder="Kunden, Rechnungen, Abos oder 6-stellige Support-PIN suchen… (min. 2 Zeichen)"
                 class="pl-9"
                 autocomplete="off"
             />
@@ -70,20 +69,8 @@ watch(query, () => {
             v-else-if="hasSearched && results"
             class="rounded-lg border border-border bg-card"
         >
-            <template v-if="results.sites?.length || results.customers?.length || results.invoices?.length || results.subscriptions?.length">
+            <template v-if="results.customers?.length || results.invoices?.length || results.subscriptions?.length">
                 <div class="divide-y divide-border">
-                    <div v-if="results.sites?.length" class="p-2">
-                        <p class="mb-1 px-2 text-xs font-medium text-muted-foreground">Sites</p>
-                        <Link
-                            v-for="item in results.sites"
-                            :key="'site-' + item.id"
-                            :href="item.url"
-                            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-                        >
-                            <Globe class="h-4 w-4 shrink-0 text-muted-foreground" />
-                            {{ item.label }}
-                        </Link>
-                    </div>
                     <div v-if="results.customers?.length" class="p-2">
                         <p class="mb-1 px-2 text-xs font-medium text-muted-foreground">Kunden</p>
                         <Link

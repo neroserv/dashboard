@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
-use App\Models\Site;
-use App\Models\SiteSubscription;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,18 +32,6 @@ class SearchController extends Controller
         }
 
         $term = '%'.$q.'%';
-
-        $sites = Site::query()
-            ->where(function ($query) use ($term) {
-                $query->where('name', 'like', $term)->orWhere('slug', 'like', $term);
-            })
-            ->limit($limit)
-            ->get(['uuid', 'name', 'slug'])
-            ->map(fn (Site $s) => [
-                'uuid' => $s->uuid,
-                'label' => $s->name.' ('.$s->slug.')',
-                'url' => route('admin.sites.show', $s),
-            ]);
 
         $customers = User::query()
             ->where(function ($query) use ($term) {
@@ -103,23 +89,11 @@ class SearchController extends Controller
                 'url' => route('admin.invoices.show', $i),
             ]);
 
-        $subscriptions = SiteSubscription::query()
-            ->where('mollie_subscription_id', 'like', $term)
-            ->with('site:uuid,name')
-            ->limit($limit)
-            ->get()
-            ->map(fn (SiteSubscription $sub) => [
-                'id' => $sub->id,
-                'site_uuid' => $sub->site?->uuid,
-                'label' => ($sub->site?->name ?? 'Site #'.$sub->site_id).' – '.$sub->mollie_subscription_id,
-                'url' => $sub->site_id ? route('admin.sites.show', $sub->site) : route('admin.subscriptions.index'),
-            ]);
-
         return response()->json([
-            'sites' => $sites,
+            'sites' => [],
             'customers' => $customers,
             'invoices' => $invoices,
-            'subscriptions' => $subscriptions,
+            'subscriptions' => [],
         ]);
     }
 }

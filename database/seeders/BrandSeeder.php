@@ -31,7 +31,7 @@ class BrandSeeder extends Seeder
                 'domains' => ['b2b.praxishosting.test', 'b2b.praxishosting.de', 'localhost', 'praxishosting.test'],
                 'is_default' => true,
                 'theme_colors' => $defaultThemeColors,
-                'features' => ['sites_editor' => true, 'webspace' => true, 'domains_shop' => true, 'ai_tokens' => true],
+                'features' => ['webspace' => true, 'domains_shop' => true, 'ai_tokens' => true],
                 'salutation' => 'formal',
             ]
         );
@@ -43,7 +43,7 @@ class BrandSeeder extends Seeder
                 'domains' => ['gaming.praxishosting.test', 'gaming.praxishosting.de'],
                 'is_default' => false,
                 'theme_colors' => $defaultThemeColors,
-                'features' => ['sites_editor' => false, 'webspace' => true, 'domains_shop' => true, 'ai_tokens' => true],
+                'features' => ['webspace' => true, 'domains_shop' => true, 'ai_tokens' => true],
                 'salutation' => 'informal',
             ]
         );

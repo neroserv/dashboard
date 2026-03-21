@@ -2,6 +2,7 @@
 
 use App\Models\Brand;
 use App\Models\HostingPlan;
+use App\Models\HostingServer;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\TeamSpeakSnapshot;
 use App\Models\User;
@@ -273,5 +274,59 @@ test('teamspeak account show canRenew is true when plan has no base price but op
         ->component('teamspeak-accounts/Show')
         ->where('canRenew', true)
         ->where('renewalAmount', 8) // 32 slots * 0.25 (JSON returns int)
+    );
+});
+
+test('teamspeak account show includes connection_preview when API unavailable but host and port exist', function () {
+    $hostingServer = HostingServer::create([
+        'brand_id' => $this->brandWithTeamSpeak->id,
+        'panel_type' => 'teamspeak',
+        'name' => 'TS Node',
+        'hostname' => 'voice.example.test',
+        'ip_address' => '10.99.1.1',
+        'config' => [],
+        'is_active' => true,
+    ]);
+
+    $plan = HostingPlan::create([
+        'brand_id' => $this->brandWithTeamSpeak->id,
+        'hosting_server_id' => $hostingServer->id,
+        'panel_type' => 'teamspeak',
+        'config' => ['plan_options' => []],
+        'name' => 'TS Plan',
+        'plesk_package_name' => null,
+        'disk_gb' => 0,
+        'traffic_gb' => 0,
+        'domains' => 0,
+        'subdomains' => 0,
+        'mailboxes' => 0,
+        'databases' => 0,
+        'price' => 0,
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $account = TeamSpeakServerAccount::create([
+        'user_id' => $this->user->id,
+        'hosting_plan_id' => $plan->id,
+        'hosting_server_id' => $hostingServer->id,
+        'product_id' => null,
+        'name' => 'TS No API',
+        'virtual_server_id' => null,
+        'port' => 9987,
+        'status' => 'active',
+    ]);
+
+    actingAs($this->user);
+
+    $path = parse_url(route('teamspeak-accounts.show', $account), PHP_URL_PATH);
+    $response = $this->get('http://teamspeak.praxishosting.test'.$path);
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('teamspeak-accounts/Show')
+        ->where('serverInfo', null)
+        ->where('connection_preview.address', 'voice.example.test:9987')
+        ->where('connection_preview.connection_uri', 'ts3server://voice.example.test?port=9987')
     );
 });

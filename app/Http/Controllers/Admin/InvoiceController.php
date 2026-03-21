@@ -95,7 +95,7 @@ class InvoiceController extends Controller
             ]);
         }
 
-        $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+        $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
         if ($pdfPath) {
             $invoice->update(['pdf_path' => $pdfPath]);
         }
@@ -136,7 +136,7 @@ class InvoiceController extends Controller
 
         if ($oldStatus !== $invoice->status) {
             try {
-                $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+                $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
                 if ($pdfPath) {
                     $invoice->update(['pdf_path' => $pdfPath]);
                 }
@@ -220,7 +220,7 @@ class InvoiceController extends Controller
             ]);
         }
 
-        $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+        $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
         if ($pdfPath) {
             $invoice->update(['pdf_path' => $pdfPath]);
         }
