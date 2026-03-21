@@ -239,10 +239,10 @@ const tableFields = [
                             </template>
                             <template #cell(assigned_to_name)="row">
                                 <div class="d-flex align-items-center flex-wrap gap-1">
-                                    <span>{{ row.item.assigned_to?.name ?? '–' }}</span>
-                                    <BBadge v-if="isAssignedToMe(row.item)" variant="success" class="text-uppercase">
-                                        Dir
-                                    </BBadge>
+                                    <span :class="{ 'ticket-assignee-row-name': isAssignedToMe(row.item) }">{{
+                                        row.item.assigned_to?.name ?? '–'
+                                    }}</span>
+                                    <span v-if="isAssignedToMe(row.item)" class="ticket-index-dir-mark">Dir</span>
                                 </div>
                             </template>
                             <template #cell(created_at)="row">
@@ -278,12 +278,39 @@ const tableFields = [
 
 <style scoped>
 .ticket-row-assigned-to-me td {
-    background-color: rgba(111, 66, 193, 0.07);
-    box-shadow: inset 3px 0 0 0 rgb(111, 66, 193);
+    background-color: rgba(79, 70, 229, 0.06);
+    box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
 :root.dark .ticket-row-assigned-to-me td {
-    background-color: rgba(111, 66, 193, 0.14);
-    box-shadow: inset 3px 0 0 0 rgb(167, 139, 250);
+    background-color: rgba(129, 140, 248, 0.1);
+    box-shadow: inset 3px 0 0 0 #818cf8;
+}
+
+.ticket-assignee-row-name {
+    color: #3730a3;
+    font-weight: 700;
+}
+
+:root.dark .ticket-assignee-row-name {
+    color: #c7d2fe;
+}
+
+.ticket-index-dir-mark {
+    display: inline-block;
+    padding: 0.12rem 0.5rem;
+    border-radius: 0.3rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    background: #4f46e5;
+    color: #fff;
+}
+
+:root.dark .ticket-index-dir-mark {
+    background: #a5b4fc;
+    color: #1e1b4b;
 }
 </style>

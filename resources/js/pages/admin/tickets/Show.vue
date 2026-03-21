@@ -370,7 +370,7 @@ onMounted(() => {
                         <BButton variant="outline-primary" size="sm">Zurück zur Liste</BButton>
                     </Link>
                 </div>
-                <BAlert v-if="isAssignedToCurrentUser" variant="success" show class="mt-2 mb-0 py-2 small">
+                <BAlert v-if="isAssignedToCurrentUser" variant="primary" show class="mt-2 mb-3 py-2 small ticket-assigned-alert">
                     Dieses Ticket ist dir zugewiesen.
                 </BAlert>
             </BCol>
@@ -380,7 +380,7 @@ onMounted(() => {
             <!-- Sidebar: Informationen, Bearbeiten, Aktionen -->
             <BCol cols="12" xl="3" class="mb-4">
                 <BCard no-body>
-                    <BCardHeader class="py-3">
+                    <BCardHeader class="py-2">
                         <BCardTitle class="mb-2">Ticket</BCardTitle>
                         <BNav tabs class="ticket-sidebar-nav card-header-tabs mb-0 flex-nowrap">
                             <BNavItem
@@ -422,7 +422,7 @@ onMounted(() => {
                             </BNavItem>
                         </BNav>
                     </BCardHeader>
-                    <BCardBody class="py-4">
+                    <BCardBody class="py-3">
                         <!-- Tab: Informationen -->
                         <div v-show="sidebarTab === 'info'" class="space-y-3">
                             <div>
@@ -457,12 +457,15 @@ onMounted(() => {
                                 <p class="mb-1 fw-semibold small">Zugewiesen an</p>
                                 <span
                                     v-if="assignedToName !== '–'"
-                                    class="ticket-meta-pill ticket-meta-pill--assignee"
-                                    :class="{ 'ticket-meta-pill--assignee-self': isAssignedToCurrentUser }"
+                                    class="ticket-meta-pill"
+                                    :class="isAssignedToCurrentUser ? 'ticket-meta-pill--assignee-self' : 'ticket-meta-pill--assignee'"
                                 >
-                                    {{ assignedToName }}
                                     <template v-if="isAssignedToCurrentUser">
-                                        <span class="text-uppercase small ms-1 opacity-90">(Dir)</span>
+                                        <span class="ticket-assignee-self-name">{{ assignedToName }}</span>
+                                        <span class="ticket-assignee-self-mark">Dir</span>
+                                    </template>
+                                    <template v-else>
+                                        {{ assignedToName }}
                                     </template>
                                 </span>
                                 <span v-else class="small text-muted">–</span>
@@ -543,7 +546,7 @@ onMounted(() => {
                         </div>
 
                         <!-- Tab: Aktionen -->
-                        <div v-show="sidebarTab === 'actions'" class="d-flex flex-column gap-3 pt-1">
+                        <div v-show="sidebarTab === 'actions'" class="d-flex flex-column gap-2">
                             <BButton variant="primary" @click="focusReply(false)">Antworten</BButton>
                             <BButton variant="outline-secondary" @click="noteDialogOpen = true">Notiz hinzufügen</BButton>
                             <BButton
@@ -649,7 +652,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Antwort-Formular -->
-                <div class="mt-6 pb-24">
+                <div class="mt-4 pb-8">
                         <div class="flex gap-4">
                             <div class="relative hidden shrink-0 md:block md:w-12">
                                 <div
@@ -681,7 +684,7 @@ onMounted(() => {
                                 <div
                                     :class="
                                         replyCardFullscreen
-                                            ? 'fixed inset-0 z-50 flex flex-col bg-white p-4 dark:bg-gray-950'
+                                            ? 'fixed inset-0 z-50 flex flex-col bg-white p-3 dark:bg-gray-950'
                                             : ''
                                     "
                                 >
@@ -689,7 +692,7 @@ onMounted(() => {
                                         no-body
                                         :class="replyCardFullscreen ? 'd-flex flex-column h-100 min-h-0 border-top border-warning border-3' : 'border-top border-warning border-3'"
                                     >
-                                        <BCardHeader class="d-flex align-items-center justify-content-between border-bottom py-3">
+                                        <BCardHeader class="d-flex align-items-center justify-content-between border-bottom py-2">
                                             <BCardTitle class="mb-0">Antwort / Notiz</BCardTitle>
                                             <BButton
                                                 type="button"
@@ -706,8 +709,8 @@ onMounted(() => {
                                             class="d-flex flex-column min-h-0 flex-grow-1"
                                             @submit.prevent="messageForm.post(adminTickets.messages.store(ticket.uuid).url)"
                                         >
-                                            <BCardBody class="d-flex flex-column min-h-0 flex-grow-1 overflow-auto pt-4">
-                                                <div class="mb-3" :class="{ 'd-flex flex-column flex-grow-1 min-h-0': replyCardFullscreen }">
+                                            <BCardBody class="d-flex flex-column min-h-0 flex-grow-1 overflow-auto py-2">
+                                                <div class="mb-2" :class="{ 'd-flex flex-column flex-grow-1 min-h-0': replyCardFullscreen }">
                                                     <div :class="{ 'min-h-0 flex-grow-1': replyCardFullscreen }">
                                                         <TicketReplyEditor
                                                             v-model="messageForm.body"
@@ -725,7 +728,7 @@ onMounted(() => {
                                                     Nur intern (Kunde sieht diese Nachricht nicht)
                                                 </BFormCheckbox>
                                             </BCardBody>
-                                            <BCardFooter class="d-flex justify-content-end gap-2 border-top py-3">
+                                            <BCardFooter class="d-flex justify-content-end gap-2 border-top py-2">
                                                 <BButton type="submit" variant="warning" :disabled="messageForm.processing">
                                                     Antwort senden
                                                 </BButton>
@@ -740,8 +743,8 @@ onMounted(() => {
         </BRow>
 
         <!-- Modals: Notiz, Merge -->
-        <BModal v-model="noteDialogOpen" title="Interne Notiz hinzufügen" no-footer>
-            <p class="text-muted small mb-3">Diese Notiz ist nur für Mitarbeiter sichtbar. Der Kunde sieht sie nicht.</p>
+        <BModal v-model="noteDialogOpen" title="Interne Notiz hinzufügen" no-footer body-class="py-2 px-3">
+            <p class="text-muted small mb-2">Diese Notiz ist nur für Mitarbeiter sichtbar. Der Kunde sieht sie nicht.</p>
             <BForm @submit.prevent="submitNote()">
                 <BFormGroup label="Notiz" label-for="note_body">
                     <textarea
@@ -761,8 +764,8 @@ onMounted(() => {
                 </div>
             </BForm>
         </BModal>
-        <BModal v-model="mergeDialogOpen" title="Ticket zusammenführen" no-footer>
-            <p class="text-muted small mb-3">
+        <BModal v-model="mergeDialogOpen" title="Ticket zusammenführen" no-footer body-class="py-2 px-3">
+            <p class="text-muted small mb-2">
                 Dieses Ticket (#{{ ticket.id }}) wird in ein Ziel-Ticket verschoben. Alle Nachrichten werden dem Ziel-Ticket zugeordnet; dieses Ticket wird geschlossen.
             </p>
             <BForm @submit.prevent="mergeForm.post(adminTickets.merge(ticket.uuid).url)">
@@ -887,10 +890,34 @@ onMounted(() => {
 }
 
 .ticket-meta-pill--assignee-self {
-    background: rgba(25, 135, 84, 0.16);
-    color: #0a3622;
-    border-color: rgba(25, 135, 84, 0.45);
-    box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.2);
+    background: rgba(79, 70, 229, 0.1);
+    color: #312e81;
+    border-color: rgba(79, 70, 229, 0.42);
+    box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.08);
+}
+
+.ticket-assignee-self-name {
+    color: #3730a3;
+    font-weight: 700;
+}
+
+.ticket-assignee-self-mark {
+    display: inline-block;
+    margin-left: 0.45rem;
+    padding: 0.12rem 0.5rem;
+    border-radius: 0.3rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    vertical-align: middle;
+    text-transform: uppercase;
+    background: #4f46e5;
+    color: #fff;
+}
+
+.ticket-assigned-alert {
+    padding-bottom: 0.875rem !important;
 }
 
 :root.dark .ticket-meta-pill--open {
@@ -945,9 +972,18 @@ onMounted(() => {
 }
 
 :root.dark .ticket-meta-pill--assignee-self {
-    background: rgba(25, 135, 84, 0.22);
-    color: #75b798;
-    border-color: rgba(25, 135, 84, 0.45);
-    box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.25);
+    background: rgba(129, 140, 248, 0.14);
+    color: #e0e7ff;
+    border-color: rgba(165, 180, 252, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.12);
+}
+
+:root.dark .ticket-assignee-self-name {
+    color: #c7d2fe;
+}
+
+:root.dark .ticket-assignee-self-mark {
+    background: #a5b4fc;
+    color: #1e1b4b;
 }
 </style>
