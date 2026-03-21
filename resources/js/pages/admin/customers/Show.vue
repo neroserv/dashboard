@@ -37,16 +37,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
 import { impersonate } from '@/routes/admin';
 import { index as customersIndex } from '@/routes/admin/customers/index';
-import { show as sitesShow } from '@/routes/sites';
 import type { BreadcrumbItem } from '@/types';
-
-type Site = {
-    uuid: string;
-    name: string;
-    slug: string;
-    template?: { name: string };
-    site_subscription?: { current_period_ends_at?: string } | null;
-};
 
 type BalanceTransaction = {
     id: number;
@@ -130,7 +121,6 @@ type Customer = {
     brand?: { id: number; key: string; name: string } | null;
     is_admin?: boolean;
     rank?: string | null;
-    sites: Site[];
     customerBalance: CustomerBalance;
     balanceTransactions: BalanceTransaction[];
     customer_notes?: CustomerNote[];
@@ -231,6 +221,10 @@ const showImpersonateButton = computed(
 
 const balanceModalOpen = ref(false);
 const aiTokensModalOpen = ref(false);
+<<<<<<< Updated upstream
+=======
+const productsTab = ref<'webspace' | 'gaming' | 'teamspeak' | 'domains'>('webspace');
+>>>>>>> Stashed changes
 
 const balanceForm = useForm({
     amount: '',
@@ -524,6 +518,7 @@ onMounted(() => {
                 </DialogContent>
             </Dialog>
 
+<<<<<<< Updated upstream
             <div class="grid gap-6 lg:grid-cols-2">
                 <div class="space-y-6">
                     <Card>
@@ -681,6 +676,40 @@ onMounted(() => {
                             <Text v-else variant="small" muted>Keine Rechnungen</Text>
                         </CardContent>
                     </Card>
+=======
+        <BCard id="products" no-body class="mb-4">
+            <BCardHeader>
+                <BCardTitle class="mb-0">Produkte &amp; Domains</BCardTitle>
+                <p class="text-muted small mb-0 mt-1">Webspace, Game-Server und Reseller-Domains dieses Kunden</p>
+            </BCardHeader>
+            <BCardBody>
+                <BNav tabs class="mb-4 flex-wrap">
+                    <BNavItem :active="productsTab === 'webspace'" @click="productsTab = 'webspace'">
+                        <Icon icon="device-desktop" class="me-1" /> Webspace ({{ customer.webspace_accounts?.length ?? 0 }})
+                    </BNavItem>
+                    <BNavItem :active="productsTab === 'gaming'" @click="productsTab = 'gaming'">
+                        <Icon icon="server" class="me-1" /> Game-Server ({{ customer.game_server_accounts?.length ?? 0 }})
+                    </BNavItem>
+                    <BNavItem :active="productsTab === 'teamspeak'" @click="productsTab = 'teamspeak'">
+                        <Icon icon="headphones" class="me-1" /> TeamSpeak ({{ customer.team_speak_server_accounts?.length ?? 0 }})
+                    </BNavItem>
+                    <BNavItem :active="productsTab === 'domains'" @click="productsTab = 'domains'">
+                        <Icon icon="world" class="me-1" /> Reseller-Domains ({{ customer.reseller_domains?.length ?? 0 }})
+                    </BNavItem>
+                </BNav>
+
+                <div v-show="productsTab === 'webspace'">
+                    <BTable small :items="customer.webspace_accounts ?? []" :fields="[{ key: 'id', label: 'ID' }, { key: 'plan', label: 'Paket / Plan' }, { key: 'server', label: 'Server / Node' }, { key: 'actions', label: '', thClass: 'text-end' }]">
+                        <template #cell(plan)="{ item }">{{ item.hosting_plan?.name ?? '–' }}</template>
+                        <template #cell(server)="{ item }"><code class="rounded bg-light px-1 small">{{ item.hosting_server?.hostname ?? '–' }}</code></template>
+                        <template #cell(actions)="{ item }">
+                            <Link :href="`/admin/webspace-accounts/${item.uuid}`"><BButton variant="link" size="sm" aria-label="Anzeigen"><Icon icon="external-link" /></BButton></Link>
+                        </template>
+                    </BTable>
+                    <p v-if="!customer.webspace_accounts?.length" class="text-muted text-center py-4 mb-0">Keine Webspace-Accounts</p>
+                    <Link v-if="customer.webspace_accounts?.length" :href="`/admin/webspace-accounts?user_id=${customer.id}`" class="small mt-2 d-inline-block">Alle Webspace-Accounts anzeigen →</Link>
+                </div>
+>>>>>>> Stashed changes
 
                     <Card>
                         <CardHeader class="flex flex-row items-center justify-between">
