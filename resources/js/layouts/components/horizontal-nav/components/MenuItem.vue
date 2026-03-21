@@ -1,12 +1,23 @@
 <template>
-  <Link v-if="menuLevel > 1" :href="item.url ?? '#'" :class="`${linkClass} ${item.isDisabled ? 'disabled' : ''}`">
+  <Link
+    v-if="menuLevel > 1"
+    :href="item.url ?? '#'"
+    :class="`${linkClass} ${item.isDisabled ? 'disabled' : ''}`"
+    :target="item.target"
+    :rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
+  >
     <span v-if="item.icon && menuLevel < 2" class="menu-icon"><Icon :icon="item.icon" class="fs-xl" /></span>
     <span class="menu-text">{{ item.label }}</span>
     <span v-if="item.badge" class="badge" :class="item.badge.className">{{ item.badge.text }}</span>
   </Link>
 
   <li v-else :class="`${wrapperClass} ${isActive ? 'active' : ''}`">
-    <Link :href="item.url ?? '#'" :class="`${linkClass} ${item.isDisabled ? 'disabled' : ''}`">
+    <Link
+      :href="item.url ?? '#'"
+      :class="`${linkClass} ${item.isDisabled ? 'disabled' : ''}`"
+      :target="item.target"
+      :rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
+    >
       <span v-if="item.icon" class="menu-icon"><Icon :icon="item.icon" class="fs-xl" /></span>
       <span class="menu-text">{{ item.label }}</span>
       <span v-if="item.badge" :class="item.badge.className" class="badge">{{ item.badge.text }}</span>

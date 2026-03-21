@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Text } from '@/components/ui/typography';
+import AdminDashboardWidgetShell from '@/components/admin/dashboard/AdminDashboardWidgetShell.vue';
+import Icon from '@/components/wrappers/Icon.vue';
 
 defineProps<{
     data?: { minutesAgo?: number | null } | null;
@@ -8,16 +8,19 @@ defineProps<{
 </script>
 
 <template>
-    <CardHeader class="py-3">
-        <CardTitle class="text-sm font-medium">Mollie Webhook</CardTitle>
-        <CardDescription>Letzter empfangener Webhook</CardDescription>
-    </CardHeader>
-    <CardContent class="pt-0">
-        <Text v-if="data?.minutesAgo != null" class="text-sm">
+    <AdminDashboardWidgetShell
+        variant="stat"
+        title="Mollie Webhook"
+        description="Letzter empfangener Webhook"
+    >
+        <template #icon>
+            <Icon icon="bolt" aria-hidden="true" />
+        </template>
+        <p v-if="data?.minutesAgo != null" class="small fw-medium mb-0">
             Vor {{ data.minutesAgo }} Minute(n)
-        </Text>
-        <Text v-else class="text-sm text-muted-foreground">
+        </p>
+        <p v-else class="text-muted small mb-0">
             Kein Webhook empfangen (oder Cache leer)
-        </Text>
-    </CardContent>
+        </p>
+    </AdminDashboardWidgetShell>
 </template>

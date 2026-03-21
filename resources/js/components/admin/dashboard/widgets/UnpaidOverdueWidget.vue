@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { Button } from '@/components/ui/button';
-import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Text } from '@/components/ui/typography';
+import { BButton } from 'bootstrap-vue-next';
+import AdminDashboardWidgetShell from '@/components/admin/dashboard/AdminDashboardWidgetShell.vue';
+import Icon from '@/components/wrappers/Icon.vue';
 
 defineProps<{
     data?: { unpaidSum?: number; overdueCount?: number } | null;
@@ -10,17 +10,20 @@ defineProps<{
 </script>
 
 <template>
-    <CardHeader class="py-3">
-        <CardTitle class="text-sm font-medium">Offene Posten</CardTitle>
-        <CardDescription>Summe unbezahlter Rechnungen</CardDescription>
-    </CardHeader>
-    <CardContent class="pt-0">
-        <span class="text-2xl font-bold">{{ (data?.unpaidSum ?? 0).toFixed(2) }} €</span>
-        <Text variant="small" muted class="mt-1 block">{{ data?.overdueCount ?? 0 }} überfällig</Text>
+    <AdminDashboardWidgetShell
+        variant="stat"
+        title="Offene Posten"
+        description="Summe unbezahlter Rechnungen"
+    >
+        <template #icon>
+            <Icon icon="file-text" aria-hidden="true" />
+        </template>
+        <span class="fs-4 fw-bold lh-sm d-block">{{ (data?.unpaidSum ?? 0).toFixed(2) }} €</span>
+        <p class="text-muted small mb-0 mt-1">{{ data?.overdueCount ?? 0 }} überfällig</p>
         <div class="mt-2">
             <Link href="/admin/invoices">
-                <Button variant="ghost" size="sm">Rechnungen</Button>
+                <BButton variant="outline-primary" size="sm">Rechnungen</BButton>
             </Link>
         </div>
-    </CardContent>
+    </AdminDashboardWidgetShell>
 </template>

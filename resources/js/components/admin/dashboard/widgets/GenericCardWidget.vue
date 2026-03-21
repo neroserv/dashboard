@@ -1,40 +1,40 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import AdminDashboardWidgetShell from '@/components/admin/dashboard/AdminDashboardWidgetShell.vue';
+import Icon from '@/components/wrappers/Icon.vue';
 
-defineProps<{
-    data?: Record<string, unknown> | null;
-    title?: string;
-    description?: string;
-    /** Link URL (e.g. /admin/customers/1). If not set, no link. */
-    linkHref?: string;
-    /** Primary line (e.g. name or number) */
-    primary?: string;
-    /** Secondary line (e.g. email or amount) */
-    secondary?: string;
-    /** Tertiary line (e.g. date) */
-    tertiary?: string;
-}>();
+withDefaults(
+    defineProps<{
+        data?: Record<string, unknown> | null;
+        title?: string;
+        description?: string;
+        linkHref?: string;
+        primary?: string;
+        secondary?: string;
+        tertiary?: string;
+        statIcon?: string;
+    }>(),
+    { statIcon: 'user' },
+);
 </script>
 
 <template>
-    <CardHeader class="py-3">
-        <CardTitle class="text-sm font-medium">{{ title }}</CardTitle>
-        <CardDescription v-if="description" class="text-xs">{{ description }}</CardDescription>
-    </CardHeader>
-    <CardContent class="pt-0">
-        <div v-if="data" class="space-y-1 text-sm">
-            <p v-if="primary" class="font-medium">{{ primary }}</p>
-            <p v-if="secondary" class="text-muted-foreground">{{ secondary }}</p>
-            <p v-if="tertiary" class="text-muted-foreground text-xs">{{ tertiary }}</p>
+    <AdminDashboardWidgetShell variant="stat" :title="title" :description="description">
+        <template #icon>
+            <Icon :icon="statIcon" aria-hidden="true" />
+        </template>
+        <div v-if="data" class="small">
+            <p v-if="primary" class="fw-semibold mb-1 text-truncate">{{ primary }}</p>
+            <p v-if="secondary" class="text-muted mb-1 text-truncate small">{{ secondary }}</p>
+            <p v-if="tertiary" class="text-muted mb-2" style="font-size: 0.6875rem">{{ tertiary }}</p>
             <Link
                 v-if="linkHref"
                 :href="linkHref"
-                class="inline-block mt-2 text-primary hover:underline text-xs"
+                class="btn btn-link btn-sm p-0"
             >
                 Öffnen →
             </Link>
         </div>
-        <p v-else class="text-sm text-muted-foreground">Keine Daten.</p>
-    </CardContent>
+        <p v-else class="text-muted small mb-0">Keine Daten.</p>
+    </AdminDashboardWidgetShell>
 </template>

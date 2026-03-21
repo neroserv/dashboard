@@ -1,15 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { BCard, BCardBody, BModal } from 'bootstrap-vue-next';
 import DashboardWidgetSlot from '@/components/admin/dashboard/DashboardWidgetSlot.vue';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import type { WidgetRegistryItem } from '@/types/admin/dashboard';
 
-defineProps<{
+const props = defineProps<{
     open: boolean;
     widgetRegistry: WidgetRegistryItem[];
 }>();
@@ -19,43 +14,108 @@ const emit = defineEmits<{
     addWidget: [key: string];
 }>();
 
-function select(key: string) {
+const modalModel = computed({
+    get: () => props.open,
+    set: (value: boolean) => {
+        if (!value) {
+            emit('close');
+        }
+    },
+});
+
+function select(key: string): void {
     emit('addWidget', key);
     emit('close');
 }
 </script>
 
 <template>
-    <Dialog :open="open" @update:open="(v) => !v && emit('close')">
-        <DialogContent class="max-h-[90vh] w-[95vw] max-w-[240rem] overflow-hidden flex flex-col sm:max-w-7xl">
-            <DialogHeader>
-                <DialogTitle>Widget hinzufügen <span class="text-sm rounded-md px-2 py-1 bg-muted">({{ widgetRegistry.length }} Widgets verfügbar)</span></DialogTitle>
-                <DialogDescription>
-                    Wählen Sie ein Widget. Die Vorschau zeigt Demo-Daten.
-                </DialogDescription>
-            </DialogHeader>
-            <div class="flex-1 overflow-y-auto">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 py-4">
-                    <button
-                        v-for="widget in widgetRegistry"
-                        :key="widget.key"
-                        type="button"
-                        class="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-modern transition-modern hover:border-primary hover:shadow-modern-lg dark:border-gray-800 dark:bg-gray-900"
-                        @click="select(widget.key)"
-                    >
-                        <div class="pointer-events-none min-h-[120px] scale-90 origin-top-left [width:111%]">
-                            <DashboardWidgetSlot
-                                :widget-key="widget.key"
-                                :registry-item="widget"
-                                :preview="true"
-                                :demo-data="widget.demoData ?? null"
-                            />
-                        </div>
-                        <p class="mt-2 font-medium">{{ widget.title }}</p>
-                        <p class="text-xs text-muted-foreground">{{ widget.description }}</p>
-                    </button>
-                </div>
+    <BModal
+        v-model="modalModel"
+        size="xl"
+        scrollable
+        no-footer
+        body-class="pt-0"
+        content-class="border-0 shadow"
+        header-class="border-bottom pb-3"
+    >
+        <template #title>
+            <span class="me-2">Widget hinzufügen</span>
+            <span class="badge bg-primary-subtle text-primary fw-normal">
+                {{ widgetRegistry.length }} verfügbar
+            </span>
+        </template>
+
+        <p class="text-muted small mb-3">
+            Wählen Sie ein Widget. Die Vorschau zeigt Demo-Daten.
+        </p>
+
+        <div class="row g-3">
+            <div
+                v-for="widget in widgetRegistry"
+                :key="widget.key"
+                class="col-12 col-sm-6 col-lg-4 col-xxl-3"
+            >
+                <button
+                    type="button"
+                    class="widget-gallery-select btn btn-light border w-100 h-100 text-start p-0 rounded-3 shadow-sm"
+                    @click="select(widget.key)"
+                >
+                    <BCard no-body class="mb-0 border-0 rounded-3 bg-transparent">
+                        <BCardBody class="p-3">
+                            <div
+                                class="widget-gallery-preview rounded-2 bg-body-secondary overflow-hidden border"
+                            >
+                                <div
+                                    class="pointer-events-none widget-gallery-preview-inner"
+                                >
+                                    <DashboardWidgetSlot
+                                        :widget-key="widget.key"
+                                        :registry-item="widget"
+                                        :preview="true"
+                                        :demo-data="widget.demoData ?? null"
+                                    />
+                                </div>
+                            </div>
+                            <h6 class="fw-semibold mt-3 mb-1 small text-body">{{ widget.title }}</h6>
+                            <p class="text-muted small mb-0 lh-sm">
+                                {{ widget.description }}
+                            </p>
+                        </BCardBody>
+                    </BCard>
+                </button>
             </div>
-        </DialogContent>
-    </Dialog>
+        </div>
+    </BModal>
 </template>
+
+<style scoped>
+.widget-gallery-select {
+    transition:
+        border-color 0.15s ease-in-out,
+        box-shadow 0.15s ease-in-out,
+        background-color 0.15s ease-in-out;
+}
+
+.widget-gallery-select:hover {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0.35rem 1rem rgba(var(--bs-primary-rgb), 0.12) !important;
+    background-color: var(--bs-body-bg) !important;
+}
+
+.widget-gallery-select:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.widget-gallery-preview {
+    min-height: 7.5rem;
+}
+
+.widget-gallery-preview-inner {
+    min-height: 7.5rem;
+    transform: scale(0.88);
+    transform-origin: top left;
+    width: 113.6%;
+}
+</style>

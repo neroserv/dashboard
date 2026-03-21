@@ -85,7 +85,7 @@ class DashboardWidgetRegistry
             ['i' => 'last-mollie-webhook', 'x' => 3, 'y' => 2, 'w' => 2, 'h' => 1],
             ['i' => 'open-tickets', 'x' => 5, 'y' => 2, 'w' => 2, 'h' => 1],
             ['i' => 'failed-jobs', 'x' => 7, 'y' => 2, 'w' => 2, 'h' => 1],
-            ['i' => 'action-items', 'x' => 0, 'y' => 3, 'w' => 6, 'h' => 3],
+            ['i' => 'action-items', 'x' => 0, 'y' => 3, 'w' => 6, 'h' => 2],
             ['i' => 'revenue-chart-daily', 'x' => 6, 'y' => 3, 'w' => 4, 'h' => 2],
             ['i' => 'recent-invoices', 'x' => 10, 'y' => 3, 'w' => 4, 'h' => 2],
             ['i' => 'overdue-failed-invoices', 'x' => 6, 'y' => 5, 'w' => 4, 'h' => 2],

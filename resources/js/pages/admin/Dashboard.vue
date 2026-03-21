@@ -106,8 +106,10 @@ function onLayoutUpdated(newLayout: LayoutItem[]) {
     layoutLocal.value = newLayout;
 }
 
-function _removeWidget(key: string) {
-    if (!isEditMode.value) return;
+function removeWidget(key: string): void {
+    if (!isEditMode.value) {
+        return;
+    }
     layoutLocal.value = layoutLocal.value.filter((it) => it.i !== key);
 }
 
@@ -216,11 +218,13 @@ const breadcrumbs: BreadcrumbItem[] = [
                     :i="item.i"
                     :static="!isEditMode"
                 >
-                    <div class="h-full w-full overflow-auto p-1">
+                    <div class="h-full w-full min-h-0 overflow-hidden p-0">
                         <DashboardWidgetSlot
                             :widget-key="item.i"
                             :registry-item="registryByKey[item.i] ?? null"
                             :preview="false"
+                            :removable="isEditMode"
+                            @remove="removeWidget(item.i)"
                         />
                     </div>
                 </GridItem>

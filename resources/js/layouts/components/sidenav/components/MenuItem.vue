@@ -1,6 +1,12 @@
 <template>
   <li class="side-nav-item" :class="{ active: isActive }">
-    <Link :href="item.url ?? '#'" class="side-nav-link" :class="{ disabled: item.isDisabled, 'special-menu': item.isSpecial, active: isActive }">
+    <Link
+      :href="item.url ?? '#'"
+      class="side-nav-link"
+      :class="{ disabled: item.isDisabled, 'special-menu': item.isSpecial, active: isActive }"
+      :target="item.target"
+      :rel="item.target === '_blank' ? 'noopener noreferrer' : undefined"
+    >
       <span v-if="item.icon && !isTopLevel" class="menu-icon">
         <Icon :icon="item.icon" />
       </span>

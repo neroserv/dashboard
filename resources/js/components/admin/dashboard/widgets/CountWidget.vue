@@ -1,28 +1,31 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { Button } from '@/components/ui/button';
-import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import AdminDashboardWidgetShell from '@/components/admin/dashboard/AdminDashboardWidgetShell.vue';
+import Icon from '@/components/wrappers/Icon.vue';
 
-defineProps<{
-    data?: { count?: number } | null;
-    title?: string;
-    description?: string;
-    linkHref?: string;
-    linkLabel?: string;
-}>();
+withDefaults(
+    defineProps<{
+        data?: { count?: number } | null;
+        title?: string;
+        description?: string;
+        linkHref?: string;
+        linkLabel?: string;
+        statIcon?: string;
+    }>(),
+    { statIcon: 'users' },
+);
 </script>
 
 <template>
-    <CardHeader class="py-3">
-        <CardTitle class="text-sm font-medium">{{ title }}</CardTitle>
-        <CardDescription v-if="description" class="text-xs">{{ description }}</CardDescription>
-    </CardHeader>
-    <CardContent class="pt-0">
-        <span class="text-2xl font-bold">{{ data?.count ?? 0 }}</span>
-        <div v-if="linkHref" class="mt-2">
-            <Link :href="linkHref">
-                <Button variant="ghost" size="sm">{{ linkLabel ?? 'Anzeigen' }}</Button>
+    <AdminDashboardWidgetShell variant="stat" :title="title" :description="description">
+        <template #icon>
+            <Icon :icon="statIcon" aria-hidden="true" />
+        </template>
+        <span class="fs-4 fw-bold lh-sm d-block">{{ data?.count ?? 0 }}</span>
+        <div v-if="linkHref" class="mt-1">
+            <Link :href="linkHref" class="btn btn-link btn-sm p-0 align-baseline">
+                {{ linkLabel ?? 'Anzeigen' }}
             </Link>
         </div>
-    </CardContent>
+    </AdminDashboardWidgetShell>
 </template>

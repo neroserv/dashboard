@@ -3,8 +3,9 @@
   Karten wie StarterKit ecommerce (BCard, card-h-100).
 -->
 <script setup lang="ts">
-import { BCard, BCardBody } from 'bootstrap-vue-next';
+import { BButton, BCard, BCardBody } from 'bootstrap-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
+import Icon from '@/components/wrappers/Icon.vue';
 import WidgetRenderer from '@/components/admin/dashboard/WidgetRenderer.vue';
 import adminDashboard from '@/routes/admin/dashboard';
 import type { WidgetRegistryItem } from '@/types/admin/dashboard';
@@ -15,9 +16,15 @@ const props = withDefaults(
         registryItem?: WidgetRegistryItem | null;
         preview?: boolean;
         demoData?: Record<string, unknown> | null;
+        /** Im Dashboard-Bearbeitungsmodus: roter Löschen-Button oben rechts */
+        removable?: boolean;
     }>(),
-    { preview: false, registryItem: null, demoData: null },
+    { preview: false, registryItem: null, demoData: null, removable: false },
 );
+
+const emit = defineEmits<{
+    remove: [];
+}>();
 
 const data = ref<Record<string, unknown> | null>(null);
 const loading = ref(true);
@@ -80,17 +87,29 @@ defineExpose({ refresh: fetchData });
 <template>
     <BCard
         no-body
-        class="admin-dashboard-widget-slot card card-h-100 mb-0 h-100 border shadow-sm"
+        class="admin-dashboard-widget-slot card card-h-100 mb-0 h-100 border shadow-sm position-relative"
     >
-        <BCardBody v-if="loading" class="placeholder-glow">
-            <span class="placeholder col-8 mb-2 d-block rounded" style="height: 0.85rem" />
-            <span class="placeholder col-5 mb-3 d-block rounded" style="height: 0.65rem" />
-            <span class="placeholder col-4 mb-2 d-block rounded" style="height: 1.75rem" />
-            <span class="placeholder col-12 d-block rounded" style="height: 0.65rem" />
+        <BButton
+            v-if="removable"
+            type="button"
+            variant="danger"
+            size="sm"
+            class="admin-dashboard-widget-remove position-absolute top-0 end-0 m-2 z-3 rounded-circle p-2 lh-1 shadow-sm"
+            aria-label="Widget entfernen"
+            title="Widget entfernen"
+            @click.stop.prevent="emit('remove')"
+            @mousedown.stop
+        >
+            <Icon icon="trash" class="d-block" aria-hidden="true" />
+        </BButton>
+        <BCardBody v-if="loading" class="placeholder-glow p-3">
+            <span class="placeholder col-9 mb-2 d-block rounded" style="height: 0.7rem" />
+            <span class="placeholder col-6 mb-3 d-block rounded" style="height: 0.55rem" />
+            <span class="placeholder col-5 d-block rounded" style="height: 1.35rem" />
             <span class="visually-hidden">{{ loadingTitle }} wird geladen</span>
         </BCardBody>
 
-        <BCardBody v-else-if="error" class="d-flex flex-column align-items-center justify-content-center text-center py-4">
+        <BCardBody v-else-if="error" class="d-flex flex-column align-items-center justify-content-center text-center py-3 px-3">
             <p class="text-danger fw-semibold small mb-1 mb-md-2">
                 Widget konnte nicht geladen werden
             </p>

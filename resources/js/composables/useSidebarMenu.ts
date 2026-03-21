@@ -116,8 +116,20 @@ function buildDefaultMenuItems(
                 children: [
                   ...(brandFeatures.gaming === true
                     ? [
-                          { slug: 'gaming-checkout', label: 'Gameserver bestellen', url: '/gaming/checkout', icon: 'package' },
-                          { slug: 'gaming-accounts', label: 'Deine Gameserver', url: '/gaming', icon: 'server' },
+                          {
+                            slug: 'gaming-checkout',
+                            label: 'Gameserver bestellen',
+                            url: 'https://dash.neroserv.de/gaming',
+                            icon: 'package',
+                            target: '_blank',
+                          },
+                          {
+                            slug: 'gaming-accounts',
+                            label: 'Deine Gameserver',
+                            url: 'https://dash.neroserv.de/gaming-accounts/',
+                            icon: 'server',
+                            target: '_blank',
+                          },
                       ]
                     : []),
                   ...(brandFeatures.gameserver_cloud === true

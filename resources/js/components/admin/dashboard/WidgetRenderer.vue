@@ -85,29 +85,87 @@ const componentProps = computed(() => {
         return { ...base, data: { labels: data.labels, values: data.invoices as number[] }, chartType: 'bar' as const };
     }
     if (['active-subscriptions', 'customers-total'].includes(key)) {
-        return { ...base, linkHref: key === 'active-subscriptions' ? '/admin/subscriptions' : undefined, linkLabel: 'Anzeigen' };
+        return {
+            ...base,
+            statIcon: key === 'active-subscriptions' ? 'repeat' : 'users',
+            linkHref: key === 'active-subscriptions' ? '/admin/subscriptions' : undefined,
+            linkLabel: 'Anzeigen',
+        };
     }
-    if (key === 'subscriptions-ending-week') return { ...base, description: 'Laufzeitende diese Woche', linkHref: '/admin/subscriptions', linkLabel: 'Abos' };
-    if (key === 'cancellations-period-end') return { ...base, description: 'Abos mit Kündigung', linkHref: '/admin/subscriptions', linkLabel: 'Abos' };
-    if (key === 'open-tickets') return { ...base, linkHref: '/admin/tickets', linkLabel: 'Tickets' };
-    if (key === 'failed-jobs') return { ...base, linkHref: '/admin/failed-jobs', linkLabel: 'Anzeigen' };
-    if (key === 'waiting-jobs') return { ...base, linkHref: '/admin/jobs-monitor', linkLabel: 'Jobs' };
-    if (key === 'game-server-accounts') return { ...base, linkHref: '/admin/gaming-accounts', linkLabel: 'Anzeigen' };
-    if (key === 'game-servers-pending') return { ...base, linkHref: '/admin/gaming-accounts', linkLabel: 'Anzeigen' };
-    if (key === 'webspace-accounts') return { ...base, linkHref: '/admin/webspace-accounts', linkLabel: 'Anzeigen' };
-    if (key === 'webspace-pending-plesk') return { ...base, linkHref: '/admin/webspace-accounts', linkLabel: 'Anzeigen' };
-    if (key === 'discount-codes-active') return { ...base, linkHref: '/admin/discount-codes', linkLabel: 'Rabattcodes' };
+    if (key === 'subscriptions-ending-week') {
+        return {
+            ...base,
+            statIcon: 'calendar-event',
+            description: 'Laufzeitende diese Woche',
+            linkHref: '/admin/subscriptions',
+            linkLabel: 'Abos',
+        };
+    }
+    if (key === 'cancellations-period-end') {
+        return {
+            ...base,
+            statIcon: 'calendar-x',
+            description: 'Abos mit Kündigung',
+            linkHref: '/admin/subscriptions',
+            linkLabel: 'Abos',
+        };
+    }
+    if (key === 'open-tickets') {
+        return { ...base, statIcon: 'message-circle', linkHref: '/admin/tickets', linkLabel: 'Tickets' };
+    }
+    if (key === 'failed-jobs') {
+        return { ...base, statIcon: 'alert-circle', linkHref: '/admin/failed-jobs', linkLabel: 'Anzeigen' };
+    }
+    if (key === 'waiting-jobs') {
+        return { ...base, statIcon: 'clock', linkHref: '/admin/jobs-monitor', linkLabel: 'Jobs' };
+    }
+    if (key === 'game-server-accounts') {
+        return { ...base, statIcon: 'device-gamepad', linkHref: '/admin/gaming-accounts', linkLabel: 'Anzeigen' };
+    }
+    if (key === 'game-servers-pending') {
+        return { ...base, statIcon: 'loader', linkHref: '/admin/gaming-accounts', linkLabel: 'Anzeigen' };
+    }
+    if (key === 'webspace-accounts') {
+        return { ...base, statIcon: 'world', linkHref: '/admin/webspace-accounts', linkLabel: 'Anzeigen' };
+    }
+    if (key === 'webspace-pending-plesk') {
+        return { ...base, statIcon: 'alert-triangle', linkHref: '/admin/webspace-accounts', linkLabel: 'Anzeigen' };
+    }
+    if (key === 'discount-codes-active') {
+        return { ...base, statIcon: 'discount-2', linkHref: '/admin/discount-codes', linkLabel: 'Rabattcodes' };
+    }
     if (key === 'pterodactyl-nodes-summary') return { ...base, keys: ['total', 'maintenance', 'memory_percent', 'disk_percent'] };
     if (key === 'hosting-servers-overview') return { ...base, keys: ['total', 'online', 'offline'] };
     if (key === 'cron-last-run') return { ...base, keys: ['lastRunAt'] };
     if (key === 'vouchers-remaining') return { ...base, keys: ['count', 'totalValue'] };
     if (key === 'newest-customer') {
         const d = data as { name?: string; email?: string; created_at?: string; id?: number } | undefined;
-        return { ...base, primary: d?.name, secondary: d?.email, tertiary: d?.created_at, linkHref: d?.id ? `/admin/customers/${d.id}` : undefined };
+        return {
+            ...base,
+            statIcon: 'user-plus',
+            primary: d?.name,
+            secondary: d?.email,
+            tertiary: d?.created_at,
+            linkHref: d?.id ? `/admin/customers/${d.id}` : undefined,
+        };
     }
     if (key === 'last-purchase') {
-        const d = data as { number?: string; amount?: number; user_name?: string; paid_at?: string; id?: number } | undefined;
-        return { ...base, primary: d?.number, secondary: d?.user_name ? `${d.user_name} – ${d?.amount ?? 0} €` : `${d?.amount ?? 0} €`, tertiary: d?.paid_at, linkHref: d?.uuid ? `/admin/invoices/${d.uuid}` : undefined };
+        const d = data as {
+            number?: string;
+            amount?: number;
+            user_name?: string;
+            paid_at?: string;
+            id?: number;
+            uuid?: string;
+        } | undefined;
+        return {
+            ...base,
+            statIcon: 'receipt',
+            primary: d?.number,
+            secondary: d?.user_name ? `${d.user_name} – ${d?.amount ?? 0} €` : `${d?.amount ?? 0} €`,
+            tertiary: d?.paid_at,
+            linkHref: d?.uuid ? `/admin/invoices/${d.uuid}` : undefined,
+        };
     }
     if (key === 'overdue-failed-invoices') {
         return { ...base, title: 'Überfällige Rechnungen', itemLink: (item: Record<string, unknown>) => `/admin/invoices/${item.uuid}`, itemLabel: (item: Record<string, unknown>) => `Rechnung ${(item as { number?: string }).number}` };
@@ -146,7 +204,7 @@ const componentProps = computed(() => {
         :is="component"
         v-bind="componentProps"
     />
-    <div v-else class="py-2 text-sm text-muted-foreground">
+    <div v-else class="p-3 text-muted small">
         Widget „{{ widgetKey }}“ – keine Komponente zugewiesen.
     </div>
 </template>

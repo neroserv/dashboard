@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import AdminSearch from '@/components/AdminSearch.vue';
-import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import AdminDashboardWidgetShell from '@/components/admin/dashboard/AdminDashboardWidgetShell.vue';
 </script>
 
 <template>
-    <CardHeader class="py-3">
-        <CardTitle>Globale Suche</CardTitle>
-        <CardDescription>Kunden, Rechnungen, Abos (Mollie-ID) durchsuchen</CardDescription>
-    </CardHeader>
-    <CardContent class="pt-0">
+    <AdminDashboardWidgetShell
+        title="Globale Suche"
+        description="Kunden, Rechnungen, Abos (Mollie-ID) durchsuchen"
+    >
         <AdminSearch />
-    </CardContent>
+    </AdminDashboardWidgetShell>
 </template>
