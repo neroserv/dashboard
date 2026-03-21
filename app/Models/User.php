@@ -405,6 +405,31 @@ class User extends Authenticatable
     }
 
     /**
+     * Partner records linked to this user account.
+     *
+     * @return HasMany<Partner>
+     */
+    public function partners(): HasMany
+    {
+        return $this->hasMany(Partner::class, 'user_id');
+    }
+
+    /**
+     * Whether the user has prioritized support via an active partner entry.
+     */
+    public function hasActivePartnerPrioritizedSupport(): bool
+    {
+        return $this->partners()
+            ->where('is_active', true)
+            ->where('prioritized_support', true)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->exists();
+    }
+
+    /**
      * Support tickets assigned to this user (as admin).
      *
      * @return HasMany<Ticket>

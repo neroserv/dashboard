@@ -66,12 +66,15 @@
                             <template v-else>{{ serviceName }}</template>
                         </p>
                         <p class="small mb-2"><span class="fw-semibold">Kategorie:</span> {{ ticketCategory?.name ?? '–' }}</p>
-                        <p class="small mb-0 d-flex align-items-center flex-wrap gap-1">
+                        <p class="small mb-2 d-flex align-items-center flex-wrap gap-1">
                             <span class="fw-semibold">Priorität:</span>
                             <BBadge v-if="ticketPriority" v-bind="ticketPriorityBadgeAttrs(ticketPriority)">
                                 {{ ticketPriority.name }}
                             </BBadge>
                             <span v-else>–</span>
+                        </p>
+                        <p v-if="ticket.prioritized_support" class="small mb-0">
+                            <BBadge variant="warning">Priorisierter Support (Partner)</BBadge>
                         </p>
                     </BCardBody>
                 </BCard>
@@ -123,19 +126,7 @@
                                             v-html="sanitizeHtml((item.data as Message).body ?? '')"
                                         />
                                         <div v-else class="small whitespace-pre-wrap">{{ (item.data as Message).body }}</div>
-                                        <div v-if="(item.data as Message).attachments?.length" class="mt-2 d-flex flex-wrap gap-2">
-                                            <a
-                                                v-for="att in (item.data as Message).attachments"
-                                                :key="att.id"
-                                                :href="att.download_url"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="btn btn-sm btn-outline-secondary"
-                                            >
-                                                <Icon icon="file-text" class="me-1" />
-                                                {{ att.name }}
-                                            </a>
-                                        </div>
+                                        <TicketMessageAttachments class="mt-2" :attachments="(item.data as Message).attachments ?? []" />
                                     </template>
                                     <p v-else class="small fst-italic text-muted mb-0">[ Interne Notiz – nur für Support sichtbar ]</p>
                                 </BCardBody>
@@ -226,15 +217,24 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
+import TicketMessageAttachments from '@/components/tickets/TicketMessageAttachments.vue';
 import { sanitizeHtml, isHtml } from '@/lib/sanitize';
 import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
 import support from '@/routes/support';
 
-type Ticket = { id: number; uuid: string; subject: string; status: string; created_at: string; updated_at: string };
+type Ticket = {
+    id: number;
+    uuid: string;
+    subject: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    prioritized_support?: boolean;
+};
 type TicketCategory = { id: number; name: string; slug: string } | null;
 type TicketPriority = { id: number; name: string; slug: string; color: string | null } | null;
 type Site = { uuid: string; name: string; slug: string } | null;
-type MessageAttachment = { id: number; name: string; download_url: string };
+type MessageAttachment = { id: number; name: string; download_url: string; preview?: 'image' | 'pdf' | null };
 
 type Message = {
     id: number;

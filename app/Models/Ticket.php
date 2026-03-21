@@ -23,6 +23,7 @@ class Ticket extends Model
         'user_id',
         'ticket_category_id',
         'ticket_priority_id',
+        'prioritized_support',
         'subject',
         'status',
         'assigned_to',
@@ -37,6 +38,7 @@ class Ticket extends Model
         return [
             'due_at' => 'datetime',
             'closed_at' => 'datetime',
+            'prioritized_support' => 'boolean',
         ];
     }
 

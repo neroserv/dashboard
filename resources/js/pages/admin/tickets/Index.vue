@@ -37,6 +37,7 @@ type Ticket = {
     status: string;
     created_at: string;
     updated_at: string;
+    prioritized_support?: boolean;
     user?: User;
     ticket_category?: TicketCategory;
     ticket_priority?: TicketPriority;
@@ -383,6 +384,7 @@ const tableFields = [
     { key: 'subject', label: 'Betreff', sortable: true },
     { key: 'category', label: 'Kategorie', sortable: true },
     { key: 'priority', label: 'Priorität', sortable: true },
+    { key: 'prioritized_support', label: 'Prio. Support', sortable: false, thClass: 'text-nowrap' },
     { key: 'site_name', label: 'Site', sortable: true },
     { key: 'status_display', label: 'Status', sortable: true },
     { key: 'assigned_to_name', label: 'Zugewiesen', sortable: true },
@@ -626,6 +628,10 @@ const tableFields = [
                                     {{ row.item.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else>–</span>
+                            </template>
+                            <template #cell(prioritized_support)="row">
+                                <BBadge v-if="row.item.prioritized_support" variant="warning">Ja</BBadge>
+                                <span v-else class="text-muted small">–</span>
                             </template>
                             <template #cell(site_name)="row">
                                 {{ row.item.service_display ?? '–' }}

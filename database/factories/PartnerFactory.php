@@ -24,6 +24,7 @@ class PartnerFactory extends Factory
             'discount_percent' => fake()->numberBetween(0, 30),
             'expires_at' => null,
             'is_active' => true,
+            'prioritized_support' => false,
         ];
     }
 }

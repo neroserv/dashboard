@@ -22,6 +22,7 @@ class Partner extends Model
         'discount_percent',
         'expires_at',
         'is_active',
+        'prioritized_support',
     ];
 
     /**
@@ -33,6 +34,7 @@ class Partner extends Model
             'discount_percent' => 'decimal:2',
             'expires_at' => 'datetime',
             'is_active' => 'boolean',
+            'prioritized_support' => 'boolean',
         ];
     }
 

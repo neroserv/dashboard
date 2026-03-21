@@ -3,10 +3,14 @@
 use App\Models\Brand;
 use App\Models\GameServerAccount;
 use App\Models\HostingPlan;
+use App\Models\Partner;
 use App\Models\Setting;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
+use App\Models\TicketMessage;
+use App\Models\TicketMessageAttachment;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 
 test('guests cannot access support index', function () {
     $response = $this->get(route('support.index'));
@@ -61,6 +65,31 @@ test('customers can only view own tickets', function () {
     $response->assertForbidden();
 });
 
+test('customers can load ticket attachment with inline disposition for images', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false]);
+    $category = TicketCategory::factory()->create();
+    $ticket = Ticket::factory()->create(['user_id' => $user->id, 'ticket_category_id' => $category->id]);
+    $message = TicketMessage::factory()->create([
+        'ticket_id' => $ticket->id,
+        'user_id' => $user->id,
+    ]);
+    $path = "ticket-attachments/{$ticket->id}/{$message->id}/pixel.png";
+    $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    Storage::disk('local')->put($path, $png);
+    $attachment = TicketMessageAttachment::create([
+        'ticket_message_id' => $message->id,
+        'name' => 'pixel.png',
+        'path' => $path,
+    ]);
+    $this->actingAs($user);
+
+    $response = $this->get(route('support.attachments.download', [$ticket, $attachment]).'?inline=1');
+
+    $response->assertOk();
+    expect($response->headers->get('Content-Disposition'))->toContain('inline');
+});
+
 test('customers can view and reply to own ticket', function () {
     Setting::set('support_enabled', '1');
     $user = User::factory()->create(['is_admin' => false]);
@@ -74,6 +103,91 @@ test('customers can view and reply to own ticket', function () {
     $response = $this->post(route('support.messages.store', $ticket), ['body' => 'Customer reply']);
     $response->assertRedirect(route('support.show', $ticket));
     $this->assertDatabaseHas('ticket_messages', ['ticket_id' => $ticket->id, 'body' => 'Customer reply']);
+});
+
+test('support ticket sets prioritized_support when user has active partner with flag', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false]);
+    $brand = Brand::create(['key' => 'prio-sup', 'name' => 'Prio Brand', 'is_default' => false]);
+    Partner::create([
+        'brand_id' => $brand->id,
+        'name' => 'Partner',
+        'discount_percent' => 0,
+        'is_active' => true,
+        'user_id' => $user->id,
+        'prioritized_support' => true,
+    ]);
+    $category = TicketCategory::factory()->create(['is_active' => true]);
+    $this->actingAs($user);
+
+    $this->post(route('support.store'), [
+        'subject' => 'Partner ticket',
+        'body' => 'Body',
+        'ticket_category_id' => $category->id,
+        'ticket_priority_id' => '',
+        'affected_services' => [],
+    ])->assertRedirect();
+
+    $ticket = Ticket::query()->where('user_id', $user->id)->where('subject', 'Partner ticket')->first();
+    expect($ticket)->not->toBeNull();
+    expect($ticket->prioritized_support)->toBeTrue();
+});
+
+test('support ticket does not set prioritized_support when partner is expired', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false]);
+    $brand = Brand::create(['key' => 'prio-exp', 'name' => 'Prio Exp', 'is_default' => false]);
+    Partner::create([
+        'brand_id' => $brand->id,
+        'name' => 'Partner',
+        'discount_percent' => 0,
+        'is_active' => true,
+        'user_id' => $user->id,
+        'prioritized_support' => true,
+        'expires_at' => now()->subDay(),
+    ]);
+    $category = TicketCategory::factory()->create(['is_active' => true]);
+    $this->actingAs($user);
+
+    $this->post(route('support.store'), [
+        'subject' => 'Expired partner ticket',
+        'body' => 'Body',
+        'ticket_category_id' => $category->id,
+        'ticket_priority_id' => '',
+        'affected_services' => [],
+    ])->assertRedirect();
+
+    $ticket = Ticket::query()->where('user_id', $user->id)->where('subject', 'Expired partner ticket')->first();
+    expect($ticket)->not->toBeNull();
+    expect($ticket->prioritized_support)->toBeFalse();
+});
+
+test('support ticket does not set prioritized_support when partner flag is off', function () {
+    Setting::set('support_enabled', '1');
+    $user = User::factory()->create(['is_admin' => false]);
+    $brand = Brand::create(['key' => 'prio-off', 'name' => 'Prio Off', 'is_default' => false]);
+    Partner::create([
+        'brand_id' => $brand->id,
+        'name' => 'Partner',
+        'discount_percent' => 0,
+        'is_active' => true,
+        'user_id' => $user->id,
+        'prioritized_support' => false,
+    ]);
+    $category = TicketCategory::factory()->create(['is_active' => true]);
+    $this->actingAs($user);
+
+    $this->post(route('support.store'), [
+        'subject' => 'Normal ticket',
+        'body' => 'Body',
+        'ticket_category_id' => $category->id,
+        'ticket_priority_id' => '',
+        'affected_services' => [],
+    ])->assertRedirect();
+
+    $ticket = Ticket::query()->where('user_id', $user->id)->where('subject', 'Normal ticket')->first();
+    expect($ticket)->not->toBeNull();
+    expect($ticket->prioritized_support)->toBeFalse();
 });
 
 test('customer cannot use service type when brand feature is disabled', function () {

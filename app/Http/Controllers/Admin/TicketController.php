@@ -22,13 +22,14 @@ use App\Models\TicketTimeLog;
 use App\Models\TicketTodo;
 use App\Models\User;
 use App\Notifications\TicketReplyNotification;
+use App\Support\TicketAttachmentPreview;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
@@ -299,6 +300,7 @@ class TicketController extends Controller
             $ticketArray['messages'][$i]['attachments'] = $message->attachments->map(fn ($a) => [
                 'id' => $a->id,
                 'name' => $a->name,
+                'preview' => TicketAttachmentPreview::previewKind($a),
                 'download_url' => route('admin.tickets.attachments.download', ['ticket' => $ticket, 'attachment' => $a->id]),
             ])->values()->all();
         }
@@ -434,17 +436,14 @@ class TicketController extends Controller
         }
     }
 
-    public function downloadAttachment(Request $request, Ticket $ticket, TicketMessageAttachment $attachment): StreamedResponse|RedirectResponse
+    public function downloadAttachment(Request $request, Ticket $ticket, TicketMessageAttachment $attachment): BinaryFileResponse|StreamedResponse|RedirectResponse
     {
         $attachment->load('ticketMessage');
         if ($attachment->ticketMessage->ticket_id !== $ticket->id) {
             abort(404);
         }
-        if (! Storage::disk('local')->exists($attachment->path)) {
-            abort(404);
-        }
 
-        return Storage::disk('local')->download($attachment->path, $attachment->name);
+        return TicketAttachmentPreview::downloadResponse($attachment, $request);
     }
 
     public function update(UpdateTicketRequest $request, Ticket $ticket): RedirectResponse

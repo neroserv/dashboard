@@ -24,6 +24,7 @@ import {
 import InputError from '@/components/InputError.vue';
 import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import TicketReplyEditor from '@/components/TicketReplyEditor.vue';
+import TicketMessageAttachments from '@/components/tickets/TicketMessageAttachments.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
@@ -36,7 +37,7 @@ import type { BreadcrumbItem } from '@/types';
 type UserType = { id: number; name: string; email?: string; is_admin?: boolean; avatar?: string };
 type TicketCategory = { id: number; name: string; slug: string };
 type TicketPriority = { id: number; name: string; slug: string; color: string | null };
-type MessageAttachment = { id: number; name: string; download_url: string };
+type MessageAttachment = { id: number; name: string; download_url: string; preview?: 'image' | 'pdf' | null };
 type Message = {
     id: number;
     body: string;
@@ -63,6 +64,7 @@ type Ticket = {
     user_id: number;
     ticket_category_id: number;
     ticket_priority_id: number | null;
+    prioritized_support?: boolean;
     assigned_to: number | null;
     created_at: string;
     user?: UserType;
@@ -374,6 +376,9 @@ onMounted(() => {
                 <BAlert v-if="isAssignedToCurrentUser" variant="primary" show class="mt-2 mb-3 py-2 small ticket-assigned-alert">
                     Dieses Ticket ist dir zugewiesen.
                 </BAlert>
+                <BAlert v-if="ticket.prioritized_support" variant="warning" show class="mb-3 py-2 small">
+                    Dieses Ticket wurde mit <strong>Priorisiertem Support</strong> (Partner) erstellt.
+                </BAlert>
             </BCol>
         </BRow>
 
@@ -446,6 +451,10 @@ onMounted(() => {
                                     {{ ticket.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else class="small">–</span>
+                            </div>
+                            <div v-if="ticket.prioritized_support">
+                                <p class="mb-1 fw-semibold small">Priorisierter Support</p>
+                                <BBadge variant="warning">Partner / priorisiert</BBadge>
                             </div>
                             <div>
                                 <p class="mb-1 fw-semibold small">Erstellt am</p>
@@ -638,19 +647,7 @@ onMounted(() => {
                                         v-html="sanitizeHtml((item.data as Message).body ?? '')"
                                     />
                                     <div v-else class="small text-break whitespace-pre-wrap">{{ (item.data as Message).body }}</div>
-                                    <div v-if="(item.data as Message).attachments?.length" class="mt-3 d-flex flex-wrap gap-2">
-                                        <a
-                                            v-for="att in (item.data as Message).attachments"
-                                            :key="att.id"
-                                            :href="att.download_url"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 text-decoration-none"
-                                        >
-                                            <Icon :icon="!/\.(jpe?g|png|webp)$/i.test(att.name) ? 'file-text' : 'photo'" />
-                                            <span class="text-truncate" style="max-width: 200px">{{ att.name }}</span>
-                                        </a>
-                                    </div>
+                                    <TicketMessageAttachments class="mt-3" :attachments="(item.data as Message).attachments ?? []" />
                                 </BCardBody>
                             </BCard>
                             <BCard v-else no-body :class="activityCardClasses((item.data as ActivityLog).action_type)">

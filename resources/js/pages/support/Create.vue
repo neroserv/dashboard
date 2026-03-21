@@ -64,6 +64,10 @@
                         Neues Support-Ticket erstellen
                     </BCardHeader>
                     <BCardBody>
+                        <BAlert v-if="props.hasPartnerPrioritizedSupport" variant="info" show class="mb-3">
+                            Über deinen Partner-Status erhältst du für dieses neue Ticket automatisch
+                            <strong>Priorisierten Support</strong> (zusätzlich zur gewählten Ticket-Priorität).
+                        </BAlert>
                         <BForm @submit.prevent="form.post(store.url())">
                             <BRow>
                                 <BCol md="8" class="mb-3">
@@ -209,6 +213,7 @@ import {
     BFormCheckbox,
     BFormTextarea,
     BButton,
+    BAlert,
 } from 'bootstrap-vue-next';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
@@ -234,6 +239,7 @@ const props = defineProps<{
     services: ServicesPayload;
     categories: Category[];
     priorities: Priority[];
+    hasPartnerPrioritizedSupport?: boolean;
 }>();
 
 type AffectedService = { type: string; id: number };

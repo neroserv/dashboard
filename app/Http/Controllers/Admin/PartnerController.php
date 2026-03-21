@@ -49,6 +49,7 @@ class PartnerController extends Controller
     {
         $validated = $request->validated();
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['prioritized_support'] = $request->boolean('prioritized_support');
         $validated['expires_at'] = $request->filled('expires_at') ? $request->expires_at : null;
         $validated['user_id'] = $request->filled('user_id') ? (int) $request->user_id : null;
         unset($validated['image']);
@@ -82,6 +83,7 @@ class PartnerController extends Controller
     {
         $validated = $request->validated();
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['prioritized_support'] = $request->boolean('prioritized_support');
         $validated['expires_at'] = $request->filled('expires_at') ? $request->expires_at : null;
         $validated['user_id'] = $request->filled('user_id') ? (int) $request->user_id : null;
         unset($validated['image']);

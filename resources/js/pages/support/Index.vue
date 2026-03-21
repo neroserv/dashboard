@@ -33,6 +33,10 @@
                             show-empty
                             empty-text="Keine Tickets."
                         >
+                            <template #cell(prioritized_support)="row">
+                                <BBadge v-if="row.item.prioritized_support" variant="warning">Ja</BBadge>
+                                <span v-else class="text-muted small">–</span>
+                            </template>
                             <template #cell(ticket_category)="row">
                                 {{ row.item.ticket_category?.name ?? '–' }}
                             </template>
@@ -104,6 +108,7 @@ type Ticket = {
     subject: string;
     status: string;
     created_at: string;
+    prioritized_support?: boolean;
     ticket_category?: TicketCategory;
     ticket_priority?: TicketPriority;
     site?: Site;

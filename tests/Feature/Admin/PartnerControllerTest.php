@@ -40,6 +40,26 @@ test('admin users can create partner', function () {
         'brand_id' => $brand->id,
         'discount_percent' => 10,
         'is_active' => true,
+        'prioritized_support' => false,
+    ]);
+});
+
+test('admin users can create partner with prioritized support', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $brand = Brand::create(['key' => 'test2', 'name' => 'Test2', 'is_default' => false]);
+    $this->actingAs($admin);
+
+    $response = $this->post(route('admin.partners.store'), [
+        'brand_id' => $brand->id,
+        'name' => 'VIP Partner',
+        'discount_percent' => 5,
+        'is_active' => true,
+        'prioritized_support' => true,
+    ]);
+    $response->assertRedirect(route('admin.partners.index'));
+    $this->assertDatabaseHas('partners', [
+        'name' => 'VIP Partner',
+        'prioritized_support' => true,
     ]);
 });
 

@@ -25,6 +25,7 @@ class UpdatePartnerRequest extends FormRequest
             'discount_percent' => ['required', 'numeric', 'min:0', 'max:100'],
             'expires_at' => ['nullable', 'date'],
             'is_active' => ['boolean'],
+            'prioritized_support' => ['sometimes', 'boolean'],
         ];
     }
 }

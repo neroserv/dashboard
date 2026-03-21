@@ -38,6 +38,7 @@ const form = useForm({
     discount_percent: '0',
     expires_at: '',
     is_active: true,
+    prioritized_support: false,
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -167,6 +168,15 @@ const userOptions = computed(() => [
                                 <BFormCheckbox id="is_active" v-model="form.is_active">
                                     Aktiv
                                 </BFormCheckbox>
+                            </BFormGroup>
+                            <BFormGroup>
+                                <BFormCheckbox id="prioritized_support" v-model="form.prioritized_support">
+                                    Priorisierter Support für verknüpften Nutzer
+                                </BFormCheckbox>
+                                <p class="text-muted small mb-0 mt-1">
+                                    Wenn aktiv und ein Nutzer zugewiesen ist, erhalten neue Support-Tickets dieses Nutzers
+                                    automatisch das Kennzeichen „Priorisierter Support“.
+                                </p>
                             </BFormGroup>
                             <div class="d-flex gap-2 pt-3">
                                 <BButton type="submit" variant="primary" :disabled="form.processing">

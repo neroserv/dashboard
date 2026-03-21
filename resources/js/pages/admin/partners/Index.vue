@@ -27,6 +27,7 @@ type Partner = {
     discount_percent: string;
     expires_at: string | null;
     is_active: boolean;
+    prioritized_support: boolean;
     brand: Brand;
     user: User;
 };
@@ -75,6 +76,7 @@ const tableFields = [
     { key: 'user_display', label: 'Nutzer', sortable: false },
     { key: 'expires_at', label: 'Ablauf', sortable: false },
     { key: 'is_active', label: 'Aktiv', sortable: false },
+    { key: 'prioritized_support', label: 'Prio. Support', sortable: false },
     { key: 'actions', label: 'Aktionen', sortable: false, thClass: 'text-end' },
 ];
 </script>
@@ -143,6 +145,11 @@ const tableFields = [
                             <template #cell(is_active)="row">
                                 <BBadge :variant="row.item.is_active ? 'success' : 'secondary'">
                                     {{ row.item.is_active ? 'Ja' : 'Nein' }}
+                                </BBadge>
+                            </template>
+                            <template #cell(prioritized_support)="row">
+                                <BBadge :variant="row.item.prioritized_support ? 'warning' : 'secondary'">
+                                    {{ row.item.prioritized_support ? 'Ja' : 'Nein' }}
                                 </BBadge>
                             </template>
                             <template #cell(actions)="row">

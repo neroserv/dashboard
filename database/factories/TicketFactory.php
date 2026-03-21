@@ -24,6 +24,7 @@ class TicketFactory extends Factory
             'user_id' => User::factory(),
             'ticket_category_id' => TicketCategory::factory(),
             'ticket_priority_id' => TicketPriority::factory(),
+            'prioritized_support' => false,
             'subject' => fake()->sentence(),
             'status' => 'open',
         ];

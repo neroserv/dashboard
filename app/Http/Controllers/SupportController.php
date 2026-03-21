@@ -15,11 +15,12 @@ use App\Models\TicketService;
 use App\Models\User;
 use App\Notifications\TicketAdminReplyNotification;
 use App\Notifications\TicketCreatedNotification;
+use App\Support\TicketAttachmentPreview;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupportController extends Controller
@@ -97,6 +98,7 @@ class SupportController extends Controller
             'services' => $services,
             'categories' => $categories,
             'priorities' => $priorities,
+            'hasPartnerPrioritizedSupport' => $user->hasActivePartnerPrioritizedSupport(),
         ]);
     }
 
@@ -118,6 +120,7 @@ class SupportController extends Controller
             'user_id' => $request->user()->id,
             'ticket_category_id' => $validated['ticket_category_id'],
             'ticket_priority_id' => $validated['ticket_priority_id'] ?? null,
+            'prioritized_support' => $request->user()->hasActivePartnerPrioritizedSupport(),
             'subject' => $validated['subject'],
             'status' => 'open',
         ]);
@@ -150,7 +153,7 @@ class SupportController extends Controller
             'ticketServices',
             'messages' => fn ($q) => $q->with(['user:id,name,is_admin,avatar_path', 'attachments'])->orderBy('created_at'),
         ]);
-        $messages = $ticket->messages->map(function ($msg) use ($request) {
+        $messages = $ticket->messages->map(function ($msg) use ($request, $ticket) {
             $arr = $msg->toArray();
             if ($msg->is_internal && ! $request->user()?->isAdmin()) {
                 $arr['body'] = null;
@@ -159,6 +162,7 @@ class SupportController extends Controller
             $arr['attachments'] = $msg->attachments->map(fn ($a) => [
                 'id' => $a->id,
                 'name' => $a->name,
+                'preview' => TicketAttachmentPreview::previewKind($a),
                 'download_url' => route('support.attachments.download', ['ticket' => $ticket, 'attachment' => $a->id]),
             ])->values()->all();
 
@@ -206,7 +210,7 @@ class SupportController extends Controller
             : 'Allgemein / Kein Dienst';
 
         return Inertia::render('support/Show', [
-            'ticket' => $ticket->only(['id', 'uuid', 'subject', 'status', 'created_at', 'updated_at', 'ticket_category_id', 'ticket_priority_id']),
+            'ticket' => $ticket->only(['id', 'uuid', 'subject', 'status', 'created_at', 'updated_at', 'ticket_category_id', 'ticket_priority_id', 'prioritized_support']),
             'ticketCategory' => $ticket->ticketCategory?->only(['id', 'name', 'slug']),
             'ticketPriority' => $ticket->ticketPriority?->only(['id', 'name', 'slug', 'color']),
             'statusLabel' => $statusLabels[$ticket->status] ?? $ticket->status,
@@ -252,7 +256,7 @@ class SupportController extends Controller
         return redirect()->route('support.show', $ticket)->with('success', 'Nachricht gesendet.');
     }
 
-    public function downloadAttachment(Request $request, Ticket $ticket, TicketMessageAttachment $attachment): StreamedResponse|RedirectResponse
+    public function downloadAttachment(Request $request, Ticket $ticket, TicketMessageAttachment $attachment): BinaryFileResponse|StreamedResponse|RedirectResponse
     {
         $this->authorize('view', $ticket);
         if ($ticket->user_id !== $request->user()->id) {
@@ -261,11 +265,8 @@ class SupportController extends Controller
         if ($attachment->ticketMessage->ticket_id !== $ticket->id) {
             abort(404);
         }
-        if (! Storage::disk('local')->exists($attachment->path)) {
-            abort(404);
-        }
 
-        return Storage::disk('local')->download($attachment->path, $attachment->name);
+        return TicketAttachmentPreview::downloadResponse($attachment, $request);
     }
 
     private function user()
