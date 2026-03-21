@@ -73,8 +73,12 @@
                             </BBadge>
                             <span v-else>–</span>
                         </p>
-                        <p v-if="ticket.prioritized_support" class="small mb-0">
-                            <BBadge variant="warning">Priorisierter Support (Partner)</BBadge>
+                        <p v-if="ticket.prioritized_support" class="small mb-0 mt-2">
+                            <span
+                                class="inline-flex rounded-md border-2 border-amber-800 bg-amber-200 px-2.5 py-1 text-xs font-semibold text-amber-950 dark:border-amber-400 dark:bg-amber-950 dark:text-amber-50"
+                            >
+                                Priorisierter Support
+                            </span>
                         </p>
                     </BCardBody>
                 </BCard>

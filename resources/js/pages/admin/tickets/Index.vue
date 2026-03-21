@@ -384,7 +384,6 @@ const tableFields = [
     { key: 'subject', label: 'Betreff', sortable: true },
     { key: 'category', label: 'Kategorie', sortable: true },
     { key: 'priority', label: 'Priorität', sortable: true },
-    { key: 'prioritized_support', label: 'Prio. Support', sortable: false, thClass: 'text-nowrap' },
     { key: 'site_name', label: 'Site', sortable: true },
     { key: 'status_display', label: 'Status', sortable: true },
     { key: 'assigned_to_name', label: 'Zugewiesen', sortable: true },
@@ -612,13 +611,33 @@ const tableFields = [
                                         class="flex-shrink-0"
                                     />
                                     <div class="min-w-0">
-                                        <span class="d-block text-truncate">{{ row.item.user.name }}</span>
+                                        <div class="d-flex align-items-center gap-1 min-w-0">
+                                            <Icon
+                                                v-if="row.item.prioritized_support"
+                                                icon="star"
+                                                class="flex-shrink-0 text-warning"
+                                                width="18"
+                                                height="18"
+                                                aria-label="Priorisierter Support"
+                                            />
+                                            <span class="d-block text-truncate">{{ row.item.user.name }}</span>
+                                        </div>
                                         <span v-if="row.item.user.email" class="small text-muted d-block text-truncate">{{
                                             row.item.user.email
                                         }}</span>
                                     </div>
                                 </div>
-                                <span v-else>–</span>
+                                <div v-else class="d-flex align-items-center gap-1">
+                                    <Icon
+                                        v-if="row.item.prioritized_support"
+                                        icon="star"
+                                        class="flex-shrink-0 text-warning"
+                                        width="18"
+                                        height="18"
+                                        aria-label="Priorisierter Support"
+                                    />
+                                    <span>–</span>
+                                </div>
                             </template>
                             <template #cell(category)="row">
                                 {{ row.item.ticket_category?.name ?? '–' }}
@@ -628,10 +647,6 @@ const tableFields = [
                                     {{ row.item.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else>–</span>
-                            </template>
-                            <template #cell(prioritized_support)="row">
-                                <BBadge v-if="row.item.prioritized_support" variant="warning">Ja</BBadge>
-                                <span v-else class="text-muted small">–</span>
                             </template>
                             <template #cell(site_name)="row">
                                 {{ row.item.service_display ?? '–' }}

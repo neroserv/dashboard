@@ -34,7 +34,12 @@
                             empty-text="Keine Tickets."
                         >
                             <template #cell(prioritized_support)="row">
-                                <BBadge v-if="row.item.prioritized_support" variant="warning">Ja</BBadge>
+                                <span
+                                    v-if="row.item.prioritized_support"
+                                    class="inline-flex rounded border-2 border-amber-800 bg-amber-200 px-1.5 py-0.5 text-xs font-semibold text-amber-950 dark:border-amber-400 dark:bg-amber-950 dark:text-amber-50"
+                                >
+                                    Ja
+                                </span>
                                 <span v-else class="text-muted small">–</span>
                             </template>
                             <template #cell(ticket_category)="row">
