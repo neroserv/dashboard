@@ -94,7 +94,7 @@ provide('closeMobileSidebar', closeMobileSidebar);
             ]"
         >
             <component :is="props.headerComponent" :breadcrumbs="breadcrumbs" :user="user" />
-            <main class="flex-1 p-4 sm:p-6">
+            <main class="flex-1 p-4 sm:p-12">
                 <slot />
             </main>
         </div>

@@ -16,4 +16,5 @@ import { useLayout } from '@/stores/layout';
 
 const layoutStore = useLayout();
 const { layout } = storeToRefs(layoutStore);
+
 </script>

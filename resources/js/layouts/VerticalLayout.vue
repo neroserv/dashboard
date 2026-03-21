@@ -6,7 +6,7 @@
         <Sidenav v-else />
 
         <div class="content-page">
-            <BContainer fluid>
+            <BContainer fluid class="p-4 sm:p-12">
                 <slot />
             </BContainer>
             <Footer />

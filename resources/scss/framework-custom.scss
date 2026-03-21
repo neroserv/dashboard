@@ -511,6 +511,114 @@ $value in $theme-colors {
     padding-inline-end: 6px;
 }
 
+// Theme (light/dark/system) dropdown: no default filled button, centered icon, even horizontal padding
+#theme-dropdown {
+    .topbar-theme-dropdown-toggle {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.5rem;
+        height: 100%;
+        padding-inline: 10px !important;
+        padding-block: 0 !important;
+        margin: 0;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: inherit;
+
+        &:hover,
+        &:focus-visible {
+            color: $topbar-item-hover-color !important;
+        }
+    }
+
+    .topbar-theme-dropdown-toggle-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+    }
+
+    .topbar-theme-dropdown-menu {
+        min-width: 11rem;
+    }
+
+    .topbar-theme-dropdown-item {
+        font-size: 0.9375rem;
+    }
+}
+
+// User menu (topbar): flat toggle, balanced layout, readable menu
+#user-dropdown-detailed {
+    max-width: min(18rem, 42vw);
+
+    .topbar-user-dropdown-toggle {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 0.5rem;
+        height: 100%;
+        padding-inline: 6px 10px !important;
+        padding-block: 0 !important;
+        margin: 0;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: inherit;
+        text-align: start;
+
+        &:hover,
+        &:focus-visible {
+            color: $topbar-item-hover-color !important;
+        }
+    }
+
+    .topbar-user-avatar,
+    .topbar-user-avatar-wrap img {
+        object-fit: cover;
+    }
+
+    .topbar-user-name {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        line-height: 1.2;
+        color: inherit;
+    }
+
+    .topbar-user-subline {
+        font-size: 0.75rem;
+        line-height: 1.2;
+    }
+
+    .topbar-user-balance-icon {
+        width: 0.95em;
+        height: 0.95em;
+    }
+
+    .topbar-user-chevron {
+        width: 1em;
+        height: 1em;
+    }
+
+    .topbar-user-dropdown-menu {
+        min-width: 14rem;
+        max-width: min(20rem, calc(100vw - 1.5rem));
+    }
+
+    .topbar-user-dropdown-header {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--#{$prefix}secondary-color);
+    }
+
+    .topbar-user-menu-item {
+        font-size: 0.9375rem;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+}
+
 //Jvector
 .jvm-zoom-btn {
     line-height: 14px;

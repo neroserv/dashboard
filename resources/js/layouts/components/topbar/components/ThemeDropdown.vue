@@ -3,25 +3,33 @@
     <BDropdown
       v-model="isOpen"
       teleport-disabled
-      toggle-class="topbar-link drop-arrow-none"
+      :variant="null"
+      no-caret
+      toggle-class="topbar-link topbar-theme-dropdown-toggle drop-arrow-none"
+      menu-class="topbar-theme-dropdown-menu dropdown-menu-end border-0 shadow py-2"
       placement="bottom-end"
-      offset="5"
+      offset="6"
     >
       <template #button-content>
-        <span class="topbar-link-icon">
+        <span class="topbar-link-icon topbar-theme-dropdown-toggle-icon">
           <Icon v-if="layout.theme === 'light'" icon="sun" />
           <Icon v-else-if="layout.theme === 'dark'" icon="moon" />
           <Icon v-else icon="sun-moon" />
         </span>
       </template>
       <template v-if="isOpen">
-      <BDropdownItem class="cursor-pointer" v-for="(theme, idx) in layoutThemes" :active="theme === layout.theme" @click="setTheme(theme)" :key="idx">
-        <input class="form-check-input" type="radio" name="data-bs-theme" value="light" style="display: none" />
-        <Icon v-if="theme === 'light'" icon="sun" class="align-middle me-1 fs-16" />
-        <Icon v-else-if="theme === 'dark'" icon="moon" class="align-middle me-1 fs-16" />
-        <Icon v-else icon="sun-moon" class="align-middle me-1 fs-16" />
-        <span class="align-middle">{{ toPascalCase(theme) }}</span>
-      </BDropdownItem>
+        <BDropdownItem
+          v-for="(theme, idx) in layoutThemes"
+          :key="idx"
+          class="cursor-pointer topbar-theme-dropdown-item d-flex align-items-center gap-2 px-3 py-2"
+          :active="theme === layout.theme"
+          @click="setTheme(theme)"
+        >
+          <Icon v-if="theme === 'light'" icon="sun" class="flex-shrink-0 fs-16" />
+          <Icon v-else-if="theme === 'dark'" icon="moon" class="flex-shrink-0 fs-16" />
+          <Icon v-else icon="sun-moon" class="flex-shrink-0 fs-16" />
+          <span>{{ toPascalCase(theme) }}</span>
+        </BDropdownItem>
       </template>
     </BDropdown>
   </div>

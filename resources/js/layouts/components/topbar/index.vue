@@ -41,17 +41,11 @@
       <div class="d-flex align-items-center gap-2">
         <ThemeDropdown />
 
-        <AppsDropdownGrid />
-
         <NotificationDropdownPeople />
 
         <FullscreenToggler />
 
         <MonochromeToggler />
-
-        <CustomizerToggler />
-
-        <LanguageSelectorRounded />
 
         <UserDropdownDetailed />
       </div>
@@ -65,10 +59,7 @@ import { ref, onMounted, onUnmounted, provide } from 'vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import { useBrandLogos } from '@/composables/useBrandLogos';
 import { topbarDropdownKey } from '@/composables/useTopbarDropdown';
-import AppsDropdownGrid from './components/AppsDropdownGrid.vue';
-import CustomizerToggler from './components/CustomizerToggler.vue';
 import FullscreenToggler from './components/FullscreenToggler.vue';
-import LanguageSelectorRounded from './components/LanguageSelectorRounded.vue';
 import MegamenuApps from './components/MegamenuApps.vue';
 import MegamenuColumns from './components/MegamenuColumns.vue';
 import MenuToggler from './components/MenuToggler.vue';

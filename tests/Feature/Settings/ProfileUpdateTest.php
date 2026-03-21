@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -135,6 +137,83 @@ test('hasCompleteBillingProfile returns true when company is null', function () 
     ]);
 
     expect($user->hasCompleteBillingProfile())->toBeTrue();
+});
+
+test('profile avatar can be uploaded', function () {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+    $file = UploadedFile::fake()->image('avatar.jpg', 100, 100);
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('profile.avatar.update'), [
+            'avatar' => $file,
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $user->refresh();
+
+    expect($user->avatar_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($user->avatar_path);
+});
+
+test('profile avatar upload replaces existing file', function () {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+
+    $first = UploadedFile::fake()->image('first.jpg', 80, 80);
+    $this->actingAs($user)->post(route('profile.avatar.update'), ['avatar' => $first]);
+    $oldPath = $user->fresh()->avatar_path;
+
+    $second = UploadedFile::fake()->image('second.jpg', 80, 80);
+    $this->actingAs($user)->post(route('profile.avatar.update'), ['avatar' => $second]);
+
+    $user->refresh();
+
+    expect($user->avatar_path)->not->toBe($oldPath);
+    Storage::disk('public')->assertMissing($oldPath);
+    Storage::disk('public')->assertExists($user->avatar_path);
+});
+
+test('profile avatar upload validates image', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('profile.avatar.update'), [
+            'avatar' => UploadedFile::fake()->create('document.pdf', 100, 'application/pdf'),
+        ]);
+
+    $response->assertSessionHasErrors('avatar');
+});
+
+test('profile avatar can be removed', function () {
+    Storage::fake('public');
+
+    $path = 'avatars/1/avatar.jpg';
+    Storage::disk('public')->put($path, 'fake-image-bytes');
+
+    $user = User::factory()->create([
+        'avatar_path' => $path,
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->delete(route('profile.avatar.destroy'));
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect($user->fresh()->avatar_path)->toBeNull();
+    Storage::disk('public')->assertMissing($path);
 });
 
 test('correct password must be provided to delete account', function () {

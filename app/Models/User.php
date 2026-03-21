@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Lab404\Impersonate\Models\Impersonate;
 use Laravel\Cashier\Billable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -64,6 +66,7 @@ class User extends Authenticatable
         'two_factor_secret',
         'two_factor_recovery_codes',
         'remember_token',
+        'avatar_path',
     ];
 
     /**
@@ -90,7 +93,23 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $appends = ['has_pin'];
+    protected $appends = ['has_pin', 'avatar'];
+
+    /**
+     * Public URL for the profile photo (storage), or null if none.
+     */
+    protected function avatar(): Attribute
+    {
+        return Attribute::make(
+            get: function (): ?string {
+                if ($this->avatar_path === null || $this->avatar_path === '') {
+                    return null;
+                }
+
+                return Storage::disk('public')->url($this->avatar_path);
+            },
+        );
+    }
 
     /**
      * Whether the user has a PIN set (for frontend without exposing pin_hash).

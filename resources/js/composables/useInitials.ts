@@ -2,15 +2,25 @@ export type UseInitialsReturn = {
     getInitials: (fullName?: string) => string;
 };
 
+/**
+ * First letter of each word (e.g. "Alessio Meier" → "AM", "Sven Oliver Zimmer" → "SOZ").
+ */
 export function getInitials(fullName?: string): string {
-    if (!fullName) return '';
+    if (!fullName?.trim()) {
+        return '?';
+    }
 
-    const names = fullName.trim().split(' ');
+    const parts = fullName
+        .trim()
+        .split(/\s+/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
 
-    if (names.length === 0) return '';
-    if (names.length === 1) return names[0].charAt(0).toUpperCase();
+    if (parts.length === 0) {
+        return '?';
+    }
 
-    return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
+    return parts.map((p) => p.charAt(0).toUpperCase()).join('');
 }
 
 export function useInitials(): UseInitialsReturn {
