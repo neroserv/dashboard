@@ -425,6 +425,7 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::post('customers/{customer}/ai-tokens', [CustomerController::class, 'storeAiTokens'])->name('customers.ai-tokens.store');
 
     Route::get('tickets', [TicketController::class, 'index'])->name('tickets.index');
+    Route::post('tickets/bulk', [TicketController::class, 'bulk'])->name('tickets.bulk');
     Route::get('tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
     Route::put('tickets/{ticket}', [TicketController::class, 'update'])->name('tickets.update');
     Route::post('tickets/{ticket}/messages', [TicketController::class, 'storeMessage'])->name('tickets.messages.store');

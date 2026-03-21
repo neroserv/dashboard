@@ -26,6 +26,7 @@ import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import TicketReplyEditor from '@/components/TicketReplyEditor.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
 import { isHtml, sanitizeHtml } from '@/lib/sanitize';
 import { dashboard } from '@/routes';
 import adminCustomers from '@/routes/admin/customers';
@@ -441,7 +442,10 @@ onMounted(() => {
                             </div>
                             <div>
                                 <p class="mb-1 fw-semibold small">Priorität</p>
-                                <span class="small">{{ ticket.ticket_priority?.name ?? '–' }}</span>
+                                <BBadge v-if="ticket.ticket_priority" v-bind="ticketPriorityBadgeAttrs(ticket.ticket_priority)">
+                                    {{ ticket.ticket_priority.name }}
+                                </BBadge>
+                                <span v-else class="small">–</span>
                             </div>
                             <div>
                                 <p class="mb-1 fw-semibold small">Erstellt am</p>

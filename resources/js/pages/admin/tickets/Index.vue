@@ -1,7 +1,7 @@
 <!-- Admin: Support-Tickets-Übersicht -->
 <script setup lang="ts">
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, reactive, watch } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, reactive, ref, watch } from 'vue';
 import {
     BRow,
     BCol,
@@ -18,10 +18,12 @@ import {
     BFormCheckbox,
 } from 'bootstrap-vue-next';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import InputError from '@/components/InputError.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import { dashboard } from '@/routes';
 import adminTickets from '@/routes/admin/tickets';
+import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
 import type { BreadcrumbItem } from '@/types';
 
 type User = { id: number; name: string; email?: string; avatar?: string | null };
@@ -41,6 +43,8 @@ type Ticket = {
     /** Betroffene Dienste (aus ticket_services), z. B. Domain/Webspace-Namen */
     service_display?: string;
     assigned_to?: User | null;
+    /** Letzte Nachricht stammt von einem Nicht-Admin (i. d. R. Kunde), analog zur Ticket-Detailseite */
+    last_message_from_customer?: boolean;
 };
 
 type TableState = {
@@ -63,7 +67,152 @@ type Props = {
     tableState: TableState;
 };
 
+type BulkAction = '' | 'assign' | 'status' | 'priority' | 'category';
+
 const props = defineProps<Props>();
+
+const selectedTicketIds = ref<number[]>([]);
+
+const pageTicketIds = computed(() => props.tickets.data.map((t) => t.id));
+
+const allPageSelected = computed(
+    () =>
+        pageTicketIds.value.length > 0 &&
+        pageTicketIds.value.every((id) => selectedTicketIds.value.includes(id)),
+);
+
+const somePageSelected = computed(() => {
+    const onPage = pageTicketIds.value;
+    if (onPage.length === 0) {
+        return false;
+    }
+    const n = onPage.filter((id) => selectedTicketIds.value.includes(id)).length;
+
+    return n > 0 && n < onPage.length;
+});
+
+watch(
+    () => props.tickets.data,
+    () => {
+        selectedTicketIds.value = [];
+    },
+);
+
+const bulkForm = useForm({
+    action: '' as BulkAction,
+    ticket_ids: [] as number[],
+    assigned_to: '',
+    status: '',
+    ticket_priority_id: '',
+    ticket_category_id: '',
+});
+
+const bulkActionOptions = [
+    { value: '', text: 'Aktion wählen…' },
+    { value: 'assign', text: 'Zuweisen an …' },
+    { value: 'status', text: 'Status setzen' },
+    { value: 'priority', text: 'Priorität setzen' },
+    { value: 'category', text: 'Kategorie setzen' },
+];
+
+const assigneeOptions = computed(() => [
+    { value: '', text: 'Nicht zugewiesen' },
+    ...props.admins.map((a) => ({ value: String(a.id), text: a.name })),
+]);
+
+const assignedToFilterOptions = computed(() => [
+    { value: '', text: 'Alle' },
+    { value: '0', text: 'Nicht zugewiesen' },
+    ...props.admins.map((a) => ({ value: String(a.id), text: a.name })),
+]);
+
+const bulkPriorityOptions = computed(() => [
+    { value: '', text: 'Keine Priorität' },
+    ...props.priorities
+        .filter((p): p is NonNullable<typeof p> => p != null)
+        .map((p) => ({ value: String(p.id), text: p.name })),
+]);
+
+const canSubmitBulk = computed((): boolean => {
+    if (selectedTicketIds.value.length === 0 || !bulkForm.action) {
+        return false;
+    }
+    switch (bulkForm.action) {
+        case 'assign':
+            return true;
+        case 'status':
+            return bulkForm.status !== '';
+        case 'priority':
+            return true;
+        case 'category':
+            return bulkForm.ticket_category_id !== '';
+        default:
+            return false;
+    }
+});
+
+function clearTicketSelection(): void {
+    selectedTicketIds.value = [];
+}
+
+function setSelectAllPage(checked: boolean): void {
+    if (checked) {
+        selectedTicketIds.value = [...new Set([...selectedTicketIds.value, ...pageTicketIds.value])];
+    } else {
+        const onPage = new Set(pageTicketIds.value);
+        selectedTicketIds.value = selectedTicketIds.value.filter((id) => !onPage.has(id));
+    }
+}
+
+function isTicketSelected(id: number): boolean {
+    return selectedTicketIds.value.includes(id);
+}
+
+function toggleTicketRow(id: number, checked: boolean): void {
+    if (checked) {
+        if (!selectedTicketIds.value.includes(id)) {
+            selectedTicketIds.value = [...selectedTicketIds.value, id];
+        }
+    } else {
+        selectedTicketIds.value = selectedTicketIds.value.filter((i) => i !== id);
+    }
+}
+
+function submitBulk(): void {
+    if (!canSubmitBulk.value) {
+        return;
+    }
+    bulkForm.ticket_ids = [...selectedTicketIds.value];
+    bulkForm
+        .transform((d) => {
+            const payload: Record<string, unknown> = {
+                action: d.action,
+                ticket_ids: d.ticket_ids,
+            };
+            if (d.action === 'assign') {
+                payload.assigned_to = d.assigned_to === '' ? null : Number(d.assigned_to);
+            }
+            if (d.action === 'status') {
+                payload.status = d.status;
+            }
+            if (d.action === 'priority') {
+                payload.ticket_priority_id = d.ticket_priority_id === '' ? null : Number(d.ticket_priority_id);
+            }
+            if (d.action === 'category') {
+                payload.ticket_category_id =
+                    d.ticket_category_id === '' ? null : Number(d.ticket_category_id);
+            }
+
+            return payload as unknown as typeof d;
+        })
+        .post(adminTickets.bulk.url(), {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedTicketIds.value = [];
+                bulkForm.reset();
+            },
+        });
+}
 
 const page = usePage();
 const currentUserId = computed((): number | null => {
@@ -81,12 +230,27 @@ function isAssignedToMe(ticket: Ticket): boolean {
     return assignee != null && assignee.id === currentUserId.value;
 }
 
+function isClosedTicketRow(ticket: Ticket): boolean {
+    return ticket.status === 'closed';
+}
+
 function ticketRowClass(item: Ticket | null, type: string): string | null {
     if (type !== 'row' || item == null) {
         return null;
     }
 
-    return isAssignedToMe(item) ? 'ticket-row-assigned-to-me' : null;
+    const classes: string[] = [];
+    if (isAssignedToMe(item)) {
+        classes.push('ticket-row-assigned-to-me');
+    }
+    if (item.last_message_from_customer) {
+        classes.push('ticket-row-last-from-customer');
+    }
+    if (isClosedTicketRow(item)) {
+        classes.push('ticket-row-closed-muted');
+    }
+
+    return classes.length ? classes.join(' ') : null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -102,6 +266,8 @@ const statusLabels: Record<string, string> = {
     resolved: 'Erledigt',
     closed: 'Geschlossen',
 };
+
+const bulkStatusOptions = Object.entries(statusLabels).map(([value, text]) => ({ value, text }));
 
 const filters = reactive({
     search: props.tableState.search ?? '',
@@ -191,28 +357,6 @@ function onIncludeArchivedChange(): void {
     applyFilters();
 }
 
-const PRIORITY_FALLBACK_COLORS: Record<string, string> = {
-    low: '#6b7280',
-    niedrig: '#6b7280',
-    normal: '#2563eb',
-    medium: '#0ea5e9',
-    mittel: '#0ea5e9',
-    high: '#f97316',
-    hoch: '#f97316',
-    urgent: '#dc2626',
-    kritisch: '#dc2626',
-    critical: '#dc2626',
-};
-
-function priorityBadgeStyle(priority: NonNullable<TicketPriority>): Record<string, string> {
-    const hex =
-        priority.color?.trim() ||
-        PRIORITY_FALLBACK_COLORS[priority.slug.toLowerCase()] ||
-        '#64748b';
-
-    return { backgroundColor: hex, color: '#fff', border: 'none' };
-}
-
 function formatUpdatedAt(iso: string): string {
     const d = new Date(iso);
     const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -227,6 +371,13 @@ const statusOptions = [
 ];
 
 const tableFields = [
+    {
+        key: 'select',
+        label: '',
+        sortable: false,
+        thClass: 'text-center align-middle ticket-col-select',
+        tdClass: 'text-center align-middle ticket-col-select',
+    },
     { key: 'id', label: 'ID', sortable: true, thClass: 'text-nowrap' },
     { key: 'customer', label: 'Kunde', sortable: true },
     { key: 'subject', label: 'Betreff', sortable: true },
@@ -313,6 +464,15 @@ const tableFields = [
                                     style="min-width: 12rem"
                                 />
                             </BFormGroup>
+                            <BFormGroup label="Zugewiesen an" label-for="filter_assigned_to" class="mb-0">
+                                <BFormSelect
+                                    id="filter_assigned_to"
+                                    v-model="filters.assigned_to"
+                                    :options="assignedToFilterOptions"
+                                    class="form-select-sm"
+                                    style="min-width: 12rem"
+                                />
+                            </BFormGroup>
                             <BButton variant="primary" @click="applyFilters">Filter anwenden</BButton>
                         </div>
                     </BCardBody>
@@ -324,6 +484,87 @@ const tableFields = [
                         <p class="text-muted small mb-0 mt-1">Sortierung per Klick auf die Spaltenüberschriften (letzte Aktualisierung ist Standard).</p>
                     </BCardHeader>
                     <BCardBody class="p-0">
+                        <div class="d-flex flex-wrap align-items-end gap-2 gap-md-3 border-bottom px-3 py-3 bg-body-secondary">
+                            <div class="small fw-semibold me-auto">
+                                <span>{{ selectedTicketIds.length }} ausgewählt</span>
+                                <span class="text-muted fw-normal ms-1 d-none d-md-inline">· erste Spalte</span>
+                            </div>
+                            <BButton
+                                size="sm"
+                                variant="outline-secondary"
+                                :disabled="selectedTicketIds.length === 0"
+                                @click="clearTicketSelection"
+                            >
+                                Auswahl aufheben
+                            </BButton>
+                            <BFormGroup label="Aktion" label-for="bulk_action" class="mb-0">
+                                <BFormSelect
+                                    id="bulk_action"
+                                    v-model="bulkForm.action"
+                                    :options="bulkActionOptions"
+                                    class="form-select-sm"
+                                    style="min-width: 11rem"
+                                    :disabled="selectedTicketIds.length === 0"
+                                />
+                            </BFormGroup>
+                            <BFormGroup v-if="bulkForm.action === 'assign'" label="Mitarbeiter" label-for="bulk_assign" class="mb-0">
+                                <BFormSelect
+                                    id="bulk_assign"
+                                    v-model="bulkForm.assigned_to"
+                                    :options="assigneeOptions"
+                                    class="form-select-sm"
+                                    style="min-width: 12rem"
+                                    :disabled="selectedTicketIds.length === 0"
+                                />
+                            </BFormGroup>
+                            <BFormGroup v-if="bulkForm.action === 'status'" label="Status" label-for="bulk_status" class="mb-0">
+                                <BFormSelect
+                                    id="bulk_status"
+                                    v-model="bulkForm.status"
+                                    :options="bulkStatusOptions"
+                                    class="form-select-sm"
+                                    style="min-width: 12rem"
+                                    :disabled="selectedTicketIds.length === 0"
+                                />
+                            </BFormGroup>
+                            <BFormGroup v-if="bulkForm.action === 'priority'" label="Priorität" label-for="bulk_prio" class="mb-0">
+                                <BFormSelect
+                                    id="bulk_prio"
+                                    v-model="bulkForm.ticket_priority_id"
+                                    :options="bulkPriorityOptions"
+                                    class="form-select-sm"
+                                    style="min-width: 12rem"
+                                    :disabled="selectedTicketIds.length === 0"
+                                />
+                            </BFormGroup>
+                            <BFormGroup v-if="bulkForm.action === 'category'" label="Kategorie" label-for="bulk_cat" class="mb-0">
+                                <BFormSelect
+                                    id="bulk_cat"
+                                    v-model="bulkForm.ticket_category_id"
+                                    :options="[{ value: '', text: 'Bitte wählen…' }, ...categories.map((c) => ({ value: String(c.id), text: c.name }))]"
+                                    class="form-select-sm"
+                                    style="min-width: 12rem"
+                                    :disabled="selectedTicketIds.length === 0"
+                                />
+                            </BFormGroup>
+                            <BButton
+                                variant="primary"
+                                size="sm"
+                                class="mb-0"
+                                :disabled="!canSubmitBulk || bulkForm.processing"
+                                @click="submitBulk"
+                            >
+                                Anwenden
+                            </BButton>
+                            <div v-if="Object.keys(bulkForm.errors).length" class="w-100">
+                                <InputError class="d-block" :message="Array.isArray(bulkForm.errors.ticket_ids) ? bulkForm.errors.ticket_ids[0] : bulkForm.errors.ticket_ids" />
+                                <InputError class="d-block" :message="bulkForm.errors.action" />
+                                <InputError class="d-block" :message="bulkForm.errors.status" />
+                                <InputError class="d-block" :message="bulkForm.errors.assigned_to" />
+                                <InputError class="d-block" :message="bulkForm.errors.ticket_priority_id" />
+                                <InputError class="d-block" :message="bulkForm.errors.ticket_category_id" />
+                            </div>
+                        </div>
                         <BTable
                             v-model:sort-by="sortByModel"
                             :items="tickets.data"
@@ -336,6 +577,26 @@ const tableFields = [
                             show-empty
                             empty-text="Keine Tickets"
                         >
+                            <template #head(select)>
+                                <BFormCheckbox
+                                    :model-value="allPageSelected"
+                                    :indeterminate="somePageSelected"
+                                    :disabled="pageTicketIds.length === 0"
+                                    plain
+                                    class="m-0"
+                                    aria-label="Alle Tickets auf dieser Seite auswählen"
+                                    @update:model-value="setSelectAllPage"
+                                />
+                            </template>
+                            <template #cell(select)="row">
+                                <BFormCheckbox
+                                    :model-value="isTicketSelected(row.item.id)"
+                                    plain
+                                    class="m-0"
+                                    :aria-label="`Ticket #${row.item.id} auswählen`"
+                                    @update:model-value="(v: boolean | string | null) => toggleTicketRow(row.item.id, v === true)"
+                                />
+                            </template>
                             <template #cell(id)="row">
                                 #{{ row.item.id }}
                             </template>
@@ -361,7 +622,7 @@ const tableFields = [
                                 {{ row.item.ticket_category?.name ?? '–' }}
                             </template>
                             <template #cell(priority)="row">
-                                <BBadge v-if="row.item.ticket_priority" :style="priorityBadgeStyle(row.item.ticket_priority)">
+                                <BBadge v-if="row.item.ticket_priority" v-bind="ticketPriorityBadgeAttrs(row.item.ticket_priority)">
                                     {{ row.item.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else>–</span>
@@ -415,14 +676,46 @@ const tableFields = [
 </template>
 
 <style scoped>
+:deep(.ticket-col-select) {
+    width: 2.75rem;
+    vertical-align: middle;
+}
+
+.ticket-row-last-from-customer td {
+    background-color: rgba(253, 186, 116, 0.38);
+}
+
+:root.dark .ticket-row-last-from-customer td {
+    background-color: rgba(251, 146, 60, 0.22);
+}
+
 .ticket-row-assigned-to-me td {
     background-color: rgba(79, 70, 229, 0.06);
+    box-shadow: inset 3px 0 0 0 #4f46e5;
+}
+
+.ticket-row-assigned-to-me.ticket-row-last-from-customer td {
+    background-color: rgba(251, 191, 36, 0.28);
     box-shadow: inset 3px 0 0 0 #4f46e5;
 }
 
 :root.dark .ticket-row-assigned-to-me td {
     background-color: rgba(129, 140, 248, 0.1);
     box-shadow: inset 3px 0 0 0 #818cf8;
+}
+
+:root.dark .ticket-row-assigned-to-me.ticket-row-last-from-customer td {
+    background-color: rgba(251, 146, 60, 0.18);
+    box-shadow: inset 3px 0 0 0 #818cf8;
+}
+
+/* Kürzlich geschlossene (noch in der Liste sichtbar): dezent zurücktreten */
+.ticket-row-closed-muted td {
+    opacity: 0.62;
+}
+
+.ticket-row-closed-muted:hover td {
+    opacity: 0.85;
 }
 
 .ticket-assignee-row-name {

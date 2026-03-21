@@ -66,7 +66,13 @@
                             <template v-else>{{ serviceName }}</template>
                         </p>
                         <p class="small mb-2"><span class="fw-semibold">Kategorie:</span> {{ ticketCategory?.name ?? '–' }}</p>
-                        <p class="small mb-0"><span class="fw-semibold">Priorität:</span> {{ ticketPriority?.name ?? '–' }}</p>
+                        <p class="small mb-0 d-flex align-items-center flex-wrap gap-1">
+                            <span class="fw-semibold">Priorität:</span>
+                            <BBadge v-if="ticketPriority" v-bind="ticketPriorityBadgeAttrs(ticketPriority)">
+                                {{ ticketPriority.name }}
+                            </BBadge>
+                            <span v-else>–</span>
+                        </p>
                     </BCardBody>
                 </BCard>
             </BCol>
@@ -221,6 +227,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import { sanitizeHtml, isHtml } from '@/lib/sanitize';
+import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
 import support from '@/routes/support';
 
 type Ticket = { id: number; uuid: string; subject: string; status: string; created_at: string; updated_at: string };

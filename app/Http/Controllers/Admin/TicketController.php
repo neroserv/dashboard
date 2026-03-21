@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\BulkTicketsRequest;
 use App\Http\Requests\Admin\MergeTicketRequest;
 use App\Http\Requests\Admin\StoreTicketMessageRequest;
 use App\Http\Requests\Admin\StoreTicketTimeLogRequest;
@@ -24,6 +25,7 @@ use App\Notifications\TicketReplyNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -75,6 +77,7 @@ class TicketController extends Controller
                 'ticketPriority:id,name,slug,color',
                 'ticketServices',
                 'assignedTo:id,name,avatar_path',
+                'latestMessage' => fn ($q) => $q->with('user:id,is_admin'),
             ]);
 
         $this->applyAdminTicketIndexClosedVisibility($query, $request);
@@ -92,7 +95,11 @@ class TicketController extends Controller
             $query->where('tickets.user_id', $tableState['user_id']);
         }
         if ($tableState['assigned_to'] !== '') {
-            $query->where('tickets.assigned_to', $tableState['assigned_to']);
+            if ($tableState['assigned_to'] === '0') {
+                $query->whereNull('tickets.assigned_to');
+            } else {
+                $query->where('tickets.assigned_to', $tableState['assigned_to']);
+            }
         }
 
         $this->applyAdminTicketIndexSearch($query, $tableState['search']);
@@ -105,6 +112,11 @@ class TicketController extends Controller
                 ? 'Allgemein / Kein Dienst'
                 : $ticket->ticketServices->map(fn (TicketService $ts) => $ts->resolveLabel())->join(', ');
             $ticket->setAttribute('service_display', $summary);
+
+            $last = $ticket->latestMessage;
+            $fromCustomer = $last !== null && ! $last->user?->is_admin;
+            $ticket->setAttribute('last_message_from_customer', $fromCustomer);
+            $ticket->unsetRelation('latestMessage');
 
             return $ticket;
         });
@@ -174,6 +186,9 @@ class TicketController extends Controller
     {
         $dir = $direction === 'asc' ? 'asc' : 'desc';
 
+        // Geschlossene Tickets ans Ende der Liste (innerhalb der gewählten Sortierung).
+        $query->orderByRaw('CASE WHEN tickets.status = ? THEN 1 ELSE 0 END ASC', ['closed']);
+
         match ($sort) {
             'id' => $query->orderBy('tickets.id', $dir),
             'subject' => $query->orderBy('tickets.subject', $dir),
@@ -204,6 +219,51 @@ class TicketController extends Controller
             ),
             default => $query->orderBy('tickets.updated_at', 'desc'),
         };
+    }
+
+    public function bulk(BulkTicketsRequest $request): RedirectResponse
+    {
+        $action = $request->validated('action');
+        $ids = $request->validated('ticket_ids');
+        $adminUserId = $request->user()->id;
+
+        $tickets = Ticket::query()->whereIn('id', $ids)->orderBy('id')->get();
+        $uniqueIds = array_values(array_unique($ids));
+        if ($tickets->count() !== count($uniqueIds)) {
+            return redirect()->route('admin.tickets.index')->with('error', 'Einige ausgewählte Tickets existieren nicht.');
+        }
+
+        $count = 0;
+
+        DB::transaction(function () use ($tickets, $action, $request, $adminUserId, &$count): void {
+            foreach ($tickets as $ticket) {
+                $update = match ($action) {
+                    'assign' => ['assigned_to' => $request->validated('assigned_to')],
+                    'status' => ['status' => $request->validated('status')],
+                    'priority' => ['ticket_priority_id' => $request->validated('ticket_priority_id')],
+                    'category' => ['ticket_category_id' => $request->validated('ticket_category_id')],
+                    default => [],
+                };
+
+                if ($update === []) {
+                    continue;
+                }
+
+                $keys = array_keys($update);
+                $old = $ticket->only($keys);
+                $ticket->update($update);
+                $ticket->refresh();
+                $new = $ticket->only($keys);
+                $count++;
+                AdminActivityLog::log($adminUserId, 'ticket_updated', Ticket::class, $ticket->id, $old, $new);
+            }
+        });
+
+        $message = $count === 1
+            ? '1 Ticket wurde aktualisiert.'
+            : $count.' Tickets wurden aktualisiert.';
+
+        return redirect()->back()->with('success', $message);
     }
 
     public function show(Ticket $ticket): Response

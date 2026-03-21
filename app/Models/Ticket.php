@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Ticket extends Model
@@ -70,6 +71,16 @@ class Ticket extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(TicketMessage::class);
+    }
+
+    /**
+     * Newest message by creation time (ties broken by id).
+     *
+     * @return HasOne<TicketMessage>
+     */
+    public function latestMessage(): HasOne
+    {
+        return $this->hasOne(TicketMessage::class)->latestOfMany(['created_at', 'id']);
     }
 
     /**

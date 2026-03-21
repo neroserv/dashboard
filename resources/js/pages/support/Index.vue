@@ -37,10 +37,7 @@
                                 {{ row.item.ticket_category?.name ?? '–' }}
                             </template>
                             <template #cell(ticket_priority)="row">
-                                <BBadge
-                                    v-if="row.item.ticket_priority"
-                                    :style="row.item.ticket_priority.color ? { backgroundColor: row.item.ticket_priority.color, color: '#fff', border: 'none' } : undefined"
-                                >
+                                <BBadge v-if="row.item.ticket_priority" v-bind="ticketPriorityBadgeAttrs(row.item.ticket_priority)">
                                     {{ row.item.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else>–</span>
@@ -95,6 +92,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import { dashboard } from '@/routes';
 import { index as supportIndex, create as supportCreate, show as supportShow } from '@/routes/support';
+import { ticketPriorityBadgeAttrs } from '@/lib/ticketPriorityBadge';
 
 type Site = { id: number; name: string; slug: string } | null;
 type TicketCategory = { id: number; name: string; slug: string };
