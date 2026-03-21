@@ -16,7 +16,23 @@ test('inertia shares brand logo urls on login for default brand', function () {
     $this->get(route('login'))->assertInertia(fn ($page) => $page
         ->where('brand.logoUrl', 'brands/main.png')
         ->where('brand.logoCollapsedUrl', 'brands/collapsed.png')
+        ->where('brand.appIconUrl', null)
         ->where('brand.authCardBgUrl', '/images/custom-auth-bg.svg')
+    );
+});
+
+test('inertia shares app icon url when set on brand', function () {
+    Brand::create([
+        'key' => 'app-icon-test',
+        'name' => 'App Icon Brand',
+        'domains' => null,
+        'is_default' => true,
+        'logo_url' => 'brands/main.png',
+        'app_icon_url' => 'brands/app-512.png',
+    ]);
+
+    $this->get(route('login'))->assertInertia(fn ($page) => $page
+        ->where('brand.appIconUrl', 'brands/app-512.png')
     );
 });
 

@@ -14,7 +14,7 @@ final class ManifestBuilder
     {
         $name = $brand?->name ?? config('app.name', 'PVA');
         $shortName = $this->shortName($brand, $name);
-        $iconUrl = BrandMediaUrl::primaryLogoAbsolute($brand) ?? url('/favicon.svg');
+        $iconUrl = BrandMediaUrl::appIconAbsolute($brand) ?? url('/favicon.svg');
 
         $themeColor = '#2563eb';
         $backgroundColor = '#ffffff';

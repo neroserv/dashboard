@@ -342,7 +342,8 @@ test('api v1 brand returns brand with valid token', function () {
 
     $response->assertOk();
     $response->assertJsonPath('data.name', 'Test Brand');
-    $response->assertJsonStructure(['data' => ['id', 'name', 'features', 'seo']]);
+    $response->assertJsonPath('data.app_icon_url', null);
+    $response->assertJsonStructure(['data' => ['id', 'name', 'features', 'seo', 'app_icon_url']]);
 });
 
 test('api v1 returns 401 with invalid token', function () {

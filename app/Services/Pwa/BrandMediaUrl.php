@@ -34,4 +34,20 @@ final class BrandMediaUrl
 
         return self::absoluteUrlForPwa($raw !== null ? (string) $raw : null);
     }
+
+    /**
+     * Icon for PWA manifest, apple-touch-icon and push: optional square app icon, else main logo.
+     */
+    public static function appIconAbsolute(?Brand $brand): ?string
+    {
+        if ($brand === null) {
+            return null;
+        }
+        $raw = $brand->app_icon_url;
+        if ($raw !== null && trim((string) $raw) !== '') {
+            return self::absoluteUrlForPwa(trim((string) $raw));
+        }
+
+        return self::primaryLogoAbsolute($brand);
+    }
 }

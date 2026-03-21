@@ -7,6 +7,8 @@ import { computed, type ComputedRef } from 'vue';
 export type PageBrandLike = {
     logoUrl?: string | null;
     logoCollapsedUrl?: string | null;
+    appIconUrl?: string | null;
+    app_icon_url?: string | null;
     logo_url?: string | null;
     logo_collapsed_url?: string | null;
     authCardBgUrl?: string | null;

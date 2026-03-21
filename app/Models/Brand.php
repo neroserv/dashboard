@@ -18,6 +18,7 @@ class Brand extends Model
         'is_default',
         'logo_url',
         'logo_collapsed_url',
+        'app_icon_url',
         'auth_card_bg_url',
         'seo',
         'theme_colors',

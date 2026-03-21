@@ -31,6 +31,7 @@ type Brand = {
     is_default: boolean;
     logo_url: string | null;
     logo_collapsed_url: string | null;
+    app_icon_url: string | null;
     auth_card_bg_url: string | null;
     seo: Record<string, string> | null;
     theme_colors: Record<string, string> | null;
@@ -125,6 +126,7 @@ const submit = () => {
         is_default: data.is_default,
         logo_url: data.logo_url,
         logo_collapsed_url: data.logo_collapsed_url,
+        app_icon_url: data.app_icon_url,
         auth_card_bg_url: data.auth_card_bg_url,
         seo: data.seo,
         theme_colors: data.theme_colors,
@@ -222,7 +224,7 @@ const salutationOptions = [
                     <BCard no-body>
                         <BCardHeader>
                             <BCardTitle class="mb-0">Logos</BCardTitle>
-                            <p class="text-muted small mb-0 mt-1">Logo-URLs für Header und eingeklappte Sidebar</p>
+                            <p class="text-muted small mb-0 mt-1">Logo-URLs für Header, Sidebar und PWA / App-Installation</p>
                         </BCardHeader>
                         <BCardBody>
                             <BFormGroup label="Logo-URL" label-for="logo_url">
@@ -236,6 +238,18 @@ const salutationOptions = [
                                     placeholder="URL für kleines Logo (z. B. Icon), sonst wird das normale Logo verkleinert"
                                 />
                                 <InputError :message="form.errors.logo_collapsed_url" />
+                            </BFormGroup>
+                            <BFormGroup label="App-Icon (PWA / Push)" label-for="app_icon_url">
+                                <BFormInput
+                                    id="app_icon_url"
+                                    v-model="form.app_icon_url"
+                                    placeholder="Quadratisches Icon (PNG/WebP, z. B. 512×512), sonst Hauptlogo"
+                                />
+                                <InputError :message="form.errors.app_icon_url" />
+                                <p class="text-muted small mb-0 mt-1">
+                                    Wird für installierbare App, Apple-Touch-Icon und Web-Push-Benachrichtigungen genutzt. Leer lassen,
+                                    um das Hauptlogo zu verwenden.
+                                </p>
                             </BFormGroup>
                             <BFormGroup label="Login-Hintergrund (Auth-Card)" label-for="auth_card_bg_url">
                                 <BFormInput

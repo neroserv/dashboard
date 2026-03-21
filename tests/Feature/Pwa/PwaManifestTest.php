@@ -33,3 +33,21 @@ test('manifest reflects brand resolved from host', function () {
         ->assertOk()
         ->assertJsonPath('name', 'Beta PWA Brand');
 });
+
+test('manifest icon src prefers app_icon_url over logo', function () {
+    Brand::query()->update(['is_default' => false]);
+
+    Brand::create([
+        'key' => 'manifest-appicon',
+        'name' => 'Manifest App Icon',
+        'domains' => ['manifest-appicon.test'],
+        'logo_url' => 'brands/wide-logo.png',
+        'app_icon_url' => 'brands/pwa-square.png',
+        'is_default' => false,
+    ]);
+
+    $response = $this->get('http://manifest-appicon.test/manifest.json');
+    $response->assertOk();
+    $src = $response->json('icons.0.src');
+    expect($src)->toBeString()->toContain('pwa-square');
+});

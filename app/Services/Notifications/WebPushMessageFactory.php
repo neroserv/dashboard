@@ -18,7 +18,7 @@ final class WebPushMessageFactory
             return (new WebPushMessage)
                 ->title(config('app.name', 'Benachrichtigung'))
                 ->body('')
-                ->icon(BrandMediaUrl::primaryLogoAbsolute(method_exists($notifiable, 'brand') ? $notifiable->brand : null) ?? url('/favicon.svg'))
+                ->icon(BrandMediaUrl::appIconAbsolute(method_exists($notifiable, 'brand') ? $notifiable->brand : null) ?? url('/favicon.svg'))
                 ->data(['url' => url('/dashboard')])
                 ->options(['TTL' => 86400]);
         }
@@ -41,7 +41,7 @@ final class WebPushMessageFactory
         if (method_exists($notifiable, 'brand')) {
             $brand = $notifiable->brand;
         }
-        $icon = BrandMediaUrl::primaryLogoAbsolute($brand) ?? url('/favicon.svg');
+        $icon = BrandMediaUrl::appIconAbsolute($brand) ?? url('/favicon.svg');
 
         return (new WebPushMessage)
             ->title($subject !== '' ? $subject : config('app.name', 'Benachrichtigung'))

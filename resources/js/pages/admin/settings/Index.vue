@@ -55,6 +55,7 @@ type Brand = {
     domains: string[] | null;
     logo_url: string | null;
     logo_collapsed_url: string | null;
+    app_icon_url: string | null;
     theme_colors: Record<string, string> | null;
     features: Record<string, boolean | number> | null;
     salutation: string | null;
@@ -741,8 +742,8 @@ function salutationLabel(salutation: string | null): string {
                                                 :style="{ backgroundColor: `${primaryColor(brand)}18`, minWidth: '8rem' }"
                                             >
                                                 <img
-                                                    v-if="brand.logo_url || brand.logo_collapsed_url"
-                                                    :src="brand.logo_url || brand.logo_collapsed_url!"
+                                                    v-if="brand.app_icon_url || brand.logo_url || brand.logo_collapsed_url"
+                                                    :src="brand.app_icon_url || brand.logo_url || brand.logo_collapsed_url!"
                                                     :alt="brand.name"
                                                     class="img-fluid"
                                                     style="max-height: 5rem; width: auto"

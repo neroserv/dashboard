@@ -84,6 +84,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $currentBrand->name,
                 'logoUrl' => $currentBrand->logo_url,
                 'logoCollapsedUrl' => $currentBrand->logo_collapsed_url,
+                'appIconUrl' => $currentBrand->app_icon_url,
                 'authCardBgUrl' => $currentBrand->auth_card_bg_url,
                 'seo' => $currentBrand->seo,
                 'themeColors' => $currentBrand->theme_colors,
