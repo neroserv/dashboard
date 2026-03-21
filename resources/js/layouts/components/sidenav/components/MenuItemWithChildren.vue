@@ -24,13 +24,7 @@
           exit="collapsed"
         >
           <template v-for="(child, idx) in item.children" :key="child.slug ?? idx">
-            <MenuItemWithChildren
-              v-if="child.children"
-              :item="child"
-              :level="(level ?? 0) + 1"
-              :open-menu-key="openMenuKey"
-              :set-open-menu-key="setOpenMenuKey"
-            />
+            <MenuItemWithChildren v-if="child.children" :item="child" :level="(level ?? 0) + 1" />
             <motion.li v-else class="side-nav-item" :variants="submenuRowVariants">
               <MenuItem :item="child" :is-top-level="isTopLevel" :as-li="false" />
             </motion.li>
@@ -47,46 +41,23 @@ import MenuItem from '@/layouts/components/sidenav/components/MenuItem.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { useSidenavMenuStore } from '@/stores/sidenav-menu'
-import { usePage } from '@inertiajs/vue3'
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 
 type PropsType = {
   item: MenuItemType
-  openMenuKey?: string | null
-  setOpenMenuKey?: (key: string | null, source?: 'route' | 'user') => void
   level?: number
 }
 
 const props = defineProps<PropsType>()
 const sidenavMenu = useSidenavMenuStore()
 
-const page = usePage()
-const pathname = computed(() => {
-  const url = page.url
-  const q = url.indexOf('?')
-  return q >= 0 ? url.slice(0, q) : url
-})
 const isTopLevel = computed(() => (props.level ?? 0) === 0)
 
-const isActive = computed(() => {
-  const isChildActive = (children: MenuItemType[]): boolean =>
-    children.some(
-      (child) =>
-        (child.url && pathname.value.includes(child.url)) || (child.children && isChildActive(child.children)),
-    )
-  return isChildActive(props.item.children || [])
-})
-
-const isOpen = computed(() => {
-  if (isTopLevel.value) {
-    return props.openMenuKey === props.item.slug
-  }
-  const slug = props.item.slug
-  if (Object.prototype.hasOwnProperty.call(sidenavMenu.nestedOpen, slug)) {
-    return sidenavMenu.nestedOpen[slug]
-  }
-  return isActive.value
-})
+const isOpen = computed(() =>
+  isTopLevel.value
+    ? sidenavMenu.isTopLevelBranchOpen(props.item.slug)
+    : sidenavMenu.isNestedBranchOpen(props.item.slug),
+)
 
 const rootIsMotion = computed(() => !isTopLevel.value)
 
@@ -158,32 +129,11 @@ const submenuRowVariants = {
   },
 }
 
-watch(
-  pathname,
-  (_newPath, oldPath) => {
-    if (isTopLevel.value) {
-      if (!props.setOpenMenuKey) {
-        return
-      }
-      if (isActive.value) {
-        if (oldPath !== undefined) {
-          props.setOpenMenuKey(props.item.slug, 'route')
-        }
-      } else if (oldPath !== undefined && props.openMenuKey === props.item.slug) {
-        props.setOpenMenuKey(null, 'route')
-      }
-    } else if (!isActive.value) {
-      sidenavMenu.clearNestedOpen(props.item.slug)
-    }
-  },
-  { immediate: true },
-)
-
 function toggleOpen(): void {
-  if (isTopLevel.value && props.setOpenMenuKey) {
-    props.setOpenMenuKey(isOpen.value ? null : props.item.slug, 'user')
+  if (isTopLevel.value) {
+    sidenavMenu.toggleTopLevelBranch(props.item.slug)
   } else {
-    sidenavMenu.setNestedOpen(props.item.slug, !isOpen.value)
+    sidenavMenu.toggleNestedBranch(props.item.slug)
   }
 }
 </script>

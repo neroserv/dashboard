@@ -1,45 +1,54 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-export type SidenavOpenMenuKeySource = 'route' | 'user'
-
+/**
+ * Sidebar-Zweige: mehrere gleichzeitig offen möglich.
+ * Standard: alles offen — nur explizit zugeklappte Slugs werden gespeichert.
+ */
 export const useSidenavMenuStore = defineStore(
-  'sidenav-menu',
+  'sidenav-sidebar-branches',
   () => {
-    const openMenuKey = ref<string | null>(null)
-    /** Sobald der Nutzer das Top-Akkordeon bedient hat, gewinnt der gespeicherte Zustand beim Reload. */
-    const lastAccordionInteractionAt = ref<number | null>(null)
-    /** Explizit gesetzte Zustände verschachtelter Zweige (slug → offen). */
-    const nestedOpen = ref<Record<string, boolean>>({})
+    const topLevelClosed = ref<Record<string, true>>({})
+    const nestedClosed = ref<Record<string, true>>({})
 
-    function setOpenMenuKey(key: string | null, source: SidenavOpenMenuKeySource = 'user'): void {
-      openMenuKey.value = key
-      if (source === 'user') {
-        lastAccordionInteractionAt.value = Date.now()
+    function isTopLevelBranchOpen(slug: string): boolean {
+      return topLevelClosed.value[slug] !== true
+    }
+
+    function isNestedBranchOpen(slug: string): boolean {
+      return nestedClosed.value[slug] !== true
+    }
+
+    function toggleTopLevelBranch(slug: string): void {
+      if (topLevelClosed.value[slug] === true) {
+        const { [slug]: _, ...rest } = topLevelClosed.value
+        topLevelClosed.value = rest
+      } else {
+        topLevelClosed.value = { ...topLevelClosed.value, [slug]: true }
       }
     }
 
-    function setNestedOpen(slug: string, open: boolean): void {
-      nestedOpen.value = { ...nestedOpen.value, [slug]: open }
-    }
-
-    function clearNestedOpen(slug: string): void {
-      if (!(slug in nestedOpen.value)) {
-        return
+    function toggleNestedBranch(slug: string): void {
+      if (nestedClosed.value[slug] === true) {
+        const { [slug]: _, ...rest } = nestedClosed.value
+        nestedClosed.value = rest
+      } else {
+        nestedClosed.value = { ...nestedClosed.value, [slug]: true }
       }
-      const next = { ...nestedOpen.value }
-      delete next[slug]
-      nestedOpen.value = next
     }
 
     return {
-      openMenuKey,
-      lastAccordionInteractionAt,
-      nestedOpen,
-      setOpenMenuKey,
-      setNestedOpen,
-      clearNestedOpen,
+      topLevelClosed,
+      nestedClosed,
+      isTopLevelBranchOpen,
+      isNestedBranchOpen,
+      toggleTopLevelBranch,
+      toggleNestedBranch,
     }
   },
-  { persist: true },
+  {
+    persist: {
+      pick: ['topLevelClosed', 'nestedClosed'],
+    },
+  },
 )

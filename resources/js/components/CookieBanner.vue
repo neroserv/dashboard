@@ -188,7 +188,7 @@ onMounted(() => {
                     </p>
                 </div>
                 <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
-                    <Button type="button" variant="ghost" size="sm" class="text-foreground" @click="openSettings">
+                    <Button type="button" variant="ghost" size="sm" @click="openSettings">
                         Einstellungen
                     </Button>
                     <Button type="button" variant="outline" size="sm" @click="rejectAll">

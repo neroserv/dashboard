@@ -180,10 +180,8 @@
     > .side-nav-item.active {
         > a, > button {
             color: $sidenav-item-active-color !important;
-            background-color: $sidenav-item-active-bg;
             transition:
                 color 0.22s ease,
-                background-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
                 box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
                 transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 
