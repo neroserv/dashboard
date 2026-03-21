@@ -50,7 +50,7 @@ class CustomerController extends Controller
         if ($request->input('rank') === '') {
             $request->merge(['rank' => null]);
         }
-        $old = $customer->only(['name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'brand_id', 'is_admin', 'rank']);
+        $old = $customer->only(['name', 'email', 'company', 'street', 'postal_code', 'city', 'country', 'brand_id', 'is_admin', 'rank', 'prioritized_support']);
         $validated = $request->validated();
         $groupIds = $validated['group_ids'] ?? [];
         unset($validated['group_ids']);

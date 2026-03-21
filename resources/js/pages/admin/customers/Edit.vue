@@ -78,6 +78,7 @@ const form = useForm({
     city: props.customer.city ?? '',
     country: props.customer.country ?? '',
     is_admin: props.customer.is_admin ?? false,
+    prioritized_support: props.customer.prioritized_support ?? false,
     rank: props.customer.rank ?? '',
     group_ids: props.customer.group_ids ?? [],
 });
