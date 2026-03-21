@@ -13,6 +13,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
+        @php
+            $pwaBrand = request()->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
+            $pwaTouchIcon = \App\Services\Pwa\BrandMediaUrl::primaryLogoAbsolute($pwaBrand) ?? asset('favicon.svg');
+        @endphp
+        <link rel="manifest" href="{{ url('/manifest.json') }}">
+        <link rel="apple-touch-icon" href="{{ $pwaTouchIcon }}">
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
             (function() {

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\Channels\AppWebPushChannel;
+use App\Services\Notifications\PushPreferenceEvaluator;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,11 +19,12 @@ use Lab404\Impersonate\Models\Impersonate;
 use Laravel\Cashier\Billable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use NotificationChannels\WebPush\HasPushSubscriptions;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use Billable, HasApiTokens, HasFactory, Impersonate, Notifiable, TwoFactorAuthenticatable;
+    use Billable, HasApiTokens, HasFactory, HasPushSubscriptions, Impersonate, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -52,6 +55,7 @@ class User extends Authenticatable
         'ticket_signature',
         'admin_dashboard_layout',
         'notification_preferences',
+        'push_settings',
         'discord_notification_consent_at',
         'mollie_customer_id',
     ];
@@ -86,6 +90,7 @@ class User extends Authenticatable
             'pin_lockout_until' => 'datetime',
             'admin_dashboard_layout' => 'array',
             'notification_preferences' => 'array',
+            'push_settings' => 'array',
             'discord_notification_consent_at' => 'datetime',
         ];
     }
@@ -512,18 +517,24 @@ class User extends Authenticatable
      * Get the notification channels the user prefers for a given notification type.
      * Used by Notification::via() to respect user preferences (none, email, discord).
      *
-     * @return array<int, string>
+     * @return array<int, string|class-string>
      */
     public function getPreferredNotificationChannels(string $type): array
     {
         $preference = $this->notification_preferences[$type] ?? 'email';
 
-        return match ($preference) {
+        $channels = match ($preference) {
             'none' => [],
             'discord' => ['discord'],
             'email' => ['transactional_mail'],
             'email_discord' => ['transactional_mail', 'discord'],
             default => ['transactional_mail'],
         };
+
+        if (app(PushPreferenceEvaluator::class)->shouldIncludeWebPush($this, $type)) {
+            $channels[] = AppWebPushChannel::class;
+        }
+
+        return $channels;
     }
 }

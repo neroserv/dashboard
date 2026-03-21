@@ -34,6 +34,7 @@ const { isCurrentUrl } = useCurrentUrl()
 
 const sidebarNavItems: { title: string; href: string; icon: string }[] = [
   { title: 'Profil', href: '/settings/profile', icon: 'user' },
+  { title: 'PWA & Notifications', href: '/settings/pwa', icon: 'device-mobile' },
   { title: 'Benachrichtigungen', href: '/settings/notifications', icon: 'bell' },
   { title: 'Integration', href: '/settings/integration', icon: 'link' },
   { title: 'Passwort', href: '/settings/password', icon: 'lock' },

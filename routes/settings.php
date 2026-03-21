@@ -6,6 +6,7 @@ use App\Http\Controllers\Settings\IntegrationController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\PwaSettingsController;
 use App\Http\Controllers\Settings\SecuritySettingsController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/notifications', [NotificationSettingsController::class, 'show'])->name('notifications.show');
     Route::patch('settings/notifications', [NotificationSettingsController::class, 'update'])->name('notifications.update');
+
+    Route::get('settings/pwa', [PwaSettingsController::class, 'show'])->name('pwa.show');
 
     Route::get('settings/integration', [IntegrationController::class, 'show'])->name('integration.show');
     Route::delete('settings/integration/discord', [IntegrationController::class, 'disconnectDiscord'])->name('integration.discord.disconnect');

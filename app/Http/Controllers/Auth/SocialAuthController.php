@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Auth\SocialiteCallbackUrlBuilder;
 use App\Services\DiscordApiService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Fortify;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
@@ -16,35 +18,45 @@ class SocialAuthController extends Controller
 {
     private const PROVIDERS = ['google', 'discord'];
 
+    public function __construct(
+        private SocialiteCallbackUrlBuilder $socialiteCallbackUrl,
+    ) {}
+
     /**
      * Redirect the user to the provider's OAuth page.
      */
-    public function redirect(string $provider): SymfonyRedirectResponse|RedirectResponse
+    public function redirect(Request $request, string $provider): SymfonyRedirectResponse|RedirectResponse
     {
         $this->validateProvider($provider);
 
-        return Socialite::driver($provider)->redirect();
+        return Socialite::driver($provider)
+            ->redirectUrl($this->socialiteCallbackUrl->absoluteCallbackUrl($request, $provider))
+            ->redirect();
     }
 
     /**
      * Redirect the authenticated user to Discord to connect their account (link only, no login).
      */
-    public function connectDiscord(): RedirectResponse
+    public function connectDiscord(Request $request): RedirectResponse
     {
         session(['discord_connect' => true]);
 
-        return Socialite::driver('discord')->redirect();
+        return Socialite::driver('discord')
+            ->redirectUrl($this->socialiteCallbackUrl->absoluteCallbackUrl($request, 'discord'))
+            ->redirect();
     }
 
     /**
      * Handle the callback from the OAuth provider.
      */
-    public function callback(string $provider): RedirectResponse
+    public function callback(Request $request, string $provider): RedirectResponse
     {
         $this->validateProvider($provider);
 
         try {
-            $socialUser = Socialite::driver($provider)->user();
+            $socialUser = Socialite::driver($provider)
+                ->redirectUrl($this->socialiteCallbackUrl->absoluteCallbackUrl($request, $provider))
+                ->user();
         } catch (\Throwable $e) {
             return redirect()->route('login')
                 ->with('error', __('Die Anmeldung mit :provider ist fehlgeschlagen. Bitte versuchen Sie es erneut.', ['provider' => $this->providerLabel($provider)]));

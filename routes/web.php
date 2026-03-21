@@ -51,6 +51,8 @@ use App\Http\Controllers\MollieWebhookController;
 use App\Http\Controllers\PostfachController;
 use App\Http\Controllers\ProductInvitationAcceptController;
 use App\Http\Controllers\ProductShareController;
+use App\Http\Controllers\Push\PushApiController;
+use App\Http\Controllers\PwaManifestController;
 use App\Http\Controllers\RedeemVoucherController;
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\TeamSpeakAccountController;
@@ -79,6 +81,15 @@ Route::get('/favicon.ico', function () {
         'Cache-Control' => 'public, max-age=3600',
     ]);
 })->name('favicon');
+
+Route::get('manifest.json', PwaManifestController::class)->name('pwa.manifest');
+
+Route::middleware(['auth', 'throttle:120,1'])->prefix('api/push')->group(function () {
+    Route::get('status', [PushApiController::class, 'status'])->name('push.status');
+    Route::post('subscribe', [PushApiController::class, 'subscribe'])->name('push.subscribe');
+    Route::post('unsubscribe', [PushApiController::class, 'unsubscribe'])->name('push.unsubscribe');
+    Route::post('preferences', [PushApiController::class, 'preferences'])->name('push.preferences');
+});
 
 // Mollie webhook – muss vor der Cashier-Route stehen, damit Guthaben/Rechnungen verarbeitet werden
 Route::post('webhooks/mollie', [MollieWebhookController::class, 'handleWebhook'])

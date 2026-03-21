@@ -15,6 +15,7 @@
         "hcgcloud/pterodactyl-sdk": "v2.0.0-alpha.2",
         "inertiajs/inertia-laravel": "^2.0",
         "lab404/laravel-impersonate": "*",
+        "laravel-notification-channels/webpush": "^10.5",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
