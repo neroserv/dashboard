@@ -12,27 +12,25 @@
     }
 }
 
-// bootstrap-vue-next: label + Sort-Icon als direkte Kinder von `th` — ohne Flex rutscht
-// das Icon je nach Layout nach rechts oder unter den Text.
+// Sort-Icon neben dem Text. Kein `display:flex` auf `th` — das ersetzt `table-cell` und
+// bricht die Spalten (Header erscheinen untereinander).
 .table th.b-table-sortable-column {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.25rem;
-
-    &.text-end {
-        justify-content: flex-end;
-    }
+    white-space: nowrap;
+    vertical-align: middle;
 
     svg {
-        flex-shrink: 0;
+        display: inline-block;
+        vertical-align: middle;
         height: 1em;
         width: 1em;
         margin-bottom: 0;
-        vertical-align: middle;
+        margin-inline-start: 0.25rem;
     }
+}
+
+.table th.b-table-sortable-column.text-end svg {
+    margin-inline-start: 0;
+    margin-inline-end: 0.25rem;
 }
 
 // Range slider
