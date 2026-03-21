@@ -15,7 +15,7 @@ onMounted(() => {
 <template>
     <CardHeader class="py-3">
         <CardTitle>Zuletzt angesehen</CardTitle>
-        <CardDescription>Zuletzt geöffnete Sites und Kunden</CardDescription>
+        <CardDescription>Zuletzt geöffnete Kunden und Einträge</CardDescription>
     </CardHeader>
     <CardContent class="pt-0">
         <ul v-if="recentItems.length" class="flex flex-wrap gap-2">

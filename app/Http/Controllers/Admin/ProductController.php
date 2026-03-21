@@ -23,11 +23,9 @@ class ProductController extends Controller
 
         $products->through(function (Product $product) {
             $product->productable_name = $product->productable?->name ?? '-';
-            $product->edit_url = $product->productable_type === \App\Models\Template::class
-                ? route('admin.templates.edit', ['template' => $product->productable_id])
-                : ($product->productable_type === \App\Models\HostingPlan::class
-                    ? route('admin.hosting-plans.edit', ['hosting_plan' => $product->productable_id])
-                    : null);
+            $product->edit_url = $product->productable_type === \App\Models\HostingPlan::class
+                ? route('admin.hosting-plans.edit', ['hosting_plan' => $product->productable_id])
+                : null;
         });
 
         return Inertia::render('admin/products/Index', [

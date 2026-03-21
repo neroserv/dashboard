@@ -9,12 +9,8 @@ use App\Models\GameserverCloudSubscription;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Models\Invoice;
-use App\Models\Site;
-use App\Models\SiteSubscription;
 use App\Models\TeamSpeakServerAccount;
-use App\Models\Template;
 use App\Models\WebspaceAccount;
-use App\Notifications\OrderCompletedNotification;
 use App\Notifications\WebspaceOrderCompletedNotification;
 use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
@@ -60,96 +56,7 @@ class CheckoutController extends Controller
             return $this->buildCloudGamingCheckoutRedirect($request, $cloudGamingPayload);
         }
 
-        $payload = $request->session()->get('checkout_meine_seiten');
-        if (! $payload || ! isset($payload['template_id'], $payload['name'])) {
-            return redirect()->route('sites.create')->with('error', 'Bitte starten Sie die Bestellung erneut.');
-        }
-
-        if (! $this->isMollieConfigured()) {
-            return redirect()->route('sites.create')->with('error', 'Mollie ist nicht konfiguriert. Bitte MOLLIE_KEY in der .env setzen (test_… oder live_…, mind. 30 Zeichen).');
-        }
-
-        $user = $request->user();
-        $template = Template::find($payload['template_id']);
-        if (! $template) {
-            $request->session()->forget('checkout_meine_seiten');
-
-            return redirect()->route('sites.create')->with('error', 'Template nicht gefunden.');
-        }
-
-        $amount = $template->price !== null ? (float) $template->price : null;
-        if ($amount === null || $amount <= 0) {
-            $request->session()->forget('checkout_meine_seiten');
-
-            return redirect()
-                ->route('sites.create', ['template' => $template->id])
-                ->with('error', 'Dieses Template hat keinen monatlichen Preis. Im Admin unter Templates den Preis eintragen.');
-        }
-
-        $siteName = $payload['name'];
-        $currency = strtoupper(config('cashier.currency', 'eur'));
-
-        try {
-            $mollie = app(MollieApiClient::class);
-            $params = [
-                'amount' => [
-                    'currency' => $currency,
-                    'value' => number_format($amount, 2, '.', ''),
-                ],
-                'description' => 'Meine Seiten: '.$siteName,
-                'redirectUrl' => route('checkout.success'),
-                'metadata' => [
-                    'type' => 'meine_seiten',
-                    'template_id' => (string) $template->id,
-                    'site_name' => $siteName,
-                    'user_id' => (string) $user->id,
-                ],
-            ];
-            $params['customerId'] = app(MollieCustomerService::class)->ensureCustomer($user);
-            $webhookUrl = MollieWebhookUrl::get();
-            if ($webhookUrl !== null) {
-                $params['webhookUrl'] = $webhookUrl;
-            }
-            $payment = $mollie->payments->create($params);
-            $request->session()->put('pending_mollie_payment_id', $payment->id);
-            $request->session()->forget('checkout_meine_seiten');
-
-            $checkoutUrl = $payment->getCheckoutUrl();
-            if (! $checkoutUrl || ! str_starts_with($checkoutUrl, 'https://')) {
-                return redirect()->route('sites.create')->with('error', 'Mollie Checkout lieferte keine gültige Weiterleitungs-URL.');
-            }
-
-            return Inertia::location($checkoutUrl);
-        } catch (\Throwable $e) {
-            $request->session()->forget('checkout_meine_seiten');
-            Log::error('Checkout Meine Seiten: Mollie-Fehler', [
-                'message' => $e->getMessage(),
-                'exception' => get_class($e),
-            ]);
-            report($e);
-
-            return redirect()
-                ->route('sites.create', ['template' => $template->id])
-                ->with('error', $this->getCheckoutErrorMessage($e));
-        }
-    }
-
-    /**
-     * Create a Stripe Checkout session for "Meine Seiten" subscription (direct POST from form).
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'template_id' => ['required', 'exists:templates,id'],
-            'name' => ['required', 'string', 'max:255'],
-        ]);
-
-        $request->session()->put('checkout_meine_seiten', [
-            'template_id' => $validated['template_id'],
-            'name' => $validated['name'],
-        ]);
-
-        return redirect()->route('checkout.redirect');
+        return redirect()->route('dashboard')->with('error', 'Keine gültige Checkout-Session. Bitte starten Sie die Bestellung erneut.');
     }
 
     /**
@@ -170,8 +77,7 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Handle successful checkout: create Site, Domain, SiteSubscription from session.
-     * This runs when the customer is redirected back from Stripe (success_url).
+     * Handle successful checkout (e.g. webspace, gaming). This runs when the customer is redirected back from Mollie (success_url).
      * No webhook is required for the initial purchase; webhooks are only used for
      * subscription updates (renewal, cancel) in production.
      */
@@ -192,10 +98,10 @@ class CheckoutController extends Controller
             } catch (\Throwable $e) {
                 Log::error('Checkout success: Mollie payment retrieve failed', ['payment_id' => $paymentId, 'message' => $e->getMessage()]);
 
-                return redirect()->route('sites.index')->with('error', 'Zahlung konnte nicht geladen werden.');
+                return redirect()->route('dashboard')->with('error', 'Zahlung konnte nicht geladen werden.');
             }
             if ($payment->status !== 'paid') {
-                return redirect()->route('sites.index')->with('info', 'Die Zahlung ist noch nicht bestätigt. Bei Fragen kontaktieren Sie uns.');
+                return redirect()->route('dashboard')->with('info', 'Die Zahlung ist noch nicht bestätigt. Bei Fragen kontaktieren Sie uns.');
             }
             $metadata = $payment->metadata ? (array) $payment->metadata : [];
             $metadata['mollie_payment_id'] = $payment->id;
@@ -205,9 +111,6 @@ class CheckoutController extends Controller
             }
             if ($type === 'game_server_renewal') {
                 return $this->handleGamingRenewalSuccessFromMollie($request, $user, $metadata);
-            }
-            if ($type === 'meine_seiten') {
-                return $this->handleMeineSeitenSuccessFromMollie($request, $user, $metadata);
             }
             if ($type === 'webspace') {
                 return $this->handleWebspaceCheckoutSuccessFromMollie($request, $user, $metadata);
@@ -237,22 +140,14 @@ class CheckoutController extends Controller
                 return $this->handleDomainCheckoutSuccessFromMollie($request, $user, $metadata);
             }
 
-            return redirect()->route('sites.index')->with('success', 'Zahlung erhalten. Vielen Dank.');
+            return redirect()->route('dashboard')->with('success', 'Zahlung erhalten. Vielen Dank.');
         }
 
         if ($sessionId) {
-            return redirect()->route('sites.index')->with('info', 'Diese Checkout-Rückkehr (Stripe) wird nicht mehr unterstützt. Bitte nutzen Sie den Mollie-Checkout.');
+            return redirect()->route('dashboard')->with('info', 'Diese Checkout-Rückkehr (Stripe) wird nicht mehr unterstützt. Bitte nutzen Sie den Mollie-Checkout.');
         }
 
-        return redirect()->route('sites.index')->with('error', 'Keine Zahlungsinformationen gefunden.');
-    }
-
-    /**
-     * Create local Invoice from subscription (legacy; Mollie flow uses one-off payments, invoices created separately if needed).
-     */
-    protected function createInvoiceFromSubscription(\App\Models\User $user, SiteSubscription $siteSubscription, mixed $subscription): void
-    {
-        // No-op: Mollie one-off payments do not use this; invoice creation handled elsewhere if required.
+        return redirect()->route('dashboard')->with('error', 'Keine Zahlungsinformationen gefunden.');
     }
 
     /**
@@ -699,79 +594,6 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Handle successful Mollie payment for "Meine Seiten": create Site, Domain, SiteSubscription.
-     */
-    protected function handleMeineSeitenSuccessFromMollie(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
-    {
-        $templateId = (int) ($metadata['template_id'] ?? 0);
-        $siteName = $metadata['site_name'] ?? 'Meine Webseite';
-        $userId = (int) ($metadata['user_id'] ?? 0);
-        $molliePaymentId = $metadata['mollie_payment_id'] ?? null;
-
-        if ($userId !== $user->id || $templateId < 1) {
-            Log::debug('Checkout success meine_seiten: invalid metadata');
-
-            return redirect()->route('sites.index')->with('error', 'Ungültige Abo-Daten.');
-        }
-
-        $existing = SiteSubscription::where('mollie_subscription_id', $molliePaymentId)->first();
-        if ($existing) {
-            return redirect()->route('sites.show', ['site' => $existing->site->uuid]);
-        }
-
-        $template = Template::find($templateId);
-        if (! $template) {
-            return redirect()->route('sites.index')->with('error', 'Template nicht gefunden.');
-        }
-
-        try {
-            $slug = Str::slug($siteName).'-'.Str::random(6);
-            $baseDomain = \App\Models\Setting::getBaseDomain();
-            $subdomain = $slug.'.'.$baseDomain;
-
-            $site = $user->sites()->create([
-                'template_id' => $template->id,
-                'name' => $siteName,
-                'slug' => $slug,
-                'domain_type' => 'subdomain',
-                'status' => 'active',
-                'is_legacy' => false,
-            ]);
-
-            $site->domains()->create([
-                'domain' => $subdomain,
-                'type' => 'subdomain',
-                'is_primary' => true,
-                'is_verified' => true,
-            ]);
-
-            $periodEnd = now()->addMonth();
-            $site->siteSubscription()->create([
-                'mollie_subscription_id' => $molliePaymentId,
-                'mollie_status' => 'active',
-                'current_period_ends_at' => $periodEnd,
-                'cancel_at_period_end' => false,
-                'ends_at' => null,
-                'renewal_type' => 'auto',
-            ]);
-
-            Log::debug('Checkout success: site and subscription created (Mollie)', ['site_id' => $site->id]);
-            $user->notify(new OrderCompletedNotification($site));
-
-            return redirect()
-                ->route('sites.show', ['site' => $site->uuid])
-                ->with('success', 'Ihre Webseite wurde erfolgreich eingerichtet.');
-        } catch (\Throwable $e) {
-            Log::error('Checkout success: exception during site creation (Mollie)', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return redirect()->route('sites.index')->with('error', 'Fehler beim Anlegen der Webseite: '.$e->getMessage());
-        }
-    }
-
-    /**
      * Handle successful Stripe one-time payment for an existing invoice.
      */
     protected function handleInvoicePaymentSuccess(Request $request, \App\Models\User $user, array $metadata): RedirectResponse
@@ -797,7 +619,7 @@ class CheckoutController extends Controller
 
         $invoice->refresh();
         try {
-            $pdfPath = app(InvoicePdfService::class)->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+            $pdfPath = app(InvoicePdfService::class)->generate($invoice->fresh(['user.brand', 'lineItems']));
             if ($pdfPath) {
                 $invoice->update(['pdf_path' => $pdfPath]);
             }

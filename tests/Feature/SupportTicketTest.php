@@ -67,60 +67,6 @@ test('customers can view and reply to own ticket', function () {
     $this->assertDatabaseHas('ticket_messages', ['ticket_id' => $ticket->id, 'body' => 'Customer reply']);
 });
 
-test('customer cannot set affected_services to another users service', function () {
-    Setting::set('support_enabled', '1');
-    $brand = Brand::create([
-        'key' => 'support-test-ownership',
-        'name' => 'Support Ownership',
-        'domains' => null,
-        'is_default' => false,
-        'features' => ['sites_editor' => true],
-    ]);
-    $user = User::factory()->create(['is_admin' => false, 'brand_id' => $brand->id]);
-    $otherUser = User::factory()->create(['is_admin' => false]);
-    $otherSite = \App\Models\Site::factory()->create(['user_id' => $otherUser->id]);
-    $category = TicketCategory::factory()->create(['is_active' => true]);
-    $this->actingAs($user);
-
-    $response = $this->post(route('support.store'), [
-        'subject' => 'Test',
-        'body' => 'Body',
-        'ticket_category_id' => $category->id,
-        'affected_services' => [['type' => 'site', 'id' => $otherSite->id]],
-    ]);
-    $response->assertSessionHasErrors();
-});
-
-test('customer can create ticket with own site when brand has sites_editor', function () {
-    Setting::set('support_enabled', '1');
-    $brand = Brand::create([
-        'key' => 'support-test-sites',
-        'name' => 'Support Test',
-        'domains' => null,
-        'is_default' => false,
-        'features' => ['sites_editor' => true],
-    ]);
-    $user = User::factory()->create(['is_admin' => false, 'brand_id' => $brand->id]);
-    $site = \App\Models\Site::factory()->create(['user_id' => $user->id]);
-    $category = TicketCategory::factory()->create(['is_active' => true]);
-    $this->actingAs($user);
-
-    $response = $this->post(route('support.store'), [
-        'subject' => 'Ticket with site',
-        'body' => 'Body',
-        'ticket_category_id' => $category->id,
-        'affected_services' => [['type' => 'site', 'id' => $site->id]],
-    ]);
-    $response->assertRedirect();
-    $ticket = Ticket::query()->where('user_id', $user->id)->where('subject', 'Ticket with site')->first();
-    expect($ticket)->not->toBeNull();
-    $this->assertDatabaseHas('ticket_services', [
-        'ticket_id' => $ticket->id,
-        'service_type' => 'site',
-        'service_id' => $site->id,
-    ]);
-});
-
 test('customer cannot use service type when brand feature is disabled', function () {
     Setting::set('support_enabled', '1');
     $brand = Brand::create([

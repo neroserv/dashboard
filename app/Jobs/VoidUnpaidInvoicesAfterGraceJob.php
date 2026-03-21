@@ -25,13 +25,13 @@ class VoidUnpaidInvoicesAfterGraceJob implements ShouldQueue
             ->whereIn('status', ['sent', 'pending'])
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', $deadline)
-            ->with(['user.brand', 'siteSubscription.site', 'lineItems'])
+            ->with(['user.brand', 'lineItems'])
             ->get()
             ->each(function (Invoice $invoice) use ($pdfService, $eInvoiceService): void {
                 $invoice->update(['status' => 'cancelled']);
 
                 try {
-                    $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'siteSubscription.site', 'lineItems']));
+                    $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
                     if ($pdfPath) {
                         $invoice->update(['pdf_path' => $pdfPath]);
                     }

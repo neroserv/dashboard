@@ -2,13 +2,11 @@
 
 use App\Http\Middleware\EnsureAdminDomainForAdminRoutes;
 use App\Http\Middleware\EnsureBillingProfile;
-use App\Http\Middleware\EnsureBrandFeatureSites;
 use App\Http\Middleware\EnsureUserBrandMatchesDomain;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveBrandFromDomain;
-use App\Http\Middleware\ResolveSiteByDomain;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -36,7 +34,6 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->prepend(ResolveBrandFromDomain::class);
-        $middleware->prepend(ResolveSiteByDomain::class);
 
         $middleware->web(append: [
             HandleAppearance::class,
@@ -49,7 +46,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.domain' => EnsureAdminDomainForAdminRoutes::class,
             'billing.profile' => EnsureBillingProfile::class,
             'brand.domain' => EnsureUserBrandMatchesDomain::class,
-            'brand.feature.sites' => EnsureBrandFeatureSites::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

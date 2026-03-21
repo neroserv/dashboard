@@ -148,9 +148,12 @@ class GameserverCloudSubscriptionController extends Controller
             $customerBalance = $balance ? (float) $balance->balance : 0.0;
         }
 
+        $pricePerMonth = (float) ($subscription->getDisplayPrice() ?? $plan->price);
+
         return Inertia::render('gaming/cloud/SubscriptionShow', [
             'subscription' => [
                 'id' => $subscription->id,
+                'uuid' => $subscription->uuid,
                 'status' => $subscription->status,
                 'current_period_ends_at' => $subscription->current_period_ends_at?->toIso8601String(),
                 'created_at' => $subscription->created_at?->toIso8601String(),
@@ -177,6 +180,8 @@ class GameserverCloudSubscriptionController extends Controller
             ],
             'canPayWithBalance' => $canPayWithBalance,
             'customerBalance' => $customerBalance,
+            'renewalAmount' => $pricePerMonth,
+            'canRenew' => $subscription->status === 'active' && $pricePerMonth > 0,
             'renewUrl' => route('gaming.cloud.subscriptions.renew', $subscription),
             'auto_renew_with_balance' => (bool) ($subscription->auto_renew_with_balance ?? false),
             'has_mollie_subscription' => ! empty($subscription->mollie_subscription_id),
@@ -699,7 +704,7 @@ class GameserverCloudSubscriptionController extends Controller
                     'description' => 'Cloud-Abo Verlängerung '.$plan->name.' – '.$periodMonths.' Monat(e)',
                 ]);
             } catch (InsufficientBalanceException $e) {
-                return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+                return redirect()->route('gaming.cloud.subscriptions.show', $subscription)
                     ->with('error', $e->getMessage());
             }
 
@@ -722,7 +727,7 @@ class GameserverCloudSubscriptionController extends Controller
                 $account->update(['status' => 'active']);
             }
 
-            return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+            return redirect()->route('gaming.cloud.subscriptions.show', $subscription)
                 ->with('success', 'Ihr Cloud-Abo wurde mit Guthaben verlängert.');
         }
 

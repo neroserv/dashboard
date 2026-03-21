@@ -10,7 +10,6 @@ import LastWebhookWidget from '@/components/admin/dashboard/widgets/LastWebhookW
 import RecentItemsWidget from '@/components/admin/dashboard/widgets/RecentItemsWidget.vue';
 import RevenueKpiWidget from '@/components/admin/dashboard/widgets/RevenueKpiWidget.vue';
 import SimpleChartWidget from '@/components/admin/dashboard/widgets/SimpleChartWidget.vue';
-import SitesStatsWidget from '@/components/admin/dashboard/widgets/SitesStatsWidget.vue';
 import UnpaidOverdueWidget from '@/components/admin/dashboard/widgets/UnpaidOverdueWidget.vue';
 import type { WidgetRegistryItem } from '@/types/admin/dashboard';
 
@@ -26,8 +25,6 @@ const componentMap: Record<string, unknown> = {
     'revenue-year': RevenueKpiWidget,
     'revenue-chart-daily': SimpleChartWidget,
     'revenue-chart-monthly': SimpleChartWidget,
-    'sites-stats': SitesStatsWidget,
-    'sites-suspended': CountWidget,
     'unpaid-overdue': UnpaidOverdueWidget,
     'last-mollie-webhook': LastWebhookWidget,
     'active-subscriptions': CountWidget,
@@ -67,7 +64,6 @@ const componentMap: Record<string, unknown> = {
     'discount-codes-active': CountWidget,
     'vouchers-remaining': GenericDataWidget,
     'domains-expiring': GenericListWidget,
-    'templates-count': GenericDataWidget,
 };
 
 const component = computed(() => componentMap[props.widgetKey] ?? null);
@@ -91,7 +87,6 @@ const componentProps = computed(() => {
     if (['active-subscriptions', 'customers-total'].includes(key)) {
         return { ...base, linkHref: key === 'active-subscriptions' ? '/admin/subscriptions' : undefined, linkLabel: 'Anzeigen' };
     }
-    if (key === 'sites-suspended') return { ...base, linkHref: '/admin/sites', linkLabel: 'Sites' };
     if (key === 'subscriptions-ending-week') return { ...base, description: 'Laufzeitende diese Woche', linkHref: '/admin/subscriptions', linkLabel: 'Abos' };
     if (key === 'cancellations-period-end') return { ...base, description: 'Abos mit Kündigung', linkHref: '/admin/subscriptions', linkLabel: 'Abos' };
     if (key === 'open-tickets') return { ...base, linkHref: '/admin/tickets', linkLabel: 'Tickets' };
@@ -106,7 +101,6 @@ const componentProps = computed(() => {
     if (key === 'hosting-servers-overview') return { ...base, keys: ['total', 'online', 'offline'] };
     if (key === 'cron-last-run') return { ...base, keys: ['lastRunAt'] };
     if (key === 'vouchers-remaining') return { ...base, keys: ['count', 'totalValue'] };
-    if (key === 'templates-count') return { ...base, keys: ['templates', 'pages'] };
     if (key === 'newest-customer') {
         const d = data as { name?: string; email?: string; created_at?: string; id?: number } | undefined;
         return { ...base, primary: d?.name, secondary: d?.email, tertiary: d?.created_at, linkHref: d?.id ? `/admin/customers/${d.id}` : undefined };
@@ -122,7 +116,7 @@ const componentProps = computed(() => {
         return { ...base, title: 'Offene Mahnungen', itemLink: (item: Record<string, unknown>) => `/admin/invoices/${item.uuid}`, itemLabel: (item: Record<string, unknown>) => `Rechnung ${(item as { number?: string }).number} (Stufe ${(item as { max_level?: number }).max_level})` };
     }
     if (key === 'expiring-subscriptions') {
-        return { ...base, title: 'Auslaufende Abos', itemLink: (item: Record<string, unknown>) => (item.site_uuid ? `/admin/sites/${item.site_uuid}` : '#'), itemLabel: (item: Record<string, unknown>) => `${(item as { site_name?: string }).site_name} – ${(item as { current_period_ends_at?: string }).current_period_ends_at}` };
+        return { ...base, title: 'Auslaufende Abos', itemLink: () => '#', itemLabel: (item: Record<string, unknown>) => `${(item as { current_period_ends_at?: string }).current_period_ends_at}` };
     }
     if (key === 'recent-invoices') {
         return { ...base, itemLink: (item: Record<string, unknown>) => `/admin/invoices/${item.uuid}`, itemLabel: (item: Record<string, unknown>) => `#${(item as { number?: string }).number} ${(item as { amount?: number }).amount} €` };

@@ -28,6 +28,7 @@ class BrandController extends ApiV1Controller
                 'key' => $brand->key,
                 'logo_url' => $brand->logo_url,
                 'logo_collapsed_url' => $brand->logo_collapsed_url,
+                'auth_card_bg_url' => $brand->auth_card_bg_url,
                 'features' => $features,
                 'seo' => [
                     'meta_description' => $seo['meta_description'] ?? null,

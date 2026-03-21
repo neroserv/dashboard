@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateDashboardLayoutRequest;
 use App\Models\Invoice;
 use App\Models\InvoiceDunningLetter;
-use App\Models\Site;
-use App\Models\SiteSubscription;
 use App\Models\User;
 use App\Services\DashboardWidgetRegistry;
 use Carbon\Carbon;
@@ -30,21 +28,7 @@ class DashboardController extends Controller
 
         $startOfWeek = Carbon::now()->startOfWeek();
         $endOfWeek = Carbon::now()->endOfWeek();
-        $endOfNextSevenDays = Carbon::now()->addDays(7);
-
-        $expiringSubscriptions = SiteSubscription::query()
-            ->with('site:uuid,name')
-            ->whereNotNull('mollie_subscription_id')
-            ->where('mollie_status', 'active')
-            ->whereBetween('current_period_ends_at', [now(), $endOfNextSevenDays])
-            ->orderBy('current_period_ends_at')
-            ->limit(20)
-            ->get()
-            ->map(fn ($sub) => [
-                'site_uuid' => $sub->site?->uuid,
-                'site_name' => $sub->site?->name,
-                'current_period_ends_at' => $sub->current_period_ends_at?->format('d.m.Y'),
-            ]);
+        $expiringSubscriptions = [];
 
         $overdueOrFailedInvoices = Invoice::query()
             ->with('user:id,name')
@@ -89,12 +73,8 @@ class DashboardController extends Controller
 
         $unpaidSum = (float) Invoice::where('status', '!=', 'paid')->sum('amount');
         $overdueCount = Invoice::where('status', '!=', 'paid')->whereNotNull('due_date')->where('due_date', '<', today())->count();
-        $subscriptionsEndingThisWeek = SiteSubscription::query()
-            ->whereNotNull('mollie_subscription_id')
-            ->where('mollie_status', 'active')
-            ->whereBetween('current_period_ends_at', [$startOfWeek, $endOfWeek])
-            ->count();
-        $cancellationsAtPeriodEnd = SiteSubscription::where('cancel_at_period_end', true)->count();
+        $subscriptionsEndingThisWeek = 0;
+        $cancellationsAtPeriodEnd = 0;
 
         $lastWebhookAt = Cache::get('mollie_last_webhook_at');
         $lastWebhookMinutesAgo = $lastWebhookAt
@@ -128,10 +108,10 @@ class DashboardController extends Controller
             'defaultLayout' => $defaultLayout,
             'widgetRegistry' => $widgetRegistry,
             'stats' => [
-                'activeSubscriptions' => SiteSubscription::whereNotNull('mollie_subscription_id')->count(),
-                'sitesTotal' => Site::count(),
-                'sitesLegacy' => Site::where('is_legacy', true)->count(),
-                'sitesSuspended' => Site::where('status', 'suspended')->count(),
+                'activeSubscriptions' => 0,
+                'sitesTotal' => 0,
+                'sitesLegacy' => 0,
+                'sitesSuspended' => 0,
                 'customersTotal' => User::count(),
                 'revenueToday' => $todayRevenue,
                 'revenueMonth' => $monthRevenue,

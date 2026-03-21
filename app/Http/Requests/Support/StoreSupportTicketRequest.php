@@ -73,7 +73,6 @@ class StoreSupportTicketRequest extends FormRequest
                         return;
                     }
                     $exists = match ($type) {
-                        'site' => $user->sites()->where('id', (int) $value)->exists(),
                         'reseller_domain' => $user->resellerDomains()->where('id', (int) $value)->exists(),
                         'webspace_account' => $user->webspaceAccounts()->where('id', (int) $value)->exists(),
                         'game_server_account' => $user->gameServerAccounts()->where('id', (int) $value)->exists(),

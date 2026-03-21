@@ -6,7 +6,6 @@ use App\Models\CustomerBalance;
 use App\Models\Setting;
 use App\Models\Ticket;
 use App\Services\MolliePaymentMethodsService;
-use App\Services\SiteRenderService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -63,11 +62,6 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        $activeUserModules = [];
-        if ($user) {
-            $activeUserModules = app(SiteRenderService::class)->getActiveModulesForUser($user);
-        }
-
         $flash = array_filter([
             'error' => $request->session()->get('error'),
             'success' => $request->session()->get('success'),
@@ -90,6 +84,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $currentBrand->name,
                 'logoUrl' => $currentBrand->logo_url,
                 'logoCollapsedUrl' => $currentBrand->logo_collapsed_url,
+                'authCardBgUrl' => $currentBrand->auth_card_bg_url,
                 'seo' => $currentBrand->seo,
                 'themeColors' => $currentBrand->theme_colors,
             ];
@@ -128,7 +123,7 @@ class HandleInertiaRequests extends Middleware
             'pinVerifiedAt' => $user && $user->hasPin() ? $request->session()->get('pin_verified_at') : null,
             'openTicketsCount' => $openTicketsCount,
             'adminOpenTicketsCount' => $adminOpenTicketsCount,
-            'activeUserModules' => $activeUserModules,
+            'activeUserModules' => [],
             'impersonating' => $impersonating,
             'group_labels' => $groupLabels,
             'group_labels_with_colors' => $groupLabelsWithColors,

@@ -34,9 +34,9 @@ class Product extends Model
     }
 
     /**
-     * The concrete offer (Template or HostingPlan) this product represents.
+     * The concrete offer (HostingPlan) this product represents.
      *
-     * @return MorphTo<Template|HostingPlan, Product>
+     * @return MorphTo<HostingPlan, Product>
      */
     public function brand(): BelongsTo
     {

@@ -5,13 +5,8 @@ namespace App\Providers;
 use App\Listeners\LogUserEmailToPostfach;
 use App\Listeners\SendLoginNotification;
 use App\Models\Setting;
-use App\Models\Site;
-use App\Modules\Handlers\ContactModuleHandler;
-use App\Modules\Handlers\NewsletterModuleHandler;
-use App\Modules\ModuleRegistry;
 use App\Notifications\Channels\DiscordChannel;
 use App\Notifications\Channels\TransactionalMailChannel;
-use App\Observers\SiteObserver;
 use App\Services\DiscordApiService;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
@@ -74,11 +69,6 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null
         );
-
-        Site::observe(SiteObserver::class);
-
-        ModuleRegistry::register('contact', ContactModuleHandler::class);
-        ModuleRegistry::register('newsletter', NewsletterModuleHandler::class);
 
         Event::listen(Login::class, SendLoginNotification::class);
 

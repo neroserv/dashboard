@@ -86,7 +86,6 @@ class CustomerController extends Controller
     {
         $customers = User::query()
             ->with('brand:id,key,name')
-            ->withCount('sites')
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -100,8 +99,6 @@ class CustomerController extends Controller
     {
         $customer->load([
             'brand:id,key,name',
-            'sites.template',
-            'sites.siteSubscription',
             'customerBalance',
             'balanceTransactions' => fn ($q) => $q->latest()->limit(20),
             'customerNotes' => fn ($q) => $q->with('admin:id,name')->latest()->limit(50),
@@ -117,9 +114,6 @@ class CustomerController extends Controller
         $customer->loadCount(['invoices', 'tickets', 'resellerDomains']);
 
         $customerArray = $customer->toArray();
-        foreach ($customerArray['sites'] ?? [] as &$site) {
-            unset($site['id']);
-        }
         if (! empty($customerArray['balance_transactions'] ?? [])) {
             foreach ($customerArray['balance_transactions'] as &$tx) {
                 if (! empty($tx['created_at'] ?? null)) {

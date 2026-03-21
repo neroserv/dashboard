@@ -19,7 +19,7 @@ class InvoiceEInvoiceService
      */
     public function generate(Invoice $invoice): ?string
     {
-        $invoice->load(['user', 'siteSubscription.site']);
+        $invoice->load(['user']);
 
         $company = Setting::getInvoiceCompany($invoice->user?->brand);
         $supplierName = $company['company_name'];
@@ -40,10 +40,7 @@ class InvoiceEInvoiceService
         $amount = number_format((float) $invoice->amount, 2, '.', '');
         $currency = 'EUR';
 
-        $description = 'Abonnement „Meine Seiten“';
-        if ($invoice->siteSubscription && $invoice->siteSubscription->site) {
-            $description .= ' – '.$invoice->siteSubscription->site->name;
-        }
+        $description = 'Rechnung';
         if ($invoice->billing_period_start && $invoice->billing_period_end) {
             $description .= ' ('.$invoice->billing_period_start->format('d.m.Y').' – '.$invoice->billing_period_end->format('d.m.Y').')';
         }

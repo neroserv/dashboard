@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import {
+    brandCollapsedLogoRaw,
+    brandMainLogoRaw,
+    resolveBrandAssetUrl,
+} from '@/composables/useBrandLogos';
 
 const page = usePage();
 
@@ -13,12 +18,26 @@ const props = withDefaults(defineProps<Props>(), {
     variant: 'default',
 });
 
-const brand = page.props.brand as { name?: string; logoUrl?: string; logoCollapsedUrl?: string } | null;
+const brand = page.props.brand as {
+    name?: string;
+    logoUrl?: string;
+    logoCollapsedUrl?: string;
+    logo_url?: string;
+    logo_collapsed_url?: string;
+} | null;
 
 const logoUrl = computed(() => {
-    if (!brand) return null;
-    if (props.variant === 'collapsed' && brand.logoCollapsedUrl) return brand.logoCollapsedUrl;
-    return brand.logoUrl ?? null;
+    if (!brand) {
+        return null;
+    }
+    if (props.variant === 'collapsed') {
+        return (
+            resolveBrandAssetUrl(brandCollapsedLogoRaw(brand)) ??
+            resolveBrandAssetUrl(brandMainLogoRaw(brand))
+        );
+    }
+
+    return resolveBrandAssetUrl(brandMainLogoRaw(brand));
 });
 </script>
 

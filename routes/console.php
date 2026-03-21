@@ -3,8 +3,6 @@
 use App\Jobs\AutoRenewPrepaidWithBalanceJob;
 use App\Jobs\CloseInactiveTicketsJob;
 use App\Jobs\CreateDomainRenewalInvoicesJob;
-use App\Jobs\CreateSiteRenewalInvoicesJob;
-use App\Jobs\NotifySubscriptionEndingSoon;
 use App\Jobs\ProcessExpiredSubscriptions;
 use App\Jobs\SendInvoiceOverdueNotificationsJob;
 use App\Jobs\SyncResellerDomainsJob;
@@ -24,13 +22,8 @@ Schedule::call(function (): void {})->everyMinute()->before(function (): void {
 Schedule::call(function (): void {
     (new ProcessExpiredSubscriptions)->handle();
 })->everySixHours()->name('subscriptions:process-expired')->withoutOverlapping();
-Schedule::job(new NotifySubscriptionEndingSoon(14))->daily();
-Schedule::job(new NotifySubscriptionEndingSoon(7))->daily();
-Schedule::job(new NotifySubscriptionEndingSoon(3))->daily();
-Schedule::job(new NotifySubscriptionEndingSoon(1))->daily();
 Schedule::job(new SyncResellerDomainsJob)->daily();
 Schedule::job(new CreateDomainRenewalInvoicesJob)->daily();
-Schedule::job(new CreateSiteRenewalInvoicesJob)->daily();
 Schedule::job(new SendInvoiceOverdueNotificationsJob)->daily();
 Schedule::job(new VoidUnpaidInvoicesAfterGraceJob)->daily();
 Schedule::job(new CloseInactiveTicketsJob(7))->daily();

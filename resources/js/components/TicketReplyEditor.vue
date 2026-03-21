@@ -1,10 +1,14 @@
+<!-- Ticket-Antwort-Editor: Rich-Text mit Toolbar und Vorlagen (Admin-Panel) -->
 <script setup lang="ts">
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
-import { useEditor, EditorContent } from '@tiptap/vue-3';
-import { Bold, Italic, Underline, Quote, Code, RemoveFormatting, LayoutTemplate } from 'lucide-vue-next';
-import { watch, onBeforeUnmount, ref } from 'vue';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { EditorContent, useEditor } from '@tiptap/vue-3';
+import { onBeforeUnmount, ref, watch } from 'vue';
+import {
+    BButton,
+    BModal,
+} from 'bootstrap-vue-next';
+import Icon from '@/components/wrappers/Icon.vue';
 
 export type TicketMessageTemplateItem = {
     id: number;
@@ -73,8 +77,8 @@ const editor = useEditor({
     editable: !props.disabled,
     extensions: [
         StarterKit.configure({
+            codeBlock: {},
             heading: false,
-            codeBlock: true,
         }),
         Placeholder.configure({
             placeholder: props.placeholder,
@@ -97,7 +101,7 @@ watch(
         if (editor.value) {
             const html = toHtml(val);
             if (html !== editor.value.getHTML()) {
-                editor.value.commands.setContent(html, false);
+                editor.value.commands.setContent(html, { emitUpdate: false });
             }
         }
     },
@@ -121,116 +125,114 @@ function clearFormatting() {
 
 <template>
     <div
-        class="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
-        :class="{ 'opacity-60 cursor-not-allowed': disabled }"
+        class="rounded border"
+        :class="disabled ? 'opacity-60 cursor-not-allowed' : ''"
         :style="{ minHeight }"
     >
-        <!-- Toolbar (wie Quill ql-toolbar) -->
+        <!-- Toolbar: Formatierung und Vorlagen -->
         <div
             v-if="editor"
             role="toolbar"
             aria-label="Formatierung"
-            class="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-2 py-1 dark:border-gray-700 dark:bg-gray-800/50"
+            class="d-flex flex-wrap align-items-center gap-1 border-bottom bg-light px-2 py-2"
         >
-            <span v-if="showTemplates" class="flex items-center gap-0.5">
+            <template v-if="showTemplates">
                 <button
                     type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                    class="rounded p-1.5 text-body hover-bg-light border-0"
                     aria-label="Vorlagen"
                     title="Vorlagen"
                     @click="templatesModalOpen = true"
                 >
-                    <LayoutTemplate class="h-4 w-4" />
+                    <Icon icon="template" class="fs-6" />
                 </button>
-            </span>
-            <span v-if="showTemplates" class="mx-1 w-px self-stretch bg-gray-200 dark:bg-gray-600" />
-            <span class="flex items-center gap-0.5">
-                <button
-                    type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    aria-label="Fett"
-                    :aria-pressed="editor.isActive('bold')"
-                    @click="editor.chain().focus().toggleBold().run()"
-                >
-                    <Bold class="h-4 w-4" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    aria-label="Kursiv"
-                    :aria-pressed="editor.isActive('italic')"
-                    @click="editor.chain().focus().toggleItalic().run()"
-                >
-                    <Italic class="h-4 w-4" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    aria-label="Unterstrichen"
-                    :aria-pressed="editor.isActive('underline')"
-                    @click="editor.chain().focus().toggleUnderline().run()"
-                >
-                    <Underline class="h-4 w-4" />
-                </button>
-            </span>
-            <span class="mx-1 w-px self-stretch bg-gray-200 dark:bg-gray-600" />
-            <span class="flex items-center gap-0.5">
-                <button
-                    type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    aria-label="Zitat"
-                    :aria-pressed="editor.isActive('blockquote')"
-                    @click="editor.chain().focus().toggleBlockquote().run()"
-                >
-                    <Quote class="h-4 w-4" />
-                </button>
-                <button
-                    type="button"
-                    class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                    aria-label="Code"
-                    :aria-pressed="editor.isActive('code')"
-                    @click="editor.chain().focus().toggleCode().run()"
-                >
-                    <Code class="h-4 w-4" />
-                </button>
-            </span>
-            <span class="mx-1 w-px self-stretch bg-gray-200 dark:bg-gray-600" />
+                <span class="vr mx-1" />
+            </template>
             <button
                 type="button"
-                class="rounded p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
+                aria-label="Fett"
+                :aria-pressed="editor.isActive('bold')"
+                @click="editor.chain().focus().toggleBold().run()"
+            >
+                <Icon icon="bold" class="fs-6" />
+            </button>
+            <button
+                type="button"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
+                aria-label="Kursiv"
+                :aria-pressed="editor.isActive('italic')"
+                @click="editor.chain().focus().toggleItalic().run()"
+            >
+                <Icon icon="italic" class="fs-6" />
+            </button>
+            <button
+                type="button"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
+                aria-label="Unterstrichen"
+                :aria-pressed="editor.isActive('underline')"
+                @click="editor.chain().focus().toggleUnderline().run()"
+            >
+                <Icon icon="underline" class="fs-6" />
+            </button>
+            <span class="vr mx-1" />
+            <button
+                type="button"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
+                aria-label="Zitat"
+                :aria-pressed="editor.isActive('blockquote')"
+                @click="editor.chain().focus().toggleBlockquote().run()"
+            >
+                <Icon icon="blockquote" class="fs-6" />
+            </button>
+            <button
+                type="button"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
+                aria-label="Code"
+                :aria-pressed="editor.isActive('code')"
+                @click="editor.chain().focus().toggleCode().run()"
+            >
+                <Icon icon="code" class="fs-6" />
+            </button>
+            <span class="vr mx-1" />
+            <button
+                type="button"
+                class="rounded p-1.5 text-body hover-bg-light border-0"
                 aria-label="Formatierung entfernen"
                 @click="clearFormatting"
             >
-                <RemoveFormatting class="h-4 w-4" />
+                <Icon icon="clear-formatting" class="fs-6" />
             </button>
         </div>
         <EditorContent
             v-if="editor"
             :editor="editor"
             :id="id"
-            class="min-h-[100px]"
+            class="min-h-[100px] w-full"
         />
 
-        <Dialog v-if="showTemplates" :open="templatesModalOpen" @update:open="(v: boolean) => (templatesModalOpen = v)">
-            <DialogContent class="w-full max-w-2xl sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Vorlagen</DialogTitle>
-                    <DialogDescription>Vorlage wählen – Platzhalter werden beim Einfügen ersetzt.</DialogDescription>
-                </DialogHeader>
-                <div class="max-h-[60vh] space-y-1 overflow-y-auto py-2">
-                    <button
-                        v-for="t in templates"
-                        :key="t.id"
-                        type="button"
-                        class="flex w-full flex-col gap-0.5 rounded-lg border border-gray-200 px-3 py-2.5 text-left text-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                        @click="insertTemplate(t.body)"
-                    >
-                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ t.name }}</span>
-                        <span v-if="t.body" class="truncate text-xs text-gray-500 dark:text-gray-400">{{ stripHtmlPreview(t.body) }}</span>
-                    </button>
-                    <p v-if="templates.length === 0" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">Keine Vorlagen vorhanden.</p>
-                </div>
-            </DialogContent>
-        </Dialog>
+        <!-- Modal: Vorlagen auswählen -->
+        <BModal
+            v-if="showTemplates"
+            v-model="templatesModalOpen"
+            title="Vorlagen"
+            no-footer
+            size="lg"
+        >
+            <p class="text-muted small mb-3">Vorlage wählen – Platzhalter werden beim Einfügen ersetzt.</p>
+            <div class="overflow-auto py-2" style="max-height: 60vh">
+                <button
+                    v-for="t in templates"
+                    :key="t.id"
+                    type="button"
+                    class="d-flex flex-column w-100 rounded border px-3 py-2 text-start text-body text-decoration-none bg-transparent hover-bg-light small gap-1 mb-2"
+                    @click="insertTemplate(t.body)"
+                >
+                    <span class="fw-medium">{{ t.name }}</span>
+                    <span v-if="t.body" class="text-muted text-truncate" style="max-width: 100%">{{ stripHtmlPreview(t.body) }}</span>
+                </button>
+                <p v-if="templates.length === 0" class="text-center text-muted small py-4 mb-0">Keine Vorlagen vorhanden.</p>
+            </div>
+        </BModal>
     </div>
 </template>

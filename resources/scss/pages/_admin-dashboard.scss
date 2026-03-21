@@ -1,0 +1,39 @@
+//
+// Admin-Dashboard-Widgets (Grid) — analog StarterKit ecommerce: BCard + card-h-100,
+// kompakter Kopf wie RecentOrders / EcommerceStatCard.
+//
+
+.admin-dashboard-widget-slot.card {
+    margin-bottom: 0;
+    overflow: hidden;
+
+    > .card-body {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+
+        // Erstes Segment: Shadcn-CardHeader (Titel) — wie .card-header
+        > *:first-child {
+            flex-shrink: 0;
+            padding: $card-cap-padding-y $card-cap-padding-x !important;
+            margin-bottom: 0 !important;
+            border-bottom: $card-border-width solid var(--#{$prefix}border-color);
+            background-color: var(--#{$prefix}tertiary-bg);
+        }
+
+        // Zweites Segment: Shadcn-CardContent
+        > *:nth-child(2) {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            padding: $card-spacer-y $card-spacer-x !important;
+        }
+
+        // Nur ein Block (z. B. Fehlermeldung)
+        > *:only-child {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+    }
+}
