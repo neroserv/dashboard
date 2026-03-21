@@ -31,14 +31,18 @@
           <span v-if="i < breadcrumbs.length - 1">/</span>
         </span>
       </nav>
-      <div v-if="loading" class="text-center py-5">
-        <Icon icon="loader-2" class="fs-2 text-muted" />
+      <div v-if="loading" class="d-flex align-items-center justify-content-center py-5 text-muted">
+        <span class="d-inline-flex align-items-center justify-content-center" style="line-height: 0">
+          <Icon icon="loader-2" class="fs-2" />
+        </span>
       </div>
       <div v-else-if="error" class="alert alert-danger small mb-0">
         {{ error }}
       </div>
-      <div v-else-if="files.length === 0" class="text-center py-5 text-muted">
-        <Icon icon="folder" class="fs-1 opacity-50 mb-2" />
+      <div v-else-if="files.length === 0" class="d-flex flex-column align-items-center justify-content-center gap-2 py-5 text-muted text-center">
+        <span class="d-inline-flex align-items-center justify-content-center opacity-50" style="line-height: 0">
+          <Icon icon="folder" class="fs-1" />
+        </span>
         <p class="mb-0">Dieser Ordner ist leer</p>
       </div>
       <BTable v-else :items="files" :fields="fileFields" small striped>
@@ -94,8 +98,10 @@
     no-footer
     @hidden="editorVisible = false"
   >
-    <div v-if="editorLoading" class="text-center py-5">
-      <Icon icon="loader-2" class="fs-2 text-muted" />
+    <div v-if="editorLoading" class="d-flex align-items-center justify-content-center py-5 text-muted">
+      <span class="d-inline-flex align-items-center justify-content-center" style="line-height: 0">
+        <Icon icon="loader-2" class="fs-2" />
+      </span>
     </div>
     <div v-else-if="editorError" class="alert alert-danger m-3 mb-0">
       {{ editorError }}

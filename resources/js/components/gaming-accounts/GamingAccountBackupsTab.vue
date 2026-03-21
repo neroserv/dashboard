@@ -2,21 +2,28 @@
   <BCard no-body>
     <BCardBody>
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
-        <h6 class="mb-0">Backups</h6>
-        <BButton size="sm" :disabled="creating" @click="createBackup">
-          <Icon v-if="creating" icon="loader-2" class="me-1" />
-          <Icon v-else icon="plus" class="me-1" />
+        <h6 class="mb-0 d-inline-flex align-items-center gap-2">
+          <Icon icon="archive" class="fs-5 text-muted" />
+          Backups
+        </h6>
+        <BButton size="sm" class="d-inline-flex align-items-center gap-1" :disabled="creating" @click="createBackup">
+          <Icon v-if="creating" icon="loader-2" />
+          <Icon v-else icon="plus" />
           Backup erstellen
         </BButton>
       </div>
-      <div v-if="loading" class="text-center py-5">
-        <Icon icon="loader-2" class="fs-2 text-muted" />
+      <div v-if="loading" class="d-flex align-items-center justify-content-center py-5 text-muted">
+        <span class="d-inline-flex align-items-center justify-content-center" style="line-height: 0">
+          <Icon icon="loader-2" class="fs-2" />
+        </span>
       </div>
       <div v-else-if="error" class="alert alert-danger small mb-0">
         {{ error }}
       </div>
-      <div v-else-if="backups.length === 0" class="text-center py-5 text-muted">
-        <Icon icon="archive" class="fs-1 opacity-50 mb-2" />
+      <div v-else-if="backups.length === 0" class="d-flex flex-column align-items-center justify-content-center gap-2 py-5 text-muted text-center">
+        <span class="d-inline-flex align-items-center justify-content-center opacity-50" style="line-height: 0">
+          <Icon icon="archive" class="fs-1" />
+        </span>
         <p class="mb-0">Keine Backups vorhanden</p>
       </div>
       <div v-else class="d-flex flex-column gap-2">

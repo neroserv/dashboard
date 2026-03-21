@@ -4,6 +4,7 @@ use App\Models\Brand;
 use App\Models\GameServerAccount;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
+use App\Models\ProductShare;
 use App\Models\User;
 use App\Services\ControlPanels\PterodactylClient;
 
@@ -83,6 +84,51 @@ test('owner can list databases and receives success with databases array', funct
 test('non-owner cannot list databases and gets 404', function () {
     $otherUser = User::factory()->create(['brand_id' => $this->brand->id]);
     actingAs($otherUser);
+
+    $response = $this->getJson(route('gaming-accounts.api.databases.list', $this->account));
+
+    $response->assertNotFound();
+    $response->assertJsonPath('success', false);
+});
+
+test('shared user with databases permission can list databases', function () {
+    $collaborator = User::factory()->create(['brand_id' => $this->brand->id]);
+    ProductShare::create([
+        'shareable_type' => GameServerAccount::class,
+        'shareable_id' => $this->account->id,
+        'user_id' => $collaborator->id,
+        'permissions' => ['view', 'databases'],
+        'invited_by' => $this->user->id,
+        'accepted_at' => now(),
+    ]);
+
+    $this->mock(PterodactylClient::class, function ($mock) {
+        $mock->shouldReceive('listDatabases')->once()->andReturn([
+            ['id' => 's1_1', 'host' => ['address' => '127.0.0.1', 'port' => 3306], 'name' => 's1_test', 'username' => 'u1_abc'],
+        ]);
+    });
+
+    actingAs($collaborator);
+
+    $response = $this->getJson(route('gaming-accounts.api.databases.list', $this->account));
+
+    $response->assertOk();
+    $response->assertJsonPath('success', true);
+    $response->assertJsonPath('databases.0.id', 's1_1');
+});
+
+test('shared user with view only cannot list databases and gets 404', function () {
+    $collaborator = User::factory()->create(['brand_id' => $this->brand->id]);
+    ProductShare::create([
+        'shareable_type' => GameServerAccount::class,
+        'shareable_id' => $this->account->id,
+        'user_id' => $collaborator->id,
+        'permissions' => ['view'],
+        'invited_by' => $this->user->id,
+        'accepted_at' => now(),
+    ]);
+
+    actingAs($collaborator);
 
     $response = $this->getJson(route('gaming-accounts.api.databases.list', $this->account));
 

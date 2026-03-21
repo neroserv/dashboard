@@ -2,14 +2,18 @@
   <BCard no-body>
     <BCardBody>
       <h6 class="mb-4">Datenbanken</h6>
-      <div v-if="loading" class="text-center py-5">
-        <Icon icon="loader-2" class="fs-2 text-muted" />
+      <div v-if="loading" class="d-flex align-items-center justify-content-center py-5 text-muted">
+        <span class="d-inline-flex align-items-center justify-content-center" style="line-height: 0">
+          <Icon icon="loader-2" class="fs-2" />
+        </span>
       </div>
       <div v-else-if="error" class="alert alert-danger small mb-0">
         {{ error }}
       </div>
-      <div v-else-if="databases.length === 0" class="text-center py-5 text-muted">
-        <Icon icon="database" class="fs-1 opacity-50 mb-2" />
+      <div v-else-if="databases.length === 0" class="d-flex flex-column align-items-center justify-content-center gap-2 py-5 text-muted text-center">
+        <span class="d-inline-flex align-items-center justify-content-center opacity-50" style="line-height: 0">
+          <Icon icon="database" class="fs-1" />
+        </span>
         <p class="mb-0">Keine Datenbanken</p>
       </div>
       <div v-else>
@@ -30,8 +34,10 @@
         <BModal v-model="credentialsModalOpen" title="Zugangsdaten" no-footer>
           <template v-if="credentialsModalDb">
             <p class="small text-muted">{{ credentialsModalDb.name }} – {{ hostPort(credentialsModalDb) }}</p>
-            <div v-if="credentialsLoading" class="text-center py-3">
-              <Icon icon="loader-2" class="fs-4" />
+            <div v-if="credentialsLoading" class="d-flex align-items-center justify-content-center py-3 text-muted">
+              <span class="d-inline-flex align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="loader-2" class="fs-4" />
+              </span>
             </div>
             <div v-else-if="credentialsError" class="alert alert-danger small">
               {{ credentialsError }}

@@ -1,8 +1,8 @@
 <template>
   <DefaultLayout>
-    <Head :title="gameServerAccount?.name ?? 'Game Server'" />
+    <Head :title="displayServerName" />
     <PageBreadcrumb
-      :title="gameServerAccount?.name ?? 'Game Server'"
+      :title="displayServerName"
       subtitle="Meine Game Server"
       subtitle-url="/gaming-accounts"
     />
@@ -23,8 +23,8 @@
             <div class="mb-2">
               <Icon icon="gamepad" class="fs-1 text-muted" />
             </div>
-            <h5 class="mb-1">Game-Server</h5>
-            <p class="text-muted small mb-0">{{ gameServerAccount?.name }}</p>
+            <h5 class="mb-1">{{ displayServerName }}</h5>
+            <p class="text-muted small mb-0">Game-Server</p>
             <p class="text-muted small mb-0">{{ planLabel }}</p>
             <div class="border rounded p-2 mt-3 bg-light">
               <span class="text-muted small">Läuft bis</span>
@@ -115,67 +115,146 @@
                 </div>
               </div>
             </div>
-            <div v-if="!isSuspendedOrExpired" class="d-flex flex-wrap gap-2 mt-3">
-              <BButton size="sm" variant="success" :disabled="isOnline || powerLoading !== null" @click="sendPower('start')">
-                <Icon icon="power" class="me-1" />
+            <div v-if="!isSuspendedOrExpired" class="d-flex flex-wrap align-items-center gap-2 mt-3">
+              <BButton
+                size="sm"
+                variant="success"
+                class="d-inline-flex align-items-center gap-1 px-2 py-1"
+                :disabled="isOnline || powerLoading !== null"
+                @click="sendPower('start')"
+              >
+                <Icon icon="player-play" class="fs-6" />
                 Start
               </BButton>
-              <BButton size="sm" variant="outline-warning" :disabled="powerLoading !== null" @click="sendPower('restart')">
+              <BButton
+                size="sm"
+                variant="outline-warning"
+                class="d-inline-flex align-items-center gap-1 px-2 py-1"
+                :disabled="powerLoading !== null"
+                @click="sendPower('restart')"
+              >
+                <Icon icon="refresh" class="fs-6" />
                 Restart
               </BButton>
-              <BButton size="sm" variant="danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('stop')">
-                <Icon icon="power-off" class="me-1" />
+              <BButton
+                size="sm"
+                variant="danger"
+                class="d-inline-flex align-items-center gap-1 px-2 py-1"
+                :disabled="!isOnline || powerLoading !== null"
+                @click="sendPower('stop')"
+              >
+                <Icon icon="square" class="fs-6" />
                 Stop
               </BButton>
-              <BButton size="sm" variant="outline-danger" :disabled="!isOnline || powerLoading !== null" @click="sendPower('kill')">
+              <BButton
+                size="sm"
+                variant="outline-danger"
+                class="d-inline-flex align-items-center gap-1 px-2 py-1"
+                :disabled="!isOnline || powerLoading !== null"
+                @click="sendPower('kill')"
+              >
+                <Icon icon="ban" class="fs-6" />
                 Kill
               </BButton>
             </div>
           </BCardBody>
         </BCard>
 
-        <BNav tabs class="mb-3 flex-wrap">
-          <BNavItem :active="activeTab === 'console'" @click="activeTab = 'console'">
-            <Icon icon="terminal" class="me-1" /> Konsole
+        <BNav tabs class="mb-3 flex-wrap gaming-account-tabs">
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'console'" @click="activeTab = 'console'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="terminal" />
+              </span>
+              <span class="d-inline-flex align-items-center">Konsole</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'files'" @click="activeTab = 'files'">
-            <Icon icon="folder" class="me-1" /> Dateien
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'files'" @click="activeTab = 'files'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="folder" />
+              </span>
+              <span class="d-inline-flex align-items-center">Dateien</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'backups'" @click="activeTab = 'backups'">
-            <Icon icon="archive" class="me-1" /> Backups
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'backups'" @click="activeTab = 'backups'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="archive" />
+              </span>
+              <span class="d-inline-flex align-items-center">Backups</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'databases'" @click="activeTab = 'databases'">
-            <Icon icon="database" class="me-1" /> Datenbank
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'databases'" @click="activeTab = 'databases'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="database" />
+              </span>
+              <span class="d-inline-flex align-items-center">Datenbank</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'schedules'" @click="activeTab = 'schedules'">
-            <Icon icon="calendar" class="me-1" /> Schedules
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'schedules'" @click="activeTab = 'schedules'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="calendar" />
+              </span>
+              <span class="d-inline-flex align-items-center">Schedules</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'access'" @click="activeTab = 'access'">
-            <Icon icon="external-link" class="me-1" /> Zugang
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'access'" @click="activeTab = 'access'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="key" />
+              </span>
+              <span class="d-inline-flex align-items-center">Zugang</span>
+            </span>
           </BNavItem>
-          <BNavItem :active="activeTab === 'rename'" @click="activeTab = 'rename'">
-            <Icon icon="pencil" class="me-1" /> Umbenennen
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'rename'" @click="activeTab = 'rename'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="pencil" />
+              </span>
+              <span class="d-inline-flex align-items-center">Umbenennen</span>
+            </span>
           </BNavItem>
           <BNavItem
             v-if="connectDomainShowUrl || (subdomainUpdateUrl && subdomainSuffix)"
+            link-class="d-inline-flex align-items-center"
             :active="activeTab === 'domain'"
             @click="activeTab = 'domain'"
           >
-            <Icon icon="globe" class="me-1" /> Domain
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="globe" />
+              </span>
+              <span class="d-inline-flex align-items-center">Domain</span>
+            </span>
           </BNavItem>
           <BNavItem
             v-if="isCloudAccount && cloudResourcesUpdateUrl && !isSuspendedOrExpired"
+            link-class="d-inline-flex align-items-center"
             :active="activeTab === 'ressourcen'"
             @click="activeTab = 'ressourcen'"
           >
-            <Icon icon="cpu" class="me-1" /> Ressourcen
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="cpu" />
+              </span>
+              <span class="d-inline-flex align-items-center">Ressourcen</span>
+            </span>
           </BNavItem>
           <BNavItem
             v-if="canManageCollaborators"
+            link-class="d-inline-flex align-items-center"
             :active="activeTab === 'sharing'"
             @click="activeTab = 'sharing'"
           >
-            <Icon icon="share" class="me-1" /> Teilen
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="share" />
+              </span>
+              <span class="d-inline-flex align-items-center">Teilen</span>
+            </span>
           </BNavItem>
         </BNav>
 
@@ -254,47 +333,64 @@
 
         <BCard v-else-if="activeTab === 'access'" no-body>
           <BCardBody>
-            <div v-if="gameServerAccount?.name" class="mb-3">
+            <h6 class="mb-3">Zugangsdaten</h6>
+            <p class="text-muted small mb-4">
+              Name, Identifier und Anmeldedaten für das Pterodactyl-Panel. Alles per Klick kopierbar.
+            </p>
+            <div class="mb-3">
               <label class="form-label small">Server-Name</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="gameServerAccount.name" readonly class="font-monospace" />
-                <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(gameServerAccount.name)">
+                <BFormInput :model-value="displayServerName" readonly class="font-monospace flex-grow-1" />
+                <BButton
+                  size="sm"
+                  variant="outline-secondary"
+                  :disabled="!copyableServerLabel"
+                  @click="copyToClipboard(copyableServerLabel)"
+                >
                   <Icon icon="copy" />
                 </BButton>
               </div>
             </div>
-            <div v-if="gameServerAccount?.identifier" class="mb-3">
+            <div class="mb-3">
               <label class="form-label small">Server-ID (Identifier)</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="gameServerAccount.identifier" readonly class="font-monospace" />
-                <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(gameServerAccount.identifier!)">
+                <BFormInput :model-value="gameServerAccount?.identifier ?? '—'" readonly class="font-monospace flex-grow-1" />
+                <BButton
+                  size="sm"
+                  variant="outline-secondary"
+                  :disabled="!gameServerAccount?.identifier"
+                  @click="copyToClipboard(gameServerAccount!.identifier!)"
+                >
                   <Icon icon="copy" />
                 </BButton>
               </div>
             </div>
-            <div v-if="userEmail" class="mb-3">
-              <label class="form-label small">E-Mail-Adresse</label>
+            <div class="mb-3">
+              <label class="form-label small">E-Mail-Adresse (Panel-Login)</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="userEmail" readonly class="font-monospace" />
-                <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(userEmail)">
+                <BFormInput :model-value="userEmail || '—'" readonly class="font-monospace flex-grow-1" />
+                <BButton size="sm" variant="outline-secondary" :disabled="!userEmail" @click="copyToClipboard(userEmail)">
                   <Icon icon="copy" />
                 </BButton>
               </div>
             </div>
-            <div v-if="loginUrl" class="mb-3">
+            <div class="mb-3">
               <label class="form-label small">Panel-URL</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="loginUrl" readonly class="font-monospace" />
-                <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(loginUrl)">
+                <BFormInput :model-value="loginUrl ?? '—'" readonly class="font-monospace flex-grow-1" />
+                <BButton size="sm" variant="outline-secondary" :disabled="!loginUrl" @click="copyToClipboard(loginUrl!)">
                   <Icon icon="copy" />
                 </BButton>
               </div>
+              <p v-if="!loginUrl" class="text-muted small mt-1 mb-0">
+                Die Panel-URL steht zur Verfügung, sobald der Server bereitgestellt ist (Identifier im Panel).
+              </p>
             </div>
-            <div v-if="displayAllocation" class="mb-3">
+            <div class="mb-3">
               <label class="form-label small">Server-Adresse</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="displayAllocation" readonly class="font-monospace" />
-                <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(displayAllocation)">
+                <BFormInput :model-value="displayAllocation ?? '—'" readonly class="font-monospace flex-grow-1" />
+                <BButton size="sm" variant="outline-secondary" :disabled="!displayAllocation" @click="copyToClipboard(displayAllocation!)">
                   <Icon icon="copy" />
                 </BButton>
               </div>
@@ -302,15 +398,21 @@
             <div v-if="gameServerAccount?.allocation?.subdomain" class="mb-3">
               <label class="form-label small">Subdomain</label>
               <div class="d-flex gap-2">
-                <BFormInput :value="gameServerAccount.allocation.subdomain" readonly class="font-monospace" />
+                <BFormInput :model-value="gameServerAccount.allocation.subdomain" readonly class="font-monospace flex-grow-1" />
                 <BButton size="sm" variant="outline-secondary" @click="copyToClipboard(gameServerAccount.allocation!.subdomain!)">
                   <Icon icon="copy" />
                 </BButton>
               </div>
             </div>
             <div class="pt-2 border-top">
-              <a v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
-                <Icon icon="external-link" class="me-1" />
+              <a
+                v-if="loginUrl && !isSuspendedOrExpired"
+                :href="loginUrl"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1"
+              >
+                <Icon icon="external-link" />
                 Im Panel anmelden
               </a>
               <p v-else-if="isSuspendedOrExpired" class="text-muted small mb-0">Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.</p>
@@ -320,8 +422,14 @@
               <p class="text-muted small mb-2">
                 Ihr Panel-Passwort können Sie im Pterodactyl-Panel unter „Zugangsdaten“ oder „Passwort“ anzeigen und ändern.
               </p>
-              <a v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
-                <Icon icon="external-link" class="me-1" />
+              <a
+                v-if="loginUrl && !isSuspendedOrExpired"
+                :href="loginUrl"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+              >
+                <Icon icon="external-link" />
                 Panel öffnen (Passwort verwalten)
               </a>
             </div>
@@ -333,17 +441,27 @@
           <BCardBody>
             <h6 class="mb-2">Server umbenennen</h6>
             <p class="text-muted small mb-3">
-              Den Anzeigenamen Ihres Servers können Sie im Pterodactyl-Panel unter Einstellungen ändern.
+              Den Anzeigenamen ändern Sie im Pterodactyl-Panel unter Server-Einstellungen („Settings“ / Name).
             </p>
-            <div v-if="gameServerAccount?.name" class="mb-3">
+            <div class="mb-3">
               <label class="form-label small">Aktueller Name</label>
-              <BFormInput :value="gameServerAccount.name" readonly />
+              <BFormInput :model-value="displayServerName" readonly />
+              <p v-if="!String(gameServerAccount?.name ?? '').trim()" class="text-muted small mt-1 mb-0">
+                In der Datenbank ist noch kein Name hinterlegt — im Panel können Sie einen festen Anzeigenamen setzen.
+              </p>
             </div>
-            <a v-if="loginUrl && !isSuspendedOrExpired" :href="loginUrl" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
-              <Icon icon="pencil" class="me-1" />
+            <a
+              v-if="loginUrl && !isSuspendedOrExpired"
+              :href="loginUrl"
+              target="_blank"
+              rel="noopener"
+              class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+            >
+              <Icon icon="pencil" />
               Im Panel umbenennen
             </a>
             <p v-else-if="isSuspendedOrExpired" class="text-muted small mb-0">Server gesperrt. Bitte verlängern Sie, um das Panel zu nutzen.</p>
+            <p v-else-if="!loginUrl" class="text-muted small mb-0">Panel-Link folgt, sobald der Server bereitgestellt ist.</p>
           </BCardBody>
         </BCard>
 
@@ -531,7 +649,7 @@ type ServerOverview = {
 }
 type GameServerAccount = {
   uuid: string
-  name: string
+  name?: string | null
   status: string
   identifier?: string | null
   current_period_ends_at: string | null
@@ -714,6 +832,26 @@ const statusVariant = computed((): 'success' | 'secondary' | 'danger' => {
 })
 const displayAllocation = computed(() => displayOverview.value?.allocation ?? null)
 
+const displayServerName = computed(() => {
+  const n = String(props.gameServerAccount?.name ?? '').trim()
+  if (n !== '') {
+    return n
+  }
+  const id = props.gameServerAccount?.identifier
+  if (id) {
+    return id
+  }
+  return 'Game Server'
+})
+
+const copyableServerLabel = computed(() => {
+  const n = String(props.gameServerAccount?.name ?? '').trim()
+  if (n !== '') {
+    return n
+  }
+  return String(props.gameServerAccount?.identifier ?? '').trim()
+})
+
 const overviewFields = [{ key: 'label', label: '' }, { key: 'value', label: '' }]
 const overviewRows = computed(() => {
   const o = displayOverview.value
@@ -882,3 +1020,9 @@ function submitSubdomainChange() {
   })
 }
 </script>
+
+<style scoped>
+.gaming-account-tabs :deep(.nav-link svg) {
+  display: block;
+}
+</style>

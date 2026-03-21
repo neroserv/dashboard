@@ -809,8 +809,13 @@ class PterodactylClient implements ControlPanelContract
         }
         $this->setServer($server);
         $data = $this->clientApiRequest('/api/client/servers/'.$account->identifier.'/schedules/'.$scheduleId);
+        $inner = $data['data'] ?? $data;
+        $attrs = is_array($inner) ? ($inner['attributes'] ?? []) : [];
+        $relationships = is_array($inner) ? ($inner['relationships'] ?? []) : [];
 
-        return $data['attributes'] ?? $data;
+        return array_merge(is_array($attrs) ? $attrs : [], [
+            'relationships' => is_array($relationships) ? $relationships : [],
+        ]);
     }
 
     /**

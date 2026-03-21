@@ -17,12 +17,12 @@ import {
 } from 'bootstrap-vue-next';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import Icon from '@/components/wrappers/Icon.vue';
+import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import { dashboard } from '@/routes';
 import adminTickets from '@/routes/admin/tickets';
 import type { BreadcrumbItem } from '@/types';
 
-type User = { id: number; name: string; email?: string };
-type Site = { id: number; name: string; slug: string } | null;
+type User = { id: number; name: string; email?: string; avatar?: string | null };
 type TicketCategory = { id: number; name: string; slug: string };
 type TicketPriority = { id: number; name: string; slug: string; color: string | null } | null;
 
@@ -35,7 +35,8 @@ type Ticket = {
     user?: User;
     ticket_category?: TicketCategory;
     ticket_priority?: TicketPriority;
-    site?: Site;
+    /** Betroffene Dienste (aus ticket_services), z. B. Domain/Webspace-Namen */
+    service_display?: string;
     assigned_to?: User | null;
 };
 
@@ -168,10 +169,22 @@ const tableFields = [
                                 #{{ row.item.id }}
                             </template>
                             <template #cell(customer)="row">
-                                <span v-if="row.item.user">{{ row.item.user.name }}</span>
-                                <br v-if="row.item.user?.email" />
-                                <span v-if="row.item.user?.email" class="small text-muted">{{ row.item.user.email }}</span>
-                                <span v-if="!row.item.user">–</span>
+                                <div v-if="row.item.user" class="d-flex align-items-center gap-2">
+                                    <UserAvatarOrInitials
+                                        :name="row.item.user.name"
+                                        :src="row.item.user.avatar ?? null"
+                                        :size="36"
+                                        rounded-class="rounded-3"
+                                        class="flex-shrink-0"
+                                    />
+                                    <div class="min-w-0">
+                                        <span class="d-block text-truncate">{{ row.item.user.name }}</span>
+                                        <span v-if="row.item.user.email" class="small text-muted d-block text-truncate">{{
+                                            row.item.user.email
+                                        }}</span>
+                                    </div>
+                                </div>
+                                <span v-else>–</span>
                             </template>
                             <template #cell(category)="row">
                                 {{ row.item.ticket_category?.name ?? '–' }}
@@ -194,7 +207,7 @@ const tableFields = [
                                 <span v-else>–</span>
                             </template>
                             <template #cell(site_name)="row">
-                                {{ row.item.site?.name ?? '–' }}
+                                {{ row.item.service_display ?? '–' }}
                             </template>
                             <template #cell(status_display)="row">
                                 {{ statusLabels[row.item.status] ?? row.item.status }}

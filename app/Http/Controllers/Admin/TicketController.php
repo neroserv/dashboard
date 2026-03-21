@@ -31,7 +31,13 @@ class TicketController extends Controller
     public function index(Request $request): Response
     {
         $query = Ticket::query()
-            ->with(['user:id,name,email', 'ticketCategory:id,name,slug', 'ticketPriority:id,name,slug,color', 'site:id,name,slug', 'assignedTo:id,name']);
+            ->with([
+                'user:id,name,email,avatar_path',
+                'ticketCategory:id,name,slug',
+                'ticketPriority:id,name,slug,color',
+                'ticketServices',
+                'assignedTo:id,name,avatar_path',
+            ]);
 
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
@@ -51,6 +57,15 @@ class TicketController extends Controller
 
         $tickets = $query->latest()->paginate(15)->withQueryString();
 
+        $tickets->through(function (Ticket $ticket): Ticket {
+            $summary = $ticket->ticketServices->isEmpty()
+                ? 'Allgemein / Kein Dienst'
+                : $ticket->ticketServices->map(fn (TicketService $ts) => $ts->resolveLabel())->join(', ');
+            $ticket->setAttribute('service_display', $summary);
+
+            return $ticket;
+        });
+
         $categories = \App\Models\TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
         $priorities = \App\Models\TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
         $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name']);
@@ -66,19 +81,19 @@ class TicketController extends Controller
     public function show(Ticket $ticket): Response
     {
         $ticket->load([
-            'user:id,name,email',
+            'user:id,name,email,avatar_path',
             'ticketCategory',
             'ticketPriority',
             'ticketServices',
-            'assignedTo:id,name',
+            'assignedTo:id,name,avatar_path',
             'tags:id,name,slug,color',
-            'messages' => fn ($q) => $q->with(['user:id,name,is_admin', 'attachments'])->orderBy('created_at'),
+            'messages' => fn ($q) => $q->with(['user:id,name,is_admin,avatar_path', 'attachments'])->orderBy('created_at'),
         ]);
         $lastMessage = $ticket->messages->last();
         $lastMessageFromCustomer = $lastMessage !== null && ! $lastMessage->user?->is_admin;
         $categories = \App\Models\TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
         $priorities = \App\Models\TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
-        $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name']);
+        $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name', 'avatar_path']);
         $customerSites = [];
         $recentTickets = Ticket::query()
             ->where('user_id', $ticket->user_id)
@@ -172,10 +187,9 @@ class TicketController extends Controller
             ->get(['id', 'name', 'body']);
 
         $affectedServices = $ticket->ticketServices->map(function (TicketService $ts) {
-            $label = $this->resolveServiceLabel($ts->service_type, $ts->service_id);
             $url = $this->resolveServiceAdminUrl($ts->service_type, $ts->service_id);
 
-            return ['type' => $ts->service_type, 'id' => $ts->service_id, 'label' => $label, 'url' => $url];
+            return ['type' => $ts->service_type, 'id' => $ts->service_id, 'label' => $ts->resolveLabel(), 'url' => $url];
         })->values()->all();
 
         $serviceName = $affectedServices !== []
@@ -196,17 +210,6 @@ class TicketController extends Controller
             'serviceName' => $serviceName,
             'affectedServices' => $affectedServices,
         ]);
-    }
-
-    private function resolveServiceLabel(string $serviceType, int $serviceId): string
-    {
-        return match ($serviceType) {
-            'reseller_domain' => \App\Models\ResellerDomain::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
-            'webspace_account' => \App\Models\WebspaceAccount::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
-            'game_server_account' => \App\Models\GameServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
-            'teamspeak_server_account' => \App\Models\TeamSpeakServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
-            default => "#{$serviceId}",
-        };
     }
 
     /**

@@ -148,7 +148,7 @@ class SupportController extends Controller
             'ticketCategory',
             'ticketPriority',
             'ticketServices',
-            'messages' => fn ($q) => $q->with(['user:id,name', 'attachments'])->orderBy('created_at'),
+            'messages' => fn ($q) => $q->with(['user:id,name,is_admin,avatar_path', 'attachments'])->orderBy('created_at'),
         ]);
         $messages = $ticket->messages->map(function ($msg) use ($request) {
             $arr = $msg->toArray();
@@ -198,9 +198,7 @@ class SupportController extends Controller
         })->values()->all();
 
         $affectedServices = $ticket->ticketServices->map(function (TicketService $ts) {
-            $label = $this->resolveServiceLabel($ts->service_type, $ts->service_id);
-
-            return ['type' => $ts->service_type, 'id' => $ts->service_id, 'label' => $label];
+            return ['type' => $ts->service_type, 'id' => $ts->service_id, 'label' => $ts->resolveLabel()];
         })->values()->all();
 
         $serviceName = $affectedServices !== []
@@ -278,16 +276,5 @@ class SupportController extends Controller
     private function isSupportEnabled(): bool
     {
         return (bool) filter_var(Setting::get('support_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-    }
-
-    private function resolveServiceLabel(string $serviceType, int $serviceId): string
-    {
-        return match ($serviceType) {
-            'reseller_domain' => \App\Models\ResellerDomain::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
-            'webspace_account' => \App\Models\WebspaceAccount::where('id', $serviceId)->value('domain') ?? "#{$serviceId}",
-            'game_server_account' => \App\Models\GameServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
-            'teamspeak_server_account' => \App\Models\TeamSpeakServerAccount::where('id', $serviceId)->value('name') ?? "#{$serviceId}",
-            default => "#{$serviceId}",
-        };
     }
 }

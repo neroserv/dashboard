@@ -831,7 +831,7 @@ class CheckoutController extends Controller
             ->orWhere('mollie_subscription_id', $molliePaymentId)
             ->first();
         if ($existing) {
-            return redirect()->route('teamspeak-accounts.show', $existing->id)->with('success', 'Ihr TeamSpeak-Server ist aktiv.');
+            return redirect()->route('teamspeak-accounts.show', $existing)->with('success', 'Ihr TeamSpeak-Server ist aktiv.');
         }
 
         $plan = HostingPlan::find($planId);
@@ -882,7 +882,7 @@ class CheckoutController extends Controller
                 'option_values' => ! empty($optionChoices) ? $optionChoices : null,
             ]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('error', 'Für dieses Paket ist derzeit kein TeamSpeak-Server verfügbar. Bitte kontaktieren Sie uns.');
         }
 
@@ -903,7 +903,7 @@ class CheckoutController extends Controller
 
         $account->refresh();
         if ($account->virtual_server_id !== null) {
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('success', 'Ihr TeamSpeak-Server ist bereits eingerichtet.');
         }
 
@@ -922,7 +922,7 @@ class CheckoutController extends Controller
             ]);
             Log::debug('Checkout success teamspeak: virtual server created (Mollie)', ['account_id' => $account->id]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('success', 'Ihr TeamSpeak-Server wurde erfolgreich eingerichtet.');
         } catch (\Throwable $e) {
             Log::error('Checkout success teamspeak: createVirtualServer exception', [
@@ -931,7 +931,7 @@ class CheckoutController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('error', 'Der TeamSpeak-Server konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
     }
@@ -1639,7 +1639,7 @@ class CheckoutController extends Controller
                 'option_values' => ! empty($optionChoices) ? $optionChoices : null,
             ]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('error', 'Für dieses Paket ist derzeit kein TeamSpeak-Server verfügbar. Bitte kontaktieren Sie uns.');
         }
 
@@ -1667,7 +1667,7 @@ class CheckoutController extends Controller
 
         $account->refresh();
         if ($account->virtual_server_id !== null) {
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('success', 'Ihr TeamSpeak-Server ist bereits eingerichtet.');
         }
 
@@ -1686,7 +1686,7 @@ class CheckoutController extends Controller
             ]);
             Log::debug('TeamSpeak balance checkout: virtual server created', ['account_id' => $account->id]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('success', 'Ihr TeamSpeak-Server wurde erfolgreich eingerichtet.');
         } catch (\Throwable $e) {
             Log::error('TeamSpeak balance checkout: createVirtualServer exception', [
@@ -1694,7 +1694,7 @@ class CheckoutController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-            return redirect()->route('teamspeak-accounts.show', $account->id)
+            return redirect()->route('teamspeak-accounts.show', $account)
                 ->with('error', 'Der TeamSpeak-Server konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
     }

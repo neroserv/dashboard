@@ -25,6 +25,19 @@ test('admin users can view tickets index', function () {
     $response->assertOk();
 });
 
+test('admin tickets index exposes service display from ticket services', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    Ticket::factory()->create(['ticket_category_id' => $category->id]);
+    $this->actingAs($admin);
+
+    $this->get(route('admin.tickets.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/tickets/Index')
+            ->has('tickets.data.0.service_display'));
+});
+
 test('admin users can view ticket', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $category = TicketCategory::factory()->create();

@@ -645,17 +645,28 @@ class GamingAccountController extends Controller
     }
 
     /**
-     * Ensure user owns the account and is not suspended. Returns JSON error response or null.
+     * Ensure the user may call the gaming account JSON API: owner, or shared with the given permission.
+     * Shared users need the matching key from config/product-share-permissions (e.g. panel_login, backups).
      */
-    private function ensureAccountOwnerApi(Request $request, GameServerAccount $gameServerAccount): ?JsonResponse
+    private function ensureGameServerAccountPanelApi(Request $request, GameServerAccount $gameServerAccount, string $requiredSharedPermission): ?JsonResponse
     {
         $redirect = $this->ensureGamingFeature($request);
         if ($redirect !== null) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if ($gameServerAccount->user_id !== $request->user()->id) {
+
+        $user = $request->user();
+        if ($user === null) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $allowed = $gameServerAccount->isOwnedBy($user)
+            || $gameServerAccount->userCan($user, $requiredSharedPermission);
+
+        if (! $allowed) {
             return response()->json(['success' => false, 'message' => 'Not found'], 404);
         }
+
         if ($gameServerAccount->isSuspendedOrExpired()) {
             return response()->json(['success' => false, 'message' => 'Server gesperrt oder abgelaufen.'], 403);
         }
@@ -672,7 +683,7 @@ class GamingAccountController extends Controller
      */
     public function consoleWebsocket(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -691,7 +702,7 @@ class GamingAccountController extends Controller
      */
     public function consoleCommand(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -714,7 +725,7 @@ class GamingAccountController extends Controller
      */
     public function filesList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -737,7 +748,7 @@ class GamingAccountController extends Controller
      */
     public function filesContents(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -760,7 +771,7 @@ class GamingAccountController extends Controller
      */
     public function filesWrite(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -787,7 +798,7 @@ class GamingAccountController extends Controller
      */
     public function filesDownload(Request $request, GameServerAccount $gameServerAccount): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -825,7 +836,7 @@ class GamingAccountController extends Controller
      */
     public function filesCreateFolder(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -852,7 +863,7 @@ class GamingAccountController extends Controller
      */
     public function filesDelete(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -883,7 +894,7 @@ class GamingAccountController extends Controller
      */
     public function filesRename(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -919,7 +930,7 @@ class GamingAccountController extends Controller
      */
     public function filesUpload(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -959,7 +970,7 @@ class GamingAccountController extends Controller
      */
     public function filesCompress(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -990,7 +1001,7 @@ class GamingAccountController extends Controller
      */
     public function filesDecompress(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'panel_login');
         if ($err !== null) {
             return $err;
         }
@@ -1017,7 +1028,7 @@ class GamingAccountController extends Controller
      */
     public function backupsList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'backups');
         if ($err !== null) {
             return $err;
         }
@@ -1036,7 +1047,7 @@ class GamingAccountController extends Controller
      */
     public function backupsCreate(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'backups');
         if ($err !== null) {
             return $err;
         }
@@ -1060,7 +1071,7 @@ class GamingAccountController extends Controller
      */
     public function backupsDownload(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse|RedirectResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'backups');
         if ($err !== null) {
             return $err;
         }
@@ -1083,7 +1094,7 @@ class GamingAccountController extends Controller
      */
     public function backupsRestore(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'backups');
         if ($err !== null) {
             return $err;
         }
@@ -1102,7 +1113,7 @@ class GamingAccountController extends Controller
      */
     public function backupsDelete(Request $request, GameServerAccount $gameServerAccount, string $backupUuid): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'backups');
         if ($err !== null) {
             return $err;
         }
@@ -1121,7 +1132,7 @@ class GamingAccountController extends Controller
      */
     public function databasesList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'databases');
         if ($err !== null) {
             return $err;
         }
@@ -1140,7 +1151,7 @@ class GamingAccountController extends Controller
      */
     public function databaseCredentials(Request $request, GameServerAccount $gameServerAccount, string $databaseId): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'databases');
         if ($err !== null) {
             return $err;
         }
@@ -1236,7 +1247,7 @@ class GamingAccountController extends Controller
      */
     public function databaseExport(Request $request, GameServerAccount $gameServerAccount, string $databaseId): StreamedResponse|RedirectResponse|JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'databases');
         if ($err !== null) {
             return $err;
         }
@@ -1292,7 +1303,7 @@ class GamingAccountController extends Controller
      */
     public function schedulesList(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1311,7 +1322,7 @@ class GamingAccountController extends Controller
      */
     public function schedulesCreate(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1345,7 +1356,7 @@ class GamingAccountController extends Controller
      */
     public function schedulesDelete(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1364,7 +1375,7 @@ class GamingAccountController extends Controller
      */
     public function schedulesExecute(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1383,7 +1394,7 @@ class GamingAccountController extends Controller
      */
     public function schedulesShow(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1403,7 +1414,7 @@ class GamingAccountController extends Controller
      */
     public function scheduleTasksCreate(Request $request, GameServerAccount $gameServerAccount, int $schedule): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }
@@ -1435,7 +1446,7 @@ class GamingAccountController extends Controller
      */
     public function scheduleTasksDelete(Request $request, GameServerAccount $gameServerAccount, int $schedule, int $task): JsonResponse
     {
-        $err = $this->ensureAccountOwnerApi($request, $gameServerAccount);
+        $err = $this->ensureGameServerAccountPanelApi($request, $gameServerAccount, 'schedules');
         if ($err !== null) {
             return $err;
         }

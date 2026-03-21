@@ -1,6 +1,6 @@
 <!-- Admin: Ticket (Detail) -->
 <script setup lang="ts">
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import {
     BBadge,
@@ -21,6 +21,7 @@ import {
     BRow,
 } from 'bootstrap-vue-next';
 import InputError from '@/components/InputError.vue';
+import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import TicketReplyEditor from '@/components/TicketReplyEditor.vue';
 import Icon from '@/components/wrappers/Icon.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -90,6 +91,13 @@ type Props = {
 
 const props = defineProps<Props>();
 
+const page = usePage();
+const authUser = computed((): { name: string; avatar?: string | null } | null => {
+    const u = page.props.auth?.user as { name?: string; avatar?: string | null } | undefined;
+
+    return u?.name ? { name: u.name, avatar: u.avatar ?? null } : null;
+});
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
     { title: 'Admin', href: '/admin' },
@@ -133,6 +141,23 @@ const assignedToName = computed(() => {
     return a?.name ?? '–';
 });
 
+function statusHighlightClass(status: string): string {
+    switch (status) {
+        case 'open':
+            return 'ticket-meta-pill ticket-meta-pill--open';
+        case 'in_progress':
+            return 'ticket-meta-pill ticket-meta-pill--progress';
+        case 'waiting_customer':
+            return 'ticket-meta-pill ticket-meta-pill--waiting';
+        case 'resolved':
+            return 'ticket-meta-pill ticket-meta-pill--resolved';
+        case 'closed':
+            return 'ticket-meta-pill ticket-meta-pill--closed';
+        default:
+            return 'ticket-meta-pill ticket-meta-pill--default';
+    }
+}
+
 const templateReplacements = computed(() => {
     const t = props.ticket;
     const assigned = t.assigned_to != null ? props.admins.find((a) => a.id === t.assigned_to)?.name ?? '–' : '–';
@@ -143,7 +168,7 @@ const templateReplacements = computed(() => {
         email: t.user?.email ?? '',
         ticket_id: String(t.id),
         betreff: t.subject ?? '',
-        produkt: props.serviceName ?? t.site?.name ?? '–',
+        produkt: props.serviceName ?? '–',
         zugewiesen: assigned,
         datum,
     };
@@ -337,15 +362,43 @@ onMounted(() => {
                 <BCard no-body>
                     <BCardHeader class="py-3">
                         <BCardTitle class="mb-2">Ticket</BCardTitle>
-                        <BNav tabs class="card-header-tabs mb-0 flex-wrap">
-                            <BNavItem :active="sidebarTab === 'info'" @click="sidebarTab = 'info'">
-                                <Icon icon="info" class="me-1" /> Informationen
+                        <BNav tabs class="ticket-sidebar-nav card-header-tabs mb-0 flex-nowrap">
+                            <BNavItem
+                                link-class="ticket-sidebar-nav-link d-inline-flex align-items-center justify-content-center"
+                                :active="sidebarTab === 'info'"
+                                title="Informationen"
+                                @click="sidebarTab = 'info'"
+                            >
+                                <span class="d-inline-flex align-items-center gap-1 text-nowrap lh-1">
+                                    <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center lh-0 ticket-sidebar-nav-icon">
+                                        <Icon icon="info-circle" />
+                                    </span>
+                                    <span>Info</span>
+                                </span>
                             </BNavItem>
-                            <BNavItem :active="sidebarTab === 'edit'" @click="sidebarTab = 'edit'">
-                                <Icon icon="pencil" class="me-1" /> Bearbeiten
+                            <BNavItem
+                                link-class="ticket-sidebar-nav-link d-inline-flex align-items-center justify-content-center"
+                                :active="sidebarTab === 'edit'"
+                                @click="sidebarTab = 'edit'"
+                            >
+                                <span class="d-inline-flex align-items-center gap-1 text-nowrap lh-1">
+                                    <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center lh-0 ticket-sidebar-nav-icon">
+                                        <Icon icon="pencil" />
+                                    </span>
+                                    <span>Bearbeiten</span>
+                                </span>
                             </BNavItem>
-                            <BNavItem :active="sidebarTab === 'actions'" @click="sidebarTab = 'actions'">
-                                <Icon icon="bolt" class="me-1" /> Aktionen
+                            <BNavItem
+                                link-class="ticket-sidebar-nav-link d-inline-flex align-items-center justify-content-center"
+                                :active="sidebarTab === 'actions'"
+                                @click="sidebarTab = 'actions'"
+                            >
+                                <span class="d-inline-flex align-items-center gap-1 text-nowrap lh-1">
+                                    <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center lh-0 ticket-sidebar-nav-icon">
+                                        <Icon icon="bolt" />
+                                    </span>
+                                    <span>Aktionen</span>
+                                </span>
                             </BNavItem>
                         </BNav>
                     </BCardHeader>
@@ -375,21 +428,44 @@ onMounted(() => {
                                 <span class="small">{{ formatDateTime(ticket.created_at) }}</span>
                             </div>
                             <div>
-                                <p class="mb-1 fw-semibold small">Zugewiesen an</p>
-                                <span class="small">{{ assignedToName }}</span>
+                                <p class="mb-1 fw-semibold small">Status</p>
+                                <span :class="statusHighlightClass(ticket.status)">
+                                    {{ statusLabels[ticket.status] ?? ticket.status }}
+                                </span>
                             </div>
                             <div>
-                                <p class="mb-1 fw-semibold small">Status</p>
-                                <span class="small">{{ statusLabels[ticket.status] ?? ticket.status }}</span>
+                                <p class="mb-1 fw-semibold small">Zugewiesen an</p>
+                                <span
+                                    v-if="assignedToName !== '–'"
+                                    class="ticket-meta-pill ticket-meta-pill--assignee"
+                                >
+                                    {{ assignedToName }}
+                                </span>
+                                <span v-else class="small text-muted">–</span>
                             </div>
                             <div>
                                 <p class="mb-1 fw-semibold small">Kunde</p>
-                                <div class="small">
-                                    <span v-if="ticket.user">
-                                        <Link :href="adminCustomers.show(ticket.user_id).url">{{ ticket.user.name }}</Link>
-                                    </span>
-                                    <span v-else>–</span>
-                                    <span v-if="ticket.user?.email" class="d-block text-muted">{{ ticket.user.email }}</span>
+                                <div v-if="ticket.user" class="small d-flex align-items-start gap-3">
+                                    <UserAvatarOrInitials
+                                        :name="ticket.user.name"
+                                        :src="ticket.user.avatar ?? null"
+                                        :size="40"
+                                        rounded-class="rounded-3"
+                                        class="flex-shrink-0 align-self-start"
+                                    />
+                                    <div class="min-w-0 d-flex flex-column gap-2">
+                                        <Link
+                                            :href="adminCustomers.show(ticket.user_id).url"
+                                            class="d-inline-block text-body fw-medium text-decoration-none"
+                                        >
+                                            {{ ticket.user.name }}
+                                        </Link>
+                                        <span v-if="ticket.user.email" class="text-muted">{{ ticket.user.email }}</span>
+                                        <span v-if="affectedServices?.length">Produkt/Site: {{ serviceName }}</span>
+                                    </div>
+                                </div>
+                                <div v-else class="small">
+                                    <span>–</span>
                                     <span v-if="affectedServices?.length" class="d-block">Produkt/Site: {{ serviceName }}</span>
                                 </div>
                             </div>
@@ -443,7 +519,7 @@ onMounted(() => {
                         </div>
 
                         <!-- Tab: Aktionen -->
-                        <div v-show="sidebarTab === 'actions'" class="d-flex flex-column gap-2">
+                        <div v-show="sidebarTab === 'actions'" class="d-flex flex-column gap-3 pt-1">
                             <BButton variant="primary" @click="focusReply(false)">Antworten</BButton>
                             <BButton variant="outline-secondary" @click="noteDialogOpen = true">Notiz hinzufügen</BButton>
                             <BButton
@@ -479,13 +555,16 @@ onMounted(() => {
                                 class="absolute inset-0 h-12 w-12 rounded-2xl bg-gray-50 dark:bg-gray-950"
                                 aria-hidden="true"
                             />
-                            <div v-if="item.type === 'message'" class="relative d-flex align-items-center justify-content-center h-12 w-12 rounded-3 bg-light overflow-hidden">
-                                <template v-if="(item.data as Message).user?.avatar">
-                                    <img :src="(item.data as Message).user!.avatar" :alt="(item.data as Message).user?.name" class="w-100 h-100 object-fit-cover" />
-                                </template>
-                                <span v-else class="rounded-3 bg-primary text-white d-flex align-items-center justify-content-center small fw-semibold w-100 h-100">
-                                    {{ ((item.data as Message).user?.name ?? '?').charAt(0).toUpperCase() }}
-                                </span>
+                            <div
+                                v-if="item.type === 'message'"
+                                class="relative d-flex align-items-center justify-content-center h-12 w-12"
+                            >
+                                <UserAvatarOrInitials
+                                    :name="(item.data as Message).user?.name ?? '?'"
+                                    :src="(item.data as Message).user?.avatar ?? null"
+                                    :size="48"
+                                    rounded-class="rounded-3"
+                                />
                             </div>
                             <div
                                 v-else
@@ -553,8 +632,25 @@ onMounted(() => {
                                     class="absolute inset-0 h-12 w-12 rounded-2xl bg-gray-50 dark:bg-gray-950"
                                     aria-hidden="true"
                                 />
-                                <div class="relative d-flex align-items-center justify-content-center h-12 w-12 rounded-3 border border-2 border-warning border-dashed bg-warning bg-opacity-10 text-warning">
-                                    <Icon icon="pencil" class="fs-4" />
+                                <div class="relative d-flex align-items-center justify-content-center h-12 w-12">
+                                    <div
+                                        v-if="authUser"
+                                        class="d-flex align-items-center justify-content-center flex-shrink-0 rounded-3 border border-2 border-warning bg-body"
+                                        style="width: 48px; height: 48px"
+                                    >
+                                        <UserAvatarOrInitials
+                                            :name="authUser.name"
+                                            :src="authUser.avatar"
+                                            :size="40"
+                                            rounded-class="rounded-3"
+                                        />
+                                    </div>
+                                    <div
+                                        v-else
+                                        class="d-flex align-items-center justify-content-center h-12 w-12 rounded-3 border border-2 border-warning border-dashed bg-warning bg-opacity-10 text-warning"
+                                    >
+                                        <Icon icon="pencil" class="fs-4" />
+                                    </div>
                                 </div>
                             </div>
                             <div class="min-w-0 flex-1">
@@ -686,5 +782,123 @@ onMounted(() => {
 
 :root.dark .ticket_messages::before {
     border-left-color: rgb(75 85 99);
+}
+
+.ticket-sidebar-nav {
+    flex-wrap: nowrap !important;
+    width: 100%;
+}
+
+.ticket-sidebar-nav :deep(.nav-item) {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+}
+
+.ticket-sidebar-nav :deep(.nav-link) {
+    white-space: nowrap;
+    width: 100%;
+    justify-content: center !important;
+    padding: 0.35rem 0.25rem !important;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.ticket-sidebar-nav-icon {
+    font-size: 1em;
+}
+
+.ticket-meta-pill {
+    display: inline-block;
+    max-width: 100%;
+    padding: 0.3rem 0.55rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    word-break: break-word;
+}
+
+.ticket-meta-pill--open {
+    background: rgba(13, 110, 253, 0.14);
+    color: #084298;
+    border-color: rgba(13, 110, 253, 0.28);
+}
+
+.ticket-meta-pill--progress {
+    background: rgba(13, 202, 240, 0.2);
+    color: #055160;
+    border-color: rgba(13, 202, 240, 0.35);
+}
+
+.ticket-meta-pill--waiting {
+    background: rgba(255, 193, 7, 0.22);
+    color: #664d03;
+    border-color: rgba(255, 193, 7, 0.45);
+}
+
+.ticket-meta-pill--resolved {
+    background: rgba(25, 135, 84, 0.16);
+    color: #0a3622;
+    border-color: rgba(25, 135, 84, 0.3);
+}
+
+.ticket-meta-pill--closed {
+    background: rgba(108, 117, 125, 0.18);
+    color: #41464b;
+    border-color: rgba(108, 117, 125, 0.3);
+}
+
+.ticket-meta-pill--default {
+    background: rgba(108, 117, 125, 0.12);
+    color: var(--bs-body-color, #212529);
+    border-color: rgba(108, 117, 125, 0.22);
+}
+
+.ticket-meta-pill--assignee {
+    background: rgba(111, 66, 193, 0.14);
+    color: #59359a;
+    border-color: rgba(111, 66, 193, 0.32);
+}
+
+:root.dark .ticket-meta-pill--open {
+    background: rgba(13, 110, 253, 0.22);
+    color: #9ec5fe;
+    border-color: rgba(13, 110, 253, 0.35);
+}
+
+:root.dark .ticket-meta-pill--progress {
+    background: rgba(13, 202, 240, 0.15);
+    color: #9eeaf9;
+    border-color: rgba(13, 202, 240, 0.35);
+}
+
+:root.dark .ticket-meta-pill--waiting {
+    background: rgba(255, 193, 7, 0.18);
+    color: #ffda6a;
+    border-color: rgba(255, 193, 7, 0.35);
+}
+
+:root.dark .ticket-meta-pill--resolved {
+    background: rgba(25, 135, 84, 0.2);
+    color: #75b798;
+    border-color: rgba(25, 135, 84, 0.35);
+}
+
+:root.dark .ticket-meta-pill--closed {
+    background: rgba(173, 181, 189, 0.15);
+    color: #dee2e6;
+    border-color: rgba(173, 181, 189, 0.3);
+}
+
+:root.dark .ticket-meta-pill--default {
+    color: var(--bs-body-color, #dee2e6);
+}
+
+:root.dark .ticket-meta-pill--assignee {
+    background: rgba(111, 66, 193, 0.22);
+    color: #d4c4f0;
+    border-color: rgba(111, 66, 193, 0.4);
 }
 </style>

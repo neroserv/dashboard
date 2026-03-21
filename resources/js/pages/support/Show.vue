@@ -21,9 +21,14 @@
         <BRow>
             <BCol xl="3" class="mb-4">
                 <BCard class="mb-3 border-danger">
-                    <BCardBody class="d-flex gap-3">
-                        <div class="rounded bg-danger bg-opacity-10 p-2 flex-shrink-0">
-                            <Icon icon="home" class="text-danger" />
+                    <BCardBody class="d-flex gap-3 align-items-start">
+                        <div
+                            class="rounded bg-danger bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0"
+                            style="width: 2.75rem; height: 2.75rem"
+                        >
+                            <span class="d-inline-flex align-items-center justify-content-center lh-0 text-danger">
+                                <Icon icon="home" />
+                            </span>
                         </div>
                         <div>
                             <h6 class="fw-semibold text-danger">Verzögerter Support in der Nacht</h6>
@@ -32,9 +37,11 @@
                     </BCardBody>
                 </BCard>
                 <BCard class="mb-3">
-                    <BCardHeader class="py-2">
-                        <Icon icon="activity" class="me-2" />
-                        Ticket Status
+                    <BCardHeader class="py-2 d-flex align-items-center gap-2">
+                        <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center lh-0 text-body-secondary">
+                            <Icon icon="activity" />
+                        </span>
+                        <span>Ticket Status</span>
                     </BCardHeader>
                     <BCardBody class="py-3">
                         <p class="fw-semibold mb-1">{{ statusLabel }}</p>
@@ -42,9 +49,11 @@
                     </BCardBody>
                 </BCard>
                 <BCard>
-                    <BCardHeader class="py-2">
-                        <Icon icon="info" class="me-2" />
-                        Informationen
+                    <BCardHeader class="py-2 d-flex align-items-center gap-2">
+                        <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center lh-0 text-body-secondary">
+                            <Icon icon="info-circle" />
+                        </span>
+                        <span>Informationen</span>
                     </BCardHeader>
                     <BCardBody class="py-3">
                         <p class="small mb-2">
@@ -62,29 +71,36 @@
                 </BCard>
             </BCol>
             <BCol xl="9">
-                <div ref="ticketMessagesRef" class="ticket_messages">
+                <div ref="ticketMessagesRef" class="ticket_messages relative space-y-6">
                     <div
                         v-for="item in timeline"
                         :key="item.type === 'message' ? `msg-${(item.data as Message).id}` : (item.data as StatusChange).id"
-                        class="d-flex gap-3 mb-4"
+                        class="ticket_message_row flex gap-4"
                     >
-                        <div class="flex-shrink-0 d-none d-md-block" style="width: 48px;">
+                        <div class="relative hidden shrink-0 md:block md:w-12" style="z-index: 1">
+                            <div
+                                class="absolute inset-0 h-12 w-12 rounded-2xl bg-gray-50 dark:bg-gray-950"
+                                aria-hidden="true"
+                            />
                             <div
                                 v-if="item.type === 'message'"
-                                class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center text-primary fw-semibold"
-                                style="width: 48px; height: 48px;"
+                                class="relative d-flex align-items-center justify-content-center h-12 w-12"
                             >
-                                {{ (item.data as Message).user?.name?.charAt(0) ?? '?' }}
+                                <UserAvatarOrInitials
+                                    :name="(item.data as Message).user?.name ?? '?'"
+                                    :src="(item.data as Message).user?.avatar ?? null"
+                                    :size="48"
+                                    rounded-class="rounded-3"
+                                />
                             </div>
                             <div
                                 v-else
-                                class="rounded border border-2 border-secondary border-dashed d-flex align-items-center justify-content-center text-muted"
-                                style="width: 48px; height: 48px;"
+                                class="relative d-flex align-items-center justify-content-center h-12 w-12 rounded-3 border border-2 border-secondary border-dashed text-muted"
                             >
                                 <Icon icon="lock" />
                             </div>
                         </div>
-                        <div class="flex-grow-1 min-w-0">
+                        <div class="min-w-0 flex-grow-1">
                             <BCard v-if="item.type === 'message'" class="mb-0">
                                 <BCardHeader class="py-2 d-flex justify-content-between align-items-center">
                                     <span>
@@ -187,7 +203,7 @@
 
 <script setup lang="ts">
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import {
     BRow,
     BCol,
@@ -203,6 +219,7 @@ import {
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
 import Icon from '@/components/wrappers/Icon.vue';
+import UserAvatarOrInitials from '@/components/UserAvatarOrInitials.vue';
 import { sanitizeHtml, isHtml } from '@/lib/sanitize';
 import support from '@/routes/support';
 
@@ -308,15 +325,24 @@ function submitMessage() {
     });
 }
 
-function fixTicketMessageHeight() {
+function fixTicketMessageHeight(): void {
     if (ticketMessagesRef.value) {
-        const h = ticketMessagesRef.value.offsetHeight;
+        const h = ticketMessagesRef.value.offsetHeight + 45;
         ticketMessagesRef.value.style.setProperty('--ticket-message-height', `${h}px`);
     }
 }
 
+watch(
+    () => [props.messages, props.statusChanges],
+    () => nextTick(fixTicketMessageHeight),
+    { deep: true },
+);
+
 onMounted(() => {
-    nextTick(fixTicketMessageHeight);
+    nextTick(() => {
+        fixTicketMessageHeight();
+        requestAnimationFrame(fixTicketMessageHeight);
+    });
 });
 
 function back() {
@@ -326,15 +352,24 @@ function back() {
 
 <style scoped>
 .ticket_messages::before {
-    border-left: 2px dashed var(--bs-secondary);
+    border-left: 2px dashed gray;
     content: '';
     position: absolute;
     height: var(--ticket-message-height, 0);
     margin-left: 23px;
-    margin-top: 48px;
+    margin-top: 5px;
     top: 0;
     left: 0;
     pointer-events: none;
     z-index: 0;
+}
+
+.ticket_message_row {
+    position: relative;
+    z-index: 1;
+}
+
+:root.dark .ticket_messages::before {
+    border-left-color: rgb(75 85 99);
 }
 </style>

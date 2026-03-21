@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\CustomerBalance;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\TeamSpeakSnapshot;
 use App\Models\User;
+use App\Services\ControlPanels\TeamSpeakClient;
 
 use function Pest\Laravel\actingAs;
 
@@ -329,4 +331,76 @@ test('teamspeak account show includes connection_preview when API unavailable bu
         ->where('connection_preview.address', 'voice.example.test:9987')
         ->where('connection_preview.connection_uri', 'ts3server://voice.example.test?port=9987')
     );
+});
+
+test('teamspeak balance checkout redirects to account show using uuid route key', function () {
+    $this->brandWithTeamSpeak->update([
+        'features' => ['teamspeak' => true, 'prepaid_balance' => true],
+    ]);
+
+    $user = User::factory()->withBillingProfile()->create([
+        'brand_id' => $this->brandWithTeamSpeak->id,
+    ]);
+
+    CustomerBalance::create([
+        'user_id' => $user->id,
+        'balance' => 100,
+    ]);
+
+    $hostingServer = HostingServer::create([
+        'brand_id' => $this->brandWithTeamSpeak->id,
+        'panel_type' => 'teamspeak',
+        'name' => 'TS Node',
+        'hostname' => 'voice.example.test',
+        'ip_address' => '10.99.1.1',
+        'config' => ['port_range_min' => 10072, 'port_range_max' => 10221],
+        'is_active' => true,
+    ]);
+
+    $plan = HostingPlan::create([
+        'brand_id' => $this->brandWithTeamSpeak->id,
+        'hosting_server_id' => $hostingServer->id,
+        'panel_type' => 'teamspeak',
+        'config' => ['plan_options' => []],
+        'name' => 'TS Plan Balance',
+        'plesk_package_name' => null,
+        'disk_gb' => 0,
+        'traffic_gb' => 0,
+        'domains' => 0,
+        'subdomains' => 0,
+        'mailboxes' => 0,
+        'databases' => 0,
+        'price' => 4.99,
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $this->mock(TeamSpeakClient::class, function ($mock) {
+        $mock->shouldReceive('setServer')->once();
+        $mock->shouldReceive('getNextAvailablePort')->once()->andReturn(10080);
+        $mock->shouldReceive('createVirtualServer')->once()->andReturn([
+            'virtual_server_id' => 99,
+            'port' => 10080,
+        ]);
+    });
+
+    actingAs($user);
+
+    $response = $this->post('http://teamspeak.praxishosting.test/teamspeak/checkout', [
+        'hosting_plan_id' => $plan->id,
+        'server_name' => 'Balance TS',
+        'payment_method' => 'balance',
+        'period_months' => 1,
+        'accept_tos' => true,
+        'accept_early_execution' => true,
+    ]);
+
+    $response->assertRedirect();
+
+    $account = TeamSpeakServerAccount::query()->where('user_id', $user->id)->latest('id')->first();
+    expect($account)->not->toBeNull();
+
+    $location = (string) $response->headers->get('Location');
+    expect($location)->toContain('/teamspeak-accounts/'.$account->uuid);
+    expect($location)->not->toBe('/teamspeak-accounts/'.$account->id);
 });
