@@ -13,15 +13,34 @@
 <script setup lang="ts">
 import MenuItemWithChildren from '@/layouts/components/sidenav/components/MenuItemWithChildren.vue'
 import MenuItem from '@/layouts/components/sidenav/components/MenuItem.vue'
+import { findActiveTopLevelExpandableSlug } from '@/composables/sidenavMenuHelpers'
 import { useSidebarMenu } from '@/composables/useSidebarMenu'
+import { useSidenavMenuStore } from '@/stores/sidenav-menu'
 import { scrollToElement } from '@/utils/helpers'
-import { onMounted, ref } from 'vue'
+import { usePage } from '@inertiajs/vue3'
+import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 
 const { menuItems } = useSidebarMenu()
-const openMenuKey = ref<string | null>(null)
+const page = usePage()
+const sidenavMenu = useSidenavMenuStore()
+const { openMenuKey } = storeToRefs(sidenavMenu)
 
-const setOpenMenuKey = (key: string | null) => {
-  openMenuKey.value = key
+const pathname = computed(() => {
+  const url = page.url
+  const q = url.indexOf('?')
+  return q >= 0 ? url.slice(0, q) : url
+})
+
+if (sidenavMenu.lastAccordionInteractionAt === null) {
+  const slug = findActiveTopLevelExpandableSlug(menuItems.value, pathname.value)
+  if (slug) {
+    sidenavMenu.setOpenMenuKey(slug, 'route')
+  }
+}
+
+function setOpenMenuKey(key: string | null, source: 'route' | 'user' = 'user'): void {
+  sidenavMenu.setOpenMenuKey(key, source)
 }
 
 const scrollToActiveLink = () => {

@@ -197,20 +197,32 @@
                 </BFormSelect>
                 <div v-if="form.errors.country" class="invalid-feedback d-block">{{ form.errors.country }}</div>
               </BCol>
-              <BCol v-if="isAdmin" xs="12" class="border-top pt-3 mt-1">
+            </BRow>
+
+            <template v-if="isAdmin">
+              <hr class="my-4" />
+              <h6 class="mb-3 fw-semibold">Support-Tickets</h6>
+              <div class="ticket-signature-block mb-1">
                 <label class="form-label">Signatur für Support-Tickets</label>
                 <BFormTextarea
                   v-model="form.ticket_signature"
                   name="ticket_signature"
                   placeholder="Wird automatisch unter jeder Ihrer Ticket-Antworten eingefügt."
-                  rows="4"
-                  :class="{ 'is-invalid': form.errors.ticket_signature }"
+                  rows="6"
+                  :class="[
+                    'ticket-signature-textarea',
+                    'w-100',
+                    { 'is-invalid': form.errors.ticket_signature },
+                  ]"
                 />
                 <div v-if="form.errors.ticket_signature" class="invalid-feedback d-block">{{ form.errors.ticket_signature }}</div>
                 <BFormText class="text-muted small">
                   Nur für Mitarbeiter sichtbar. Wird unter jeder Ihrer Antworten im Support-Ticket-System angehängt.
                 </BFormText>
-              </BCol>
+              </div>
+            </template>
+
+            <BRow class="g-3">
               <BCol xs="12">
                 <BAlert v-if="mustVerifyEmail && !authUser?.email_verified_at" variant="warning" show>
                   Ihre E-Mail-Adresse ist nicht verifiziert.
@@ -357,5 +369,17 @@ function submit(): void {
 
 :deep(.profile-photo-avatar) {
   display: block;
+}
+
+.ticket-signature-block {
+  width: 100%;
+}
+
+:deep(.ticket-signature-textarea textarea),
+:deep(textarea.ticket-signature-textarea) {
+  min-height: 10rem;
+  width: 100% !important;
+  max-width: 100%;
+  resize: vertical;
 }
 </style>

@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -12,6 +13,22 @@ test('profile page is displayed', function () {
         ->get(route('profile.edit'));
 
     $response->assertOk();
+});
+
+test('profile inertia includes admin flag and ticket signature for staff', function () {
+    $user = User::factory()->create([
+        'is_admin' => true,
+        'ticket_signature' => "Mit freundlichen Grüßen\nTeam",
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Profile')
+            ->where('auth.user.is_admin', true)
+            ->where('auth.user.ticket_signature', "Mit freundlichen Grüßen\nTeam")
+        );
 });
 
 test('profile information can be updated', function () {
