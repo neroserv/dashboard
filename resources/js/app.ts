@@ -1,7 +1,7 @@
+import { loader as monacoLoader } from '@guolao/vue-monaco-editor';
 import { createInertiaApp } from '@inertiajs/vue3';
 import * as Sentry from '@sentry/vue';
 import { createBootstrap } from 'bootstrap-vue-next';
-import { loader as monacoLoader } from '@guolao/vue-monaco-editor';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createPinia } from 'pinia';
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
@@ -11,6 +11,7 @@ import '../css/app.css';
 import '../scss/app.scss';
 import AppRoot from './components/AppRoot.vue';
 import { initializeTheme } from './composables/useAppearance';
+import { registerPwaServiceWorker } from './pwa/registerServiceWorker';
 
 monacoLoader.config({
     paths: {
@@ -57,3 +58,5 @@ createInertiaApp({
 
 // This will set light / dark mode on page load...
 initializeTheme();
+
+registerPwaServiceWorker();

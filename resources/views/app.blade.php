@@ -16,9 +16,16 @@
         @php
             $pwaBrand = request()->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
             $pwaTouchIcon = \App\Services\Pwa\BrandMediaUrl::primaryLogoAbsolute($pwaBrand) ?? asset('favicon.svg');
+            $pwaThemeColor = '#2563eb';
+            if ($pwaBrand !== null && is_array($pwaBrand->theme_colors) && ! empty($pwaBrand->theme_colors['primary']) && is_string($pwaBrand->theme_colors['primary'])) {
+                $pwaThemeColor = $pwaBrand->theme_colors['primary'];
+            }
         @endphp
         <link rel="manifest" href="{{ url('/manifest.json') }}">
         <link rel="apple-touch-icon" href="{{ $pwaTouchIcon }}">
+        <meta name="theme-color" content="{{ $pwaThemeColor }}">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>

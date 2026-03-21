@@ -26,7 +26,8 @@ test('manifest reflects brand resolved from host', function () {
     $this->get('http://alpha-pwa.test/manifest.json')
         ->assertOk()
         ->assertHeader('Content-Type', 'application/manifest+json')
-        ->assertJsonPath('name', 'Alpha PWA Brand');
+        ->assertJsonPath('name', 'Alpha PWA Brand')
+        ->assertJsonStructure(['id', 'name', 'short_name', 'start_url', 'icons']);
 
     $this->get('http://beta-pwa.test/manifest.json')
         ->assertOk()

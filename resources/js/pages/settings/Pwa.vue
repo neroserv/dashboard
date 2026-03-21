@@ -21,6 +21,51 @@
 
       <BCard no-body class="mb-4">
         <BCardHeader>
+          <h5 class="mb-0">App installieren</h5>
+          <p class="text-muted small mb-0">Dieses Panel als installierbare App (Startbildschirm oder Desktop) nutzen.</p>
+        </BCardHeader>
+        <BCardBody>
+          <p v-if="isStandalone" class="text-success small mb-0">
+            Die App läuft bereits installiert (Vollbild / eigenes Fenster).
+          </p>
+          <template v-else>
+            <div v-if="!serviceWorkerSupported" class="text-muted small mb-0">
+              In diesem Browser sind Service Worker nicht verfügbar – eine Installation als PWA ist nicht möglich.
+            </div>
+            <template v-else>
+              <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <BButton
+                  v-if="canUseInstallPrompt"
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  :disabled="installBusy"
+                  @click="promptInstall"
+                >
+                  <span v-if="installBusy" class="d-inline-flex align-items-center gap-2">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    Installation…
+                  </span>
+                  <span v-else>App installieren</span>
+                </BButton>
+              </div>
+              <p v-if="!canUseInstallPrompt && serviceWorkerSupported" class="text-muted small mb-2 mb-md-3">
+                <strong>Chrome / Edge / Android:</strong> Nutzen Sie das Install-Symbol in der Adressleiste oder das Menü (⋮) →
+                <em>App installieren</em> bzw. <em>Als App installieren</em>. Der Button erscheint, sobald der Browser die App
+                als installierbar einstuft (einmal die Seite neu laden kann helfen).
+              </p>
+              <p class="text-muted small mb-0">
+                <strong>iPhone / iPad (Safari):</strong> Teilen-Taste
+                <span class="text-nowrap">(□↑)</span>
+                → <em>Zum Home-Bildschirm</em>. Anschließend die App von dort öffnen.
+              </p>
+            </template>
+          </template>
+        </BCardBody>
+      </BCard>
+
+      <BCard no-body class="mb-4">
+        <BCardHeader>
           <h5 class="mb-0">Push-Benachrichtigungen</h5>
           <p class="text-muted small mb-0">Berechtigung wird erst nach Klick auf den Button angefragt.</p>
         </BCardHeader>
@@ -149,6 +194,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { BAlert, BButton, BCard, BCardBody, BCardHeader, BForm, BFormCheckbox } from 'bootstrap-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue';
+import { usePwaInstall } from '@/composables/usePwaInstall';
 import {
   pushPreferencesRequest,
   pushSubscribeRequest,
@@ -172,6 +218,10 @@ const props = defineProps<{
 
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
+
+const { isStandalone, installBusy, canUseInstallPrompt, promptInstall } = usePwaInstall();
+
+const serviceWorkerSupported = typeof window !== 'undefined' && 'serviceWorker' in navigator;
 
 const permissionState = ref<NotificationPermission | 'unsupported'>(
   typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,

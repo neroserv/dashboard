@@ -40,12 +40,15 @@ final class ManifestBuilder
             ],
         ];
 
+        $startUrl = url('/');
+
         return [
+            'id' => $startUrl,
             'name' => $name,
             'short_name' => $shortName,
             'description' => is_array($brand?->seo) ? (string) ($brand->seo['meta_description'] ?? '') : '',
-            'start_url' => url('/'),
-            'scope' => url('/'),
+            'start_url' => $startUrl,
+            'scope' => $startUrl,
             'display' => 'standalone',
             'background_color' => $backgroundColor,
             'theme_color' => $themeColor,
