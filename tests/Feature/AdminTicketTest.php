@@ -38,6 +38,42 @@ test('admin tickets index exposes service display from ticket services', functio
             ->has('tickets.data.0.service_display'));
 });
 
+test('admin tickets index includes assignee when ticket is assigned', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    $ticket = Ticket::factory()->create([
+        'ticket_category_id' => $category->id,
+        'assigned_to' => $admin->id,
+    ]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/tickets/Index')
+            ->where('tickets.data.0.id', $ticket->id)
+            ->has('tickets.data.0.assigned_to')
+            ->where('tickets.data.0.assigned_to.id', $admin->id));
+});
+
+test('admin ticket show exposes assigned_to id for the assignee', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    $ticket = Ticket::factory()->create([
+        'ticket_category_id' => $category->id,
+        'assigned_to' => $admin->id,
+    ]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.show', $ticket))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/tickets/Show')
+            ->where('ticket.assigned_to', $admin->id));
+});
+
 test('admin users can view ticket', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $category = TicketCategory::factory()->create();

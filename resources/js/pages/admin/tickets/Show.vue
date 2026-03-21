@@ -3,6 +3,7 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import {
+    BAlert,
     BBadge,
     BButton,
     BCard,
@@ -92,10 +93,26 @@ type Props = {
 const props = defineProps<Props>();
 
 const page = usePage();
-const authUser = computed((): { name: string; avatar?: string | null } | null => {
-    const u = page.props.auth?.user as { name?: string; avatar?: string | null } | undefined;
+const authUser = computed((): { id: number; name: string; avatar?: string | null } | null => {
+    const u = page.props.auth?.user as { id?: number; name?: string; avatar?: string | null } | undefined;
 
-    return u?.name ? { name: u.name, avatar: u.avatar ?? null } : null;
+    if (u?.id == null || !u?.name) {
+        return null;
+    }
+
+    return { id: u.id, name: u.name, avatar: u.avatar ?? null };
+});
+
+const isAssignedToCurrentUser = computed((): boolean => {
+    const uid = authUser.value?.id;
+    if (uid == null) {
+        return false;
+    }
+    const aid = props.ticket.assigned_to;
+    const assigneeId =
+        typeof aid === 'object' && aid !== null && 'id' in aid ? (aid as { id: number }).id : (aid as number | null);
+
+    return assigneeId != null && Number(assigneeId) === Number(uid);
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -353,6 +370,9 @@ onMounted(() => {
                         <BButton variant="outline-primary" size="sm">Zurück zur Liste</BButton>
                     </Link>
                 </div>
+                <BAlert v-if="isAssignedToCurrentUser" variant="success" show class="mt-2 mb-0 py-2 small">
+                    Dieses Ticket ist dir zugewiesen.
+                </BAlert>
             </BCol>
         </BRow>
 
@@ -438,8 +458,12 @@ onMounted(() => {
                                 <span
                                     v-if="assignedToName !== '–'"
                                     class="ticket-meta-pill ticket-meta-pill--assignee"
+                                    :class="{ 'ticket-meta-pill--assignee-self': isAssignedToCurrentUser }"
                                 >
                                     {{ assignedToName }}
+                                    <template v-if="isAssignedToCurrentUser">
+                                        <span class="text-uppercase small ms-1 opacity-90">(Dir)</span>
+                                    </template>
                                 </span>
                                 <span v-else class="small text-muted">–</span>
                             </div>
@@ -862,6 +886,13 @@ onMounted(() => {
     border-color: rgba(111, 66, 193, 0.32);
 }
 
+.ticket-meta-pill--assignee-self {
+    background: rgba(25, 135, 84, 0.16);
+    color: #0a3622;
+    border-color: rgba(25, 135, 84, 0.45);
+    box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.2);
+}
+
 :root.dark .ticket-meta-pill--open {
     background: rgba(13, 110, 253, 0.22);
     color: #9ec5fe;
@@ -900,5 +931,23 @@ onMounted(() => {
     background: rgba(111, 66, 193, 0.22);
     color: #d4c4f0;
     border-color: rgba(111, 66, 193, 0.4);
+}
+
+.ticket-message-body {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ticket-message-body :where(pre),
+.ticket-message-body :where(code) {
+    white-space: pre-wrap;
+}
+
+:root.dark .ticket-meta-pill--assignee-self {
+    background: rgba(25, 135, 84, 0.22);
+    color: #75b798;
+    border-color: rgba(25, 135, 84, 0.45);
+    box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.25);
 }
 </style>

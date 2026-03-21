@@ -69,7 +69,10 @@ function toHtml(val: string | undefined): string {
     const trimmed = val.trim();
     if (!trimmed) return '';
     if (trimmed.startsWith('<') && trimmed.includes('>')) return val;
-    return `<p>${trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+    const escaped = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const withBreaks = escaped.replace(/\r\n|\r|\n/g, '<br>');
+
+    return `<p>${withBreaks}</p>`;
 }
 
 const editor = useEditor({

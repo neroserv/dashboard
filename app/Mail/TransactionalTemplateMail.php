@@ -103,7 +103,7 @@ class TransactionalTemplateMail extends Mailable
         if ($this->brand !== null) {
             $custom = $this->brand->mail_header;
             if ($custom !== null && trim($custom) !== '') {
-                return trim($custom);
+                return $this->constrainEmailImagesForOutlook(trim($custom));
             }
 
             $logoImg = $this->buildBrandLogoImg($this->brand);
@@ -118,7 +118,7 @@ class TransactionalTemplateMail extends Mailable
 
         $custom = config('maizzle.header');
         if ($custom !== null && trim((string) $custom) !== '') {
-            return trim((string) $custom);
+            return $this->constrainEmailImagesForOutlook(trim((string) $custom));
         }
 
         $appName = e(config('app.name'));
@@ -155,9 +155,88 @@ class TransactionalTemplateMail extends Mailable
 
         $alt = e($brand->name);
 
-        $imgStyle = 'display: block; max-width: 200px; max-height: 48px; width: auto; height: auto; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;';
+        $imgStyle = 'display:block;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;line-height:100%;';
 
-        return '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="max-width: 200px;"><tr><td style="height: 48px; max-height: 48px; line-height: 0;"><img src="'.e($logoUrl).'" alt="'.$alt.'" style="'.$imgStyle.'" /></td></tr></table>';
+        return '<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="200" style="max-width:200px;width:200px;"><tr><td style="line-height:0;font-size:0;mso-line-height-rule:exactly;"><img src="'.e($logoUrl).'" width="200" alt="'.$alt.'" style="'.$imgStyle.'" /></td></tr></table>';
+    }
+
+    /**
+     * Outlook ignores CSS max-width on images; custom mail headers often use full-size assets.
+     * Force HTML width and inline styles so headers render at a sane size in Outlook/Gmail.
+     */
+    private function constrainEmailImagesForOutlook(string $html): string
+    {
+        if (stripos($html, '<img') === false) {
+            return $html;
+        }
+
+        libxml_use_internal_errors(true);
+        $dom = new \DOMDocument;
+        $wrapped = '<?xml encoding="UTF-8"><div id="email-img-root">'.$html.'</div>';
+        $loaded = @$dom->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        if (! $loaded) {
+            libxml_clear_errors();
+
+            return $this->constrainEmailImagesForOutlookRegex($html);
+        }
+
+        $root = $dom->getElementById('email-img-root');
+        if ($root === null) {
+            libxml_clear_errors();
+
+            return $this->constrainEmailImagesForOutlookRegex($html);
+        }
+
+        foreach ($root->getElementsByTagName('img') as $img) {
+            if (! $img instanceof \DOMElement) {
+                continue;
+            }
+            $img->setAttribute('width', '200');
+            $img->removeAttribute('height');
+            $style = trim($img->getAttribute('style'), '; ');
+            $extra = 'max-width:200px;height:auto;display:block;border:0;outline:none;line-height:100%;';
+            $img->setAttribute('style', trim($style !== '' ? $style.';'.$extra : $extra, '; '));
+        }
+
+        $fragment = '';
+        foreach ($root->childNodes as $child) {
+            $fragment .= $dom->saveHTML($child);
+        }
+        libxml_clear_errors();
+
+        return $fragment !== '' ? $fragment : $html;
+    }
+
+    /**
+     * Fallback when DOM parsing fails on malformed header HTML fragments.
+     */
+    private function constrainEmailImagesForOutlookRegex(string $html): string
+    {
+        $result = preg_replace_callback('/<img\b[^>]*>/i', function (array $m): string {
+            $tag = $m[0];
+            $tag = preg_replace('/\sheight\s*=\s*["\']?[^"\'\s>]+["\']?/i', '', $tag) ?? $tag;
+            if (preg_match('/\bwidth\s*=\s*["\']?(\d+)/i', $tag, $wm)) {
+                if ((int) $wm[1] > 200) {
+                    $tag = preg_replace('/\bwidth\s*=\s*["\']?\d+["\']?/i', 'width="200"', $tag) ?? $tag;
+                }
+            } elseif (! preg_match('/\bwidth\s*=/i', $tag)) {
+                $tag = preg_replace('/<img/i', '<img width="200"', $tag, 1) ?? $tag;
+            }
+            if (preg_match('/style\s*=\s*(["\'])(.*?)\1/s', $tag, $sm)) {
+                $q = $sm[1];
+                $st = $sm[2];
+                if (! preg_match('/max-width\s*:/i', $st)) {
+                    $st .= ';max-width:200px;height:auto;display:block;border:0';
+                }
+                $tag = preg_replace('/style\s*=\s*["\'].*?["\']/s', 'style='.$q.$st.$q, $tag, 1) ?? $tag;
+            } else {
+                $tag = preg_replace('/<img/i', '<img style="max-width:200px;height:auto;display:block;border:0"', $tag, 1) ?? $tag;
+            }
+
+            return $tag;
+        }, $html);
+
+        return is_string($result) ? $result : $html;
     }
 
     private function getGlobalFooter(): string
@@ -200,13 +279,11 @@ class TransactionalTemplateMail extends Mailable
         $url = e($this->actionUrl);
         $text = e($this->content['action_text']);
         $primary = $this->brandPrimaryColor();
-        $primaryHover = $this->brandPrimaryHoverColor();
 
         return sprintf(
-            '<a href="%s" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, %s 0%%, %s 100%%); color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px;">%s</a>',
+            '<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;"><tr><td align="center" bgcolor="%1$s" style="background-color:%1$s;border-radius:8px;mso-line-height-rule:exactly;"><a href="%2$s" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;line-height:1.25;">%3$s</a></td></tr></table>',
+            e($primary),
             $url,
-            $primary,
-            $primaryHover,
             $text
         );
     }
@@ -219,16 +296,6 @@ class TransactionalTemplateMail extends Mailable
         }
 
         return '#059669';
-    }
-
-    private function brandPrimaryHoverColor(): string
-    {
-        $colors = $this->brand?->theme_colors;
-        if (is_array($colors) && ! empty($colors['primary_hover'])) {
-            return $this->sanitizeCssColor($colors['primary_hover']);
-        }
-
-        return '#047857';
     }
 
     private function sanitizeCssColor(string $value): string

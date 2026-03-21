@@ -1,7 +1,7 @@
 <!-- Admin: Support-Tickets-Übersicht -->
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, reactive } from 'vue';
 import {
     BRow,
     BCol,
@@ -48,6 +48,30 @@ type Props = {
 };
 
 defineProps<Props>();
+
+const page = usePage();
+const currentUserId = computed((): number | null => {
+    const u = page.props.auth?.user as { id?: number } | undefined;
+
+    return u?.id ?? null;
+});
+
+function isAssignedToMe(ticket: Ticket): boolean {
+    if (currentUserId.value == null) {
+        return false;
+    }
+    const assignee = ticket.assigned_to;
+
+    return assignee != null && assignee.id === currentUserId.value;
+}
+
+function ticketRowClass(item: Ticket | null, type: string): string | null {
+    if (type !== 'row' || item == null) {
+        return null;
+    }
+
+    return isAssignedToMe(item) ? 'ticket-row-assigned-to-me' : null;
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -159,6 +183,7 @@ const tableFields = [
                         <BTable
                             :items="tickets.data"
                             :fields="tableFields"
+                            :tbody-tr-class="ticketRowClass"
                             striped
                             responsive
                             class="mb-0"
@@ -213,7 +238,12 @@ const tableFields = [
                                 {{ statusLabels[row.item.status] ?? row.item.status }}
                             </template>
                             <template #cell(assigned_to_name)="row">
-                                {{ row.item.assigned_to?.name ?? '–' }}
+                                <div class="d-flex align-items-center flex-wrap gap-1">
+                                    <span>{{ row.item.assigned_to?.name ?? '–' }}</span>
+                                    <BBadge v-if="isAssignedToMe(row.item)" variant="success" class="text-uppercase">
+                                        Dir
+                                    </BBadge>
+                                </div>
                             </template>
                             <template #cell(created_at)="row">
                                 {{ new Date(row.item.created_at).toLocaleDateString('de-DE') }}
@@ -245,3 +275,15 @@ const tableFields = [
         </BRow>
     </AdminLayout>
 </template>
+
+<style scoped>
+.ticket-row-assigned-to-me td {
+    background-color: rgba(111, 66, 193, 0.07);
+    box-shadow: inset 3px 0 0 0 rgb(111, 66, 193);
+}
+
+:root.dark .ticket-row-assigned-to-me td {
+    background-color: rgba(111, 66, 193, 0.14);
+    box-shadow: inset 3px 0 0 0 rgb(167, 139, 250);
+}
+</style>

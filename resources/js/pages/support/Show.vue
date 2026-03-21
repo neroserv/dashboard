@@ -372,4 +372,15 @@ function back() {
 :root.dark .ticket_messages::before {
     border-left-color: rgb(75 85 99);
 }
+
+.ticket-message-body {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ticket-message-body :where(pre),
+.ticket-message-body :where(code) {
+    white-space: pre-wrap;
+}
 </style>
