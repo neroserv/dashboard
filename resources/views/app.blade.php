@@ -60,6 +60,27 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
+        @php
+            $brandFaviconUrl = data_get($page ?? [], 'props.brand.seo.favicon_url');
+            $brandFaviconUrl = is_string($brandFaviconUrl) && $brandFaviconUrl !== '' ? $brandFaviconUrl : null;
+            if ($brandFaviconUrl !== null && ! preg_match('#^https?://#i', $brandFaviconUrl)) {
+                $brandFaviconUrl = url($brandFaviconUrl);
+            }
+            $brandFaviconPath = $brandFaviconUrl !== null ? (parse_url($brandFaviconUrl, PHP_URL_PATH) ?: '') : '';
+            $brandFaviconType = match (true) {
+                str_ends_with(strtolower($brandFaviconPath), '.svg') => 'image/svg+xml',
+                str_ends_with(strtolower($brandFaviconPath), '.png') => 'image/png',
+                str_ends_with(strtolower($brandFaviconPath), '.ico') => 'image/x-icon',
+                str_ends_with(strtolower($brandFaviconPath), '.webp') => 'image/webp',
+                default => null,
+            };
+        @endphp
+        @if ($brandFaviconUrl)
+            <link rel="icon" href="{{ $brandFaviconUrl }}" @if ($brandFaviconType !== null) type="{{ $brandFaviconType }}" @endif>
+        @else
+            <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
+        @endif
+
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 

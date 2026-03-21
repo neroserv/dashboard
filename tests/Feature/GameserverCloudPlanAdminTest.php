@@ -30,12 +30,14 @@ beforeEach(function () {
 test('admin can access gameserver cloud plans index when brand has feature', function () {
     $this->actingAs($this->admin);
 
-    $response = $this->get(route('admin.gameserver-cloud-plans.index'));
+    $response = $this->followingRedirects()
+        ->get(route('admin.gameserver-cloud-plans.index'));
 
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
-        ->component('admin/gameserver-cloud-plans/Index')
+        ->component('admin/hosting-plans/Index')
         ->has('gameserverCloudPlans')
+        ->where('brandHasGameserverCloud', true)
     );
 });
 

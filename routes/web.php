@@ -58,10 +58,27 @@ use App\Http\Controllers\TeamSpeakController;
 use App\Http\Controllers\WebspaceAccountController;
 use App\Http\Controllers\WebspaceController;
 use App\Http\Controllers\WorkflowController;
+use App\Models\Brand;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Cashier\Cashier;
+
+// Ohne statische public/favicon.ico: Browser-Default-Request liefert Marken-Favicon statt Laravel-ICO
+Route::get('/favicon.ico', function () {
+    $brand = request()->attributes->get('current_brand') ?? Brand::getDefault();
+    $raw = $brand?->seo['favicon_url'] ?? null;
+    if (is_string($raw) && $raw !== '') {
+        $target = preg_match('#^https?://#i', $raw) ? $raw : url($raw);
+
+        return redirect()->away($target);
+    }
+
+    return response()->file(public_path('favicon.svg'), [
+        'Content-Type' => 'image/svg+xml',
+        'Cache-Control' => 'public, max-age=3600',
+    ]);
+})->name('favicon');
 
 // Mollie webhook – muss vor der Cashier-Route stehen, damit Guthaben/Rechnungen verarbeitet werden
 Route::post('webhooks/mollie', [MollieWebhookController::class, 'handleWebhook'])
