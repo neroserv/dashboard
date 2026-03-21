@@ -1,7 +1,7 @@
 <!-- Admin: Support-Tickets-Übersicht -->
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import {
     BRow,
     BCol,
@@ -14,6 +14,8 @@ import {
     BBadge,
     BFormSelect,
     BFormGroup,
+    BFormInput,
+    BFormCheckbox,
 } from 'bootstrap-vue-next';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import Icon from '@/components/wrappers/Icon.vue';
@@ -32,6 +34,7 @@ type Ticket = {
     subject: string;
     status: string;
     created_at: string;
+    updated_at: string;
     user?: User;
     ticket_category?: TicketCategory;
     ticket_priority?: TicketPriority;
@@ -40,14 +43,27 @@ type Ticket = {
     assigned_to?: User | null;
 };
 
+type TableState = {
+    search: string;
+    include_archived: boolean;
+    sort: string;
+    direction: string;
+    status: string;
+    ticket_category_id: string;
+    ticket_priority_id: string;
+    user_id: string;
+    assigned_to: string;
+};
+
 type Props = {
     tickets: { data: Ticket[]; links: { url: string | null; label: string; active: boolean }[] };
     categories: TicketCategory[];
     priorities: TicketPriority[];
     admins: User[];
+    tableState: TableState;
 };
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const page = usePage();
 const currentUserId = computed((): number | null => {
@@ -88,21 +104,121 @@ const statusLabels: Record<string, string> = {
 };
 
 const filters = reactive({
-    status: '',
-    ticket_category_id: '',
-    ticket_priority_id: '',
-    user_id: '',
-    assigned_to: '',
+    search: props.tableState.search ?? '',
+    include_archived: props.tableState.include_archived ?? false,
+    sort: props.tableState.sort ?? 'updated_at',
+    direction: (props.tableState.direction === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
+    status: props.tableState.status ?? '',
+    ticket_category_id: props.tableState.ticket_category_id ?? '',
+    ticket_priority_id: props.tableState.ticket_priority_id ?? '',
+    user_id: props.tableState.user_id ?? '',
+    assigned_to: props.tableState.assigned_to ?? '',
 });
 
+watch(
+    () => props.tableState,
+    (s) => {
+        filters.search = s.search ?? '';
+        filters.include_archived = s.include_archived ?? false;
+        filters.sort = s.sort ?? 'updated_at';
+        filters.direction = s.direction === 'asc' ? 'asc' : 'desc';
+        filters.status = s.status ?? '';
+        filters.ticket_category_id = s.ticket_category_id ?? '';
+        filters.ticket_priority_id = s.ticket_priority_id ?? '';
+        filters.user_id = s.user_id ?? '';
+        filters.assigned_to = s.assigned_to ?? '';
+    },
+    { deep: true },
+);
+
+const sortByModel = computed({
+    get() {
+        return [{ key: filters.sort, order: filters.direction }];
+    },
+    set(val: { key: string; order?: 'asc' | 'desc' }[]) {
+        const first = val?.[0];
+        if (!first?.key || !first.order) {
+            return;
+        }
+        if (filters.sort === first.key && filters.direction === first.order) {
+            return;
+        }
+        filters.sort = first.key;
+        filters.direction = first.order;
+        applyFilters();
+    },
+});
+
+function buildQueryParams(): Record<string, string | number> {
+    const params: Record<string, string | number> = {};
+    const q = filters.search.trim();
+    if (q !== '') {
+        params.search = q;
+    }
+    if (filters.include_archived) {
+        params.include_archived = 1;
+    }
+    if (filters.status) {
+        params.status = filters.status;
+    }
+    if (filters.ticket_category_id) {
+        params.ticket_category_id = filters.ticket_category_id;
+    }
+    if (filters.ticket_priority_id) {
+        params.ticket_priority_id = filters.ticket_priority_id;
+    }
+    if (filters.user_id) {
+        params.user_id = filters.user_id;
+    }
+    if (filters.assigned_to) {
+        params.assigned_to = filters.assigned_to;
+    }
+    params.sort = filters.sort;
+    params.direction = filters.direction;
+
+    return params;
+}
+
 function applyFilters(): void {
-    const params: Record<string, string> = {};
-    if (filters.status) params.status = filters.status;
-    if (filters.ticket_category_id) params.ticket_category_id = filters.ticket_category_id;
-    if (filters.ticket_priority_id) params.ticket_priority_id = filters.ticket_priority_id;
-    if (filters.user_id) params.user_id = filters.user_id;
-    if (filters.assigned_to) params.assigned_to = filters.assigned_to;
-    router.get('/admin/tickets', params);
+    router.get('/admin/tickets', buildQueryParams(), { preserveState: true, preserveScroll: true });
+}
+
+function onSearchSubmit(): void {
+    applyFilters();
+}
+
+function onIncludeArchivedChange(): void {
+    applyFilters();
+}
+
+const PRIORITY_FALLBACK_COLORS: Record<string, string> = {
+    low: '#6b7280',
+    niedrig: '#6b7280',
+    normal: '#2563eb',
+    medium: '#0ea5e9',
+    mittel: '#0ea5e9',
+    high: '#f97316',
+    hoch: '#f97316',
+    urgent: '#dc2626',
+    kritisch: '#dc2626',
+    critical: '#dc2626',
+};
+
+function priorityBadgeStyle(priority: NonNullable<TicketPriority>): Record<string, string> {
+    const hex =
+        priority.color?.trim() ||
+        PRIORITY_FALLBACK_COLORS[priority.slug.toLowerCase()] ||
+        '#64748b';
+
+    return { backgroundColor: hex, color: '#fff', border: 'none' };
+}
+
+function formatUpdatedAt(iso: string): string {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+    return `${date} ${time}`;
 }
 
 const statusOptions = [
@@ -111,15 +227,16 @@ const statusOptions = [
 ];
 
 const tableFields = [
-    { key: 'id', label: 'ID', sortable: false },
-    { key: 'customer', label: 'Kunde', sortable: false },
-    { key: 'subject', label: 'Betreff', sortable: false },
-    { key: 'category', label: 'Kategorie', sortable: false },
-    { key: 'priority', label: 'Priorität', sortable: false },
-    { key: 'site_name', label: 'Site', sortable: false },
-    { key: 'status_display', label: 'Status', sortable: false },
-    { key: 'assigned_to_name', label: 'Zugewiesen', sortable: false },
-    { key: 'created_at', label: 'Erstellt', sortable: false },
+    { key: 'id', label: 'ID', sortable: true, thClass: 'text-nowrap' },
+    { key: 'customer', label: 'Kunde', sortable: true },
+    { key: 'subject', label: 'Betreff', sortable: true },
+    { key: 'category', label: 'Kategorie', sortable: true },
+    { key: 'priority', label: 'Priorität', sortable: true },
+    { key: 'site_name', label: 'Site', sortable: true },
+    { key: 'status_display', label: 'Status', sortable: true },
+    { key: 'assigned_to_name', label: 'Zugewiesen', sortable: true },
+    { key: 'created_at', label: 'Erstellt', sortable: true },
+    { key: 'updated_at', label: 'Aktualisiert', sortable: true },
     { key: 'actions', label: 'Aktionen', sortable: false, thClass: 'text-end' },
 ];
 </script>
@@ -137,10 +254,37 @@ const tableFields = [
 
                 <BCard no-body class="mb-4">
                     <BCardHeader>
-                        <BCardTitle class="mb-0">Filter</BCardTitle>
-                        <p class="text-muted small mb-0 mt-1">Status, Kategorie, Priorität</p>
+                        <BCardTitle class="mb-0">Suche &amp; Filter</BCardTitle>
+                        <p class="text-muted small mb-0 mt-1">
+                            Standardmäßig werden geschlossene Tickets nur angezeigt, wenn die Schließung weniger als 24&nbsp;Stunden her ist.
+                        </p>
                     </BCardHeader>
                     <BCardBody>
+                        <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+                            <BFormGroup label="Suche" label-for="ticket_search" class="mb-0 flex-grow-1" style="min-width: 14rem">
+                                <BFormInput
+                                    id="ticket_search"
+                                    v-model="filters.search"
+                                    type="search"
+                                    placeholder="ID, Betreff, Kunde, E-Mail, Kategorie, Zugewiesen…"
+                                    class="form-control-sm"
+                                    @keydown.enter.prevent="onSearchSubmit"
+                                />
+                            </BFormGroup>
+                            <BButton variant="primary" size="sm" class="mb-0" @click="onSearchSubmit">
+                                <Icon icon="search" class="me-1" />
+                                Suchen
+                            </BButton>
+                        </div>
+                        <BFormCheckbox
+                            id="include_archived"
+                            v-model="filters.include_archived"
+                            class="mb-3"
+                            switch
+                            @update:model-value="onIncludeArchivedChange"
+                        >
+                            Alle Tickets durchsuchen (inkl. ältere geschlossene / archivierte)
+                        </BFormCheckbox>
                         <div class="d-flex flex-wrap align-items-end gap-3">
                             <BFormGroup label="Status" label-for="filter_status" class="mb-0">
                                 <BFormSelect
@@ -177,13 +321,15 @@ const tableFields = [
                 <BCard no-body>
                     <BCardHeader>
                         <BCardTitle class="mb-0">Tickets</BCardTitle>
-                        <p class="text-muted small mb-0 mt-1">Kunde, Betreff, Status, Priorität, Produkt</p>
+                        <p class="text-muted small mb-0 mt-1">Sortierung per Klick auf die Spaltenüberschriften (letzte Aktualisierung ist Standard).</p>
                     </BCardHeader>
                     <BCardBody class="p-0">
                         <BTable
+                            v-model:sort-by="sortByModel"
                             :items="tickets.data"
                             :fields="tableFields"
                             :tbody-tr-class="ticketRowClass"
+                            no-local-sorting
                             striped
                             responsive
                             class="mb-0"
@@ -215,18 +361,7 @@ const tableFields = [
                                 {{ row.item.ticket_category?.name ?? '–' }}
                             </template>
                             <template #cell(priority)="row">
-                                <BBadge
-                                    v-if="row.item.ticket_priority"
-                                    :style="
-                                        row.item.ticket_priority.color
-                                            ? {
-                                                  backgroundColor: row.item.ticket_priority.color,
-                                                  color: '#fff',
-                                                  border: 'none',
-                                              }
-                                            : undefined
-                                    "
-                                >
+                                <BBadge v-if="row.item.ticket_priority" :style="priorityBadgeStyle(row.item.ticket_priority)">
                                     {{ row.item.ticket_priority.name }}
                                 </BBadge>
                                 <span v-else>–</span>
@@ -247,6 +382,9 @@ const tableFields = [
                             </template>
                             <template #cell(created_at)="row">
                                 {{ new Date(row.item.created_at).toLocaleDateString('de-DE') }}
+                            </template>
+                            <template #cell(updated_at)="row">
+                                {{ formatUpdatedAt(row.item.updated_at) }}
                             </template>
                             <template #cell(actions)="row">
                                 <Link :href="adminTickets.show(row.item.uuid ?? row.item.id).url">

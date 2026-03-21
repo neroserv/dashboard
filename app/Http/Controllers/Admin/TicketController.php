@@ -11,14 +11,17 @@ use App\Http\Requests\Admin\UpdateTicketRequest;
 use App\Http\Requests\Admin\UpdateTicketTodoRequest;
 use App\Models\AdminActivityLog;
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\TicketMessage;
 use App\Models\TicketMessageAttachment;
 use App\Models\TicketMessageTemplate;
+use App\Models\TicketPriority;
 use App\Models\TicketService;
 use App\Models\TicketTimeLog;
 use App\Models\TicketTodo;
 use App\Models\User;
 use App\Notifications\TicketReplyNotification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +33,41 @@ class TicketController extends Controller
 {
     public function index(Request $request): Response
     {
+        $allowedSorts = [
+            'id',
+            'subject',
+            'created_at',
+            'updated_at',
+            'status_display',
+            'customer',
+            'category',
+            'priority',
+            'site_name',
+            'assigned_to_name',
+        ];
+
+        $sort = $request->query('sort', 'updated_at');
+        if (! is_string($sort) || ! in_array($sort, $allowedSorts, true)) {
+            $sort = 'updated_at';
+        }
+
+        $direction = strtolower((string) $request->query('direction', 'desc'));
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        $tableState = [
+            'search' => is_string($request->query('search')) ? trim($request->query('search')) : '',
+            'include_archived' => $request->boolean('include_archived'),
+            'sort' => $sort,
+            'direction' => $direction,
+            'status' => is_string($request->query('status')) ? $request->query('status') : '',
+            'ticket_category_id' => is_string($request->query('ticket_category_id')) ? $request->query('ticket_category_id') : '',
+            'ticket_priority_id' => is_string($request->query('ticket_priority_id')) ? $request->query('ticket_priority_id') : '',
+            'user_id' => is_string($request->query('user_id')) ? $request->query('user_id') : '',
+            'assigned_to' => is_string($request->query('assigned_to')) ? $request->query('assigned_to') : '',
+        ];
+
         $query = Ticket::query()
             ->with([
                 'user:id,name,email,avatar_path',
@@ -39,23 +77,28 @@ class TicketController extends Controller
                 'assignedTo:id,name,avatar_path',
             ]);
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
+        $this->applyAdminTicketIndexClosedVisibility($query, $request);
+
+        if ($tableState['status'] !== '') {
+            $query->where('tickets.status', $tableState['status']);
         }
-        if ($request->filled('ticket_category_id')) {
-            $query->where('ticket_category_id', $request->query('ticket_category_id'));
+        if ($tableState['ticket_category_id'] !== '') {
+            $query->where('tickets.ticket_category_id', $tableState['ticket_category_id']);
         }
-        if ($request->filled('ticket_priority_id')) {
-            $query->where('ticket_priority_id', $request->query('ticket_priority_id'));
+        if ($tableState['ticket_priority_id'] !== '') {
+            $query->where('tickets.ticket_priority_id', $tableState['ticket_priority_id']);
         }
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
+        if ($tableState['user_id'] !== '') {
+            $query->where('tickets.user_id', $tableState['user_id']);
         }
-        if ($request->filled('assigned_to')) {
-            $query->where('assigned_to', $request->query('assigned_to'));
+        if ($tableState['assigned_to'] !== '') {
+            $query->where('tickets.assigned_to', $tableState['assigned_to']);
         }
 
-        $tickets = $query->latest()->paginate(15)->withQueryString();
+        $this->applyAdminTicketIndexSearch($query, $tableState['search']);
+        $this->applyAdminTicketIndexSorting($query, $sort, $direction);
+
+        $tickets = $query->paginate(15)->withQueryString();
 
         $tickets->through(function (Ticket $ticket): Ticket {
             $summary = $ticket->ticketServices->isEmpty()
@@ -66,8 +109,8 @@ class TicketController extends Controller
             return $ticket;
         });
 
-        $categories = \App\Models\TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
-        $priorities = \App\Models\TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
+        $categories = TicketCategory::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug']);
+        $priorities = TicketPriority::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'slug', 'color']);
         $admins = User::query()->where('is_admin', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('admin/tickets/Index', [
@@ -75,7 +118,92 @@ class TicketController extends Controller
             'categories' => $categories,
             'priorities' => $priorities,
             'admins' => $admins,
+            'tableState' => $tableState,
         ]);
+    }
+
+    private function applyAdminTicketIndexClosedVisibility(Builder $query, Request $request): void
+    {
+        if ($request->boolean('include_archived')) {
+            return;
+        }
+
+        if ($request->filled('status') && $request->query('status') === 'closed') {
+            return;
+        }
+
+        $query->where(function ($q) {
+            $q->where('tickets.status', '!=', 'closed')
+                ->orWhere(function ($q2) {
+                    $q2->where('tickets.status', 'closed')
+                        ->where(function ($q3) {
+                            $q3->where('tickets.closed_at', '>=', now()->subHours(24))
+                                ->orWhere(function ($q4) {
+                                    $q4->whereNull('tickets.closed_at')
+                                        ->where('tickets.updated_at', '>=', now()->subHours(24));
+                                });
+                        });
+                });
+        });
+    }
+
+    private function applyAdminTicketIndexSearch(Builder $query, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
+        $like = '%'.$escaped.'%';
+
+        $query->where(function ($q) use ($like, $search) {
+            $q->where('tickets.subject', 'like', $like);
+            if (ctype_digit($search)) {
+                $q->orWhere('tickets.id', (int) $search);
+            }
+            $q->orWhereHas('user', function ($userQuery) use ($like) {
+                $userQuery->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            });
+            $q->orWhereHas('ticketCategory', fn ($c) => $c->where('name', 'like', $like));
+            $q->orWhereHas('assignedTo', fn ($a) => $a->where('name', 'like', $like));
+        });
+    }
+
+    private function applyAdminTicketIndexSorting(Builder $query, string $sort, string $direction): void
+    {
+        $dir = $direction === 'asc' ? 'asc' : 'desc';
+
+        match ($sort) {
+            'id' => $query->orderBy('tickets.id', $dir),
+            'subject' => $query->orderBy('tickets.subject', $dir),
+            'created_at' => $query->orderBy('tickets.created_at', $dir),
+            'updated_at' => $query->orderBy('tickets.updated_at', $dir),
+            'status_display' => $query->orderBy('tickets.status', $dir),
+            'customer' => $query->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'tickets.user_id'),
+                $dir
+            ),
+            'category' => $query->orderBy(
+                TicketCategory::query()->select('name')->whereColumn('id', 'tickets.ticket_category_id'),
+                $dir
+            ),
+            'priority' => $query->orderBy(
+                TicketPriority::query()->select('sort_order')->whereColumn('id', 'tickets.ticket_priority_id'),
+                $dir
+            )->orderBy(
+                TicketPriority::query()->select('name')->whereColumn('id', 'tickets.ticket_priority_id'),
+                $dir
+            ),
+            'assigned_to_name' => $query->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'tickets.assigned_to'),
+                $dir
+            ),
+            'site_name' => $query->orderByRaw(
+                '(SELECT MIN(id) FROM ticket_services WHERE ticket_services.ticket_id = tickets.id) '.$dir
+            ),
+            default => $query->orderBy('tickets.updated_at', 'desc'),
+        };
     }
 
     public function show(Ticket $ticket): Response

@@ -25,6 +25,78 @@ test('admin users can view tickets index', function () {
     $response->assertOk();
 });
 
+test('admin tickets index passes table state for sorting and search', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('admin/tickets/Index')
+            ->has('tableState')
+            ->where('tableState.sort', 'updated_at')
+            ->where('tableState.direction', 'desc'));
+});
+
+test('admin tickets index hides closed tickets closed longer than 24 hours by default', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    $stale = Ticket::factory()->create(['ticket_category_id' => $category->id, 'status' => 'open']);
+    $stale->forceFill([
+        'status' => 'closed',
+        'closed_at' => now()->subHours(48),
+    ])->saveQuietly();
+    $recent = Ticket::factory()->create(['ticket_category_id' => $category->id, 'status' => 'open']);
+    $recent->forceFill([
+        'status' => 'closed',
+        'closed_at' => now()->subHours(2),
+    ])->saveQuietly();
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('tickets.data', fn ($data) => ! collect($data)->pluck('id')->contains($stale->id)
+                && collect($data)->pluck('id')->contains($recent->id)));
+});
+
+test('admin tickets index includes archived closed tickets when include_archived is set', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    $stale = Ticket::factory()->create(['ticket_category_id' => $category->id, 'status' => 'open']);
+    $stale->forceFill([
+        'status' => 'closed',
+        'closed_at' => now()->subHours(48),
+    ])->saveQuietly();
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index', ['include_archived' => 1]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('tickets.data', fn ($data) => collect($data)->pluck('id')->contains($stale->id)));
+});
+
+test('admin tickets index search finds ticket by subject', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $category = TicketCategory::factory()->create();
+    $needle = 'UniqueTicketSubject'.uniqid();
+    Ticket::factory()->create([
+        'ticket_category_id' => $category->id,
+        'subject' => $needle,
+    ]);
+    $this->actingAs($admin);
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureAdminDomainForAdminRoutes::class);
+
+    $this->get(route('admin.tickets.index', ['search' => $needle]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('tickets.data', fn ($data) => count($data) >= 1
+                && collect($data)->contains(fn ($row) => str_contains((string) ($row['subject'] ?? ''), $needle))));
+});
+
 test('admin tickets index exposes service display from ticket services', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $category = TicketCategory::factory()->create();

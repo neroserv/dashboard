@@ -35,6 +35,7 @@ class Ticket extends Model
     {
         return [
             'due_at' => 'datetime',
+            'closed_at' => 'datetime',
         ];
     }
 
@@ -115,6 +116,20 @@ class Ticket extends Model
         static::creating(function (Ticket $model): void {
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
+            }
+            if ($model->status === 'closed' && $model->getAttribute('closed_at') === null) {
+                $model->closed_at = now();
+            }
+        });
+
+        static::updating(function (Ticket $ticket): void {
+            if (! $ticket->isDirty('status')) {
+                return;
+            }
+            if ($ticket->status === 'closed') {
+                $ticket->closed_at = now();
+            } else {
+                $ticket->closed_at = null;
             }
         });
     }
