@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\GameServerAccount;
+use App\Services\BrandExtensionService;
 use App\Services\CloudflareDnsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,9 +18,10 @@ class SubdomainsController extends Controller
     {
         $this->authorize('viewAny', GameServerAccount::class);
 
-        $cloudflare = app(CloudflareDnsService::class);
+        $brand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $cloudflare = CloudflareDnsService::forBrand($brand, app(BrandExtensionService::class));
         $cloudflareConfigured = $cloudflare->isConfigured();
-        $zoneDomain = (string) config('services.cloudflare.zone_domain', '');
+        $zoneDomain = $cloudflare->zoneDomain();
         $srvRecords = [];
 
         if ($cloudflareConfigured) {
@@ -56,7 +59,8 @@ class SubdomainsController extends Controller
     {
         $this->authorize('viewAny', GameServerAccount::class);
 
-        $cloudflare = app(CloudflareDnsService::class);
+        $brand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $cloudflare = CloudflareDnsService::forBrand($brand, app(BrandExtensionService::class));
         if (! $cloudflare->isConfigured()) {
             return redirect()->route('admin.subdomains.index')
                 ->with('error', 'Cloudflare ist nicht konfiguriert.');

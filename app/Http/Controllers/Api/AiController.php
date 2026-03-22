@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\GenerateTextRequest;
+use App\Models\Brand;
 use App\Services\AiTokenService;
+use App\Services\BrandExtensionService;
 use App\Services\OpenAiService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Http\Request;
 
 class AiController extends Controller
 {
@@ -17,7 +19,8 @@ class AiController extends Controller
 
     public function __construct(
         protected AiTokenService $tokenService,
-        protected OpenAiService $openAiService
+        protected OpenAiService $openAiService,
+        protected BrandExtensionService $brandExtensionService
     ) {}
 
     public function generateText(GenerateTextRequest $request): JsonResponse
@@ -37,7 +40,10 @@ class AiController extends Controller
             ], 402);
         }
 
-        if (! $this->isOpenAiConfigured()) {
+        $brand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        $apiKey = $this->brandExtensionService->openAiApiKeyForBrand($brand);
+
+        if ($apiKey === null) {
             return response()->json([
                 'message' => 'AI-Service ist derzeit nicht verfügbar.',
             ], 503);
@@ -50,6 +56,7 @@ class AiController extends Controller
 
         try {
             $text = $this->openAiService->generateText(
+                apiKey: $apiKey,
                 context: $request->validated('context'),
                 promptTemplate: $request->validated('prompt_template'),
                 pageName: $request->validated('page_name'),
@@ -71,17 +78,10 @@ class AiController extends Controller
         return response()->json(['text' => $text]);
     }
 
-    public function balance(\Illuminate\Http\Request $request): JsonResponse
+    public function balance(Request $request): JsonResponse
     {
         return response()->json([
             'balance' => $this->tokenService->getBalance($request->user()),
         ]);
-    }
-
-    private function isOpenAiConfigured(): bool
-    {
-        $key = Config::get('openai.api_key');
-
-        return is_string($key) && trim($key) !== '';
     }
 }

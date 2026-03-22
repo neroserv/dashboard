@@ -80,12 +80,11 @@ class DiscordApiService
     /**
      * Add a role to a guild member. Fails silently (logs only) if user is not on the server or on API error.
      */
-    public function addRoleToMember(string $discordUserId, string $roleId): bool
+    public function addRoleToMember(string $discordUserId, string $guildId, string $roleId): bool
     {
         $token = config('services.discord.bot_token');
-        $guildId = config('services.discord.guild_id');
-        if (! $token || ! $guildId) {
-            Log::warning('Discord add role skipped: bot_token or guild_id not configured');
+        if (! $token || $guildId === '' || $roleId === '') {
+            Log::warning('Discord add role skipped: bot_token, guild_id or role_id missing');
 
             return false;
         }

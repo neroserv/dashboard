@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\BrandExtensionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -161,40 +162,36 @@ class Brand extends Model
      */
     public function getFeaturesArray(): array
     {
+        /** @var BrandExtensionService $brandExtensions */
+        $brandExtensions = app(BrandExtensionService::class);
+
+        $features = $this->features ?? [];
+
         $defaults = [
-            'webspace' => true,
-            'domains_shop' => true,
-            'ai_tokens' => true,
+            'webspace' => $this->hasInstalledExtension(BrandExtension::EXTENSION_PLESK),
+            'domains_shop' => $this->hasInstalledExtension(BrandExtension::EXTENSION_SKRIME),
+            'ai_tokens' => $brandExtensions->openAiApiKeyForBrand($this) !== null,
             'gaming' => false,
             'gameserver_cloud' => false,
-            'teamspeak' => false,
+            'teamspeak' => $this->hasInstalledExtension(BrandExtension::EXTENSION_TEAMSPEAK),
+            'discord_notifications' => $brandExtensions->discordPortalConfigForBrand($this) !== null,
             'prepaid_balance' => false,
             'balance_topup' => false,
             'balance_period_months' => 1,
         ];
-        $features = $this->features ?? [];
-        $boolKeys = ['webspace', 'domains_shop', 'ai_tokens', 'gaming', 'gameserver_cloud', 'teamspeak', 'prepaid_balance', 'balance_topup'];
-        foreach ($boolKeys as $key) {
+
+        if ($this->hasInstalledExtension(BrandExtension::EXTENSION_PTERODACTYL)) {
+            $defaults['gaming'] = (bool) ($features['gaming'] ?? true);
+            $defaults['gameserver_cloud'] = (bool) ($features['gameserver_cloud'] ?? false);
+        }
+
+        foreach (['prepaid_balance', 'balance_topup'] as $key) {
             if (array_key_exists($key, $features)) {
                 $defaults[$key] = (bool) $features[$key];
             }
         }
         if (isset($features['balance_period_months']) && is_numeric($features['balance_period_months'])) {
             $defaults['balance_period_months'] = max(1, min(24, (int) $features['balance_period_months']));
-        }
-
-        $installed = array_flip($this->installedExtensionKeys());
-        if (isset($installed[BrandExtension::EXTENSION_TEAMSPEAK])) {
-            $defaults['teamspeak'] = true;
-        }
-        if (isset($installed[BrandExtension::EXTENSION_PTERODACTYL])) {
-            $defaults['gaming'] = true;
-        }
-        if (isset($installed[BrandExtension::EXTENSION_PLESK])) {
-            $defaults['webspace'] = true;
-        }
-        if (isset($installed[BrandExtension::EXTENSION_SKRIME])) {
-            $defaults['domains_shop'] = true;
         }
 
         return $defaults;

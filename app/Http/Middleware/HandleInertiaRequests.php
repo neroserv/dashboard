@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\CustomerBalance;
 use App\Models\Setting;
 use App\Models\Ticket;
+use App\Services\BrandExtensionService;
 use App\Services\MolliePaymentMethodsService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -134,7 +135,10 @@ class HandleInertiaRequests extends Middleware
             $authPayload['customerBalance'] = $customerBalance;
         }
 
-        $discordInviteUrl = config('services.discord.invite_url');
+        $discordPortal = $currentBrand !== null
+            ? app(BrandExtensionService::class)->discordPortalConfigForBrand($currentBrand)
+            : null;
+        $discordInviteUrl = $discordPortal['invite_url'] ?? null;
         $isAdminDomain = $request->attributes->get('is_admin_domain', false);
 
         $molliePaymentMethods = config('mollie.key')

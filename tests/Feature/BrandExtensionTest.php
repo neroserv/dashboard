@@ -23,7 +23,9 @@ test('admin can view brand extensions index', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('admin/brand-extensions/Index')
-        ->has('extensions'));
+        ->has('extension_brand')
+        ->has('brand_extensions')
+        ->has('pterodactyl_product_flags'));
 });
 
 test('non-admin cannot view brand extensions index', function () {

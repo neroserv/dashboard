@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Auth\SocialiteCallbackUrlBuilder;
+use App\Services\BrandExtensionService;
 use App\Services\DiscordApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -156,11 +157,15 @@ class SocialAuthController extends Controller
         if (empty($user->discord_id)) {
             return;
         }
-        $roleId = config('services.discord.customer_role_id');
-        if (empty($roleId)) {
+        $portal = app(BrandExtensionService::class)->discordPortalConfigForBrand($user->brand);
+        if ($portal === null) {
             return;
         }
-        app(DiscordApiService::class)->addRoleToMember($user->discord_id, $roleId);
+        app(DiscordApiService::class)->addRoleToMember(
+            $user->discord_id,
+            $portal['guild_id'],
+            $portal['customer_role_id']
+        );
     }
 
     private function createUserFromSocial(string $provider, string $providerId, string $email, string $name): User

@@ -7,6 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BrandExtension extends Model
 {
+    public const EXTENSION_CHATGPT = 'chatgpt';
+
+    public const EXTENSION_CLOUDFLARE = 'cloudflare';
+
+    public const EXTENSION_DISCORD = 'discord';
+
     public const EXTENSION_INVOICE_NINJA = 'invoice_ninja';
 
     public const EXTENSION_PLESK = 'plesk';
@@ -23,6 +29,9 @@ class BrandExtension extends Model
     public static function allExtensionKeys(): array
     {
         return [
+            self::EXTENSION_CHATGPT,
+            self::EXTENSION_CLOUDFLARE,
+            self::EXTENSION_DISCORD,
             self::EXTENSION_INVOICE_NINJA,
             self::EXTENSION_PLESK,
             self::EXTENSION_PTERODACTYL,

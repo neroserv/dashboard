@@ -398,6 +398,10 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::post('brand-extensions/uninstall', [BrandExtensionController::class, 'uninstall'])->name('brand-extensions.uninstall');
     Route::put('brand-extensions/skrime', [BrandExtensionController::class, 'updateSkrime'])->name('brand-extensions.skrime.update');
     Route::put('brand-extensions/invoice-ninja', [BrandExtensionController::class, 'updateInvoiceNinja'])->name('brand-extensions.invoice-ninja.update');
+    Route::put('brand-extensions/chatgpt', [BrandExtensionController::class, 'updateChatgpt'])->name('brand-extensions.chatgpt.update');
+    Route::put('brand-extensions/discord', [BrandExtensionController::class, 'updateDiscord'])->name('brand-extensions.discord.update');
+    Route::put('brand-extensions/cloudflare', [BrandExtensionController::class, 'updateCloudflare'])->name('brand-extensions.cloudflare.update');
+    Route::put('brand-extensions/pterodactyl-product-flags', [BrandExtensionController::class, 'updatePterodactylProductFlags'])->name('brand-extensions.pterodactyl-product-flags.update');
     Route::resource('discount-codes', DiscountCodeController::class)->except(['show']);
     Route::resource('partners', PartnerController::class)->except(['show']);
     Route::resource('vouchers', VoucherController::class)->except(['show', 'destroy']);

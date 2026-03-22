@@ -177,4 +177,121 @@ class BrandExtensionService
             'timeout' => $timeout,
         ];
     }
+
+    public function openAiApiKeyForBrand(?Brand $brand): ?string
+    {
+        if ($brand === null) {
+            return null;
+        }
+
+        $ext = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_CHATGPT)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($ext === null || ! is_array($ext->settings)) {
+            return null;
+        }
+
+        $key = trim((string) ($ext->settings['api_key'] ?? ''));
+
+        return $key !== '' ? $key : null;
+    }
+
+    /**
+     * @return array{zone_id: string, api_token: string, zone_domain: string}|null
+     */
+    public function cloudflareConfigForBrand(?Brand $brand): ?array
+    {
+        if ($brand === null) {
+            return null;
+        }
+
+        $ext = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_CLOUDFLARE)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($ext === null || ! is_array($ext->settings)) {
+            return null;
+        }
+
+        $s = $ext->settings;
+        $zoneId = trim((string) ($s['zone_id'] ?? ''));
+        $token = trim((string) ($s['api_token'] ?? ''));
+        $zoneDomain = trim((string) ($s['zone_domain'] ?? ''));
+
+        if ($zoneId === '' || $token === '' || $zoneDomain === '') {
+            return null;
+        }
+
+        return [
+            'zone_id' => $zoneId,
+            'api_token' => $token,
+            'zone_domain' => $zoneDomain,
+        ];
+    }
+
+    /**
+     * @return array{guild_id: string, customer_role_id: string, invite_url: string}|null
+     */
+    public function discordPortalConfigForBrand(?Brand $brand): ?array
+    {
+        if ($brand === null) {
+            return null;
+        }
+
+        $ext = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_DISCORD)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($ext === null || ! is_array($ext->settings)) {
+            return null;
+        }
+
+        $s = $ext->settings;
+        $guildId = trim((string) ($s['guild_id'] ?? ''));
+        $roleId = trim((string) ($s['customer_role_id'] ?? ''));
+        $inviteUrl = trim((string) ($s['invite_url'] ?? ''));
+
+        if ($guildId === '' || $roleId === '' || $inviteUrl === '') {
+            return null;
+        }
+
+        return [
+            'guild_id' => $guildId,
+            'customer_role_id' => $roleId,
+            'invite_url' => $inviteUrl,
+        ];
+    }
+
+    public function findBrandByDiscordGuildId(string $guildId): ?Brand
+    {
+        $guildId = trim($guildId);
+        if ($guildId === '') {
+            return null;
+        }
+
+        $rows = BrandExtension::query()
+            ->where('extension', BrandExtension::EXTENSION_DISCORD)
+            ->whereNotNull('installed_at')
+            ->with('brand')
+            ->get();
+
+        foreach ($rows as $row) {
+            if (! is_array($row->settings)) {
+                continue;
+            }
+            $g = trim((string) ($row->settings['guild_id'] ?? ''));
+            if ($g !== '' && $g === $guildId) {
+                return $row->brand;
+            }
+        }
+
+        return null;
+    }
 }

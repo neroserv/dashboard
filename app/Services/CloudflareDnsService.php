@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Brand;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -11,10 +12,23 @@ class CloudflareDnsService
 
     protected string $apiToken;
 
-    public function __construct(?string $zoneId = null, ?string $apiToken = null)
+    protected string $zoneDomain;
+
+    public function __construct(?string $zoneId = null, ?string $apiToken = null, ?string $zoneDomain = null)
     {
-        $this->zoneId = $zoneId ?? (string) config('services.cloudflare.zone_id', '');
-        $this->apiToken = $apiToken ?? (string) config('services.cloudflare.api_token', '');
+        $this->zoneId = $zoneId ?? '';
+        $this->apiToken = $apiToken ?? '';
+        $this->zoneDomain = $zoneDomain ?? '';
+    }
+
+    public static function forBrand(?Brand $brand, BrandExtensionService $brandExtensionService): self
+    {
+        $config = $brandExtensionService->cloudflareConfigForBrand($brand);
+        if ($config === null) {
+            return new self('', '', '');
+        }
+
+        return new self($config['zone_id'], $config['api_token'], $config['zone_domain']);
     }
 
     /**
@@ -23,6 +37,11 @@ class CloudflareDnsService
     public function isConfigured(): bool
     {
         return $this->zoneId !== '' && $this->apiToken !== '';
+    }
+
+    public function zoneDomain(): string
+    {
+        return $this->zoneDomain;
     }
 
     /**
@@ -138,7 +157,7 @@ class CloudflareDnsService
      */
     public function srvRecordExists(string $recordName): bool
     {
-        $zoneDomain = (string) config('services.cloudflare.zone_domain', '');
+        $zoneDomain = $this->zoneDomain;
         $nameToCheck = $recordName;
         if ($zoneDomain !== '' && ! str_ends_with(strtolower($recordName), strtolower('.'.$zoneDomain))) {
             $nameToCheck = $recordName.'.'.$zoneDomain;
@@ -178,7 +197,7 @@ class CloudflareDnsService
     public function createSrvRecord(string $name, string $target, int $port, int $priority = 0, int $weight = 0): void
     {
         if (! $this->isConfigured()) {
-            throw new \RuntimeException('Cloudflare DNS is not configured (CLOUDFLARE_ZONE_ID, CLOUDFLARE_API_TOKEN).');
+            throw new \RuntimeException('Cloudflare DNS ist für diese Marke nicht konfiguriert.');
         }
 
         $target = rtrim($target, '.');
@@ -220,7 +239,7 @@ class CloudflareDnsService
             return;
         }
 
-        $zoneDomain = (string) config('services.cloudflare.zone_domain', '');
+        $zoneDomain = $this->zoneDomain;
         $nameToFind = $name;
         if ($zoneDomain !== '' && ! str_ends_with(strtolower($name), strtolower('.'.$zoneDomain))) {
             $nameToFind = $name.'.'.$zoneDomain;

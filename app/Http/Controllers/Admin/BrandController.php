@@ -39,13 +39,6 @@ class BrandController extends Controller
             'theme_colors' => ['nullable', 'array'],
             'theme_colors.*' => ['nullable', 'string', 'max:50'],
             'features' => ['nullable', 'array'],
-            'features.webspace' => ['boolean'],
-            'features.domains_shop' => ['boolean'],
-            'features.ai_tokens' => ['boolean'],
-            'features.gaming' => ['boolean'],
-            'features.gameserver_cloud' => ['boolean'],
-            'features.teamspeak' => ['boolean'],
-            'features.discord_notifications' => ['boolean'],
             'features.prepaid_balance' => ['boolean'],
             'features.balance_topup' => ['boolean'],
             'features.balance_period_months' => ['nullable', 'integer', 'min:1', 'max:24'],
@@ -80,6 +73,10 @@ class BrandController extends Controller
         }
         if (isset($validated['features']['balance_period_months'])) {
             $validated['features']['balance_period_months'] = max(1, min(24, (int) $validated['features']['balance_period_months']));
+        }
+
+        if (isset($validated['features'])) {
+            $validated['features'] = array_merge($brand->features ?? [], $validated['features']);
         }
 
         $brand->update($validated);

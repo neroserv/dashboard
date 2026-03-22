@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Brand;
+use App\Services\BrandExtensionService;
 use App\Services\CloudflareDnsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
@@ -12,25 +14,33 @@ class CloudflareTestCommand extends Command
                             {--list : List first 5 DNS records}
                             {--srv-name= : Check if SRV record exists (e.g. _minecraft._tcp.test)}';
 
-    protected $description = 'Test Cloudflare API connection (zone, token) and optionally list DNS records or check SRV.';
+    protected $description = 'Test Cloudflare API connection (zone, token) for the default brand extension and optionally list DNS records or check SRV.';
 
     public function handle(): int
     {
-        $zoneId = config('services.cloudflare.zone_id');
-        $apiToken = config('services.cloudflare.api_token');
-        $zoneDomain = config('services.cloudflare.zone_domain');
+        $brand = Brand::getDefault();
+        if ($brand === null) {
+            $this->error('Keine Standard-Marke gefunden.');
 
-        $this->info('Cloudflare DNS Test');
+            return self::FAILURE;
+        }
+
+        $config = app(BrandExtensionService::class)->cloudflareConfigForBrand($brand);
+        if ($config === null) {
+            $this->error('Cloudflare ist für die Standard-Marke nicht konfiguriert (Erweiterung installieren und Zone, Token und Domain im Panel setzen).');
+
+            return self::FAILURE;
+        }
+
+        $zoneId = $config['zone_id'];
+        $apiToken = $config['api_token'];
+        $zoneDomain = $config['zone_domain'];
+
+        $this->info('Cloudflare DNS Test (Marke: '.$brand->name.')');
         $this->line('Zone ID: '.($zoneId ? substr($zoneId, 0, 8).'...' : '(leer)'));
         $this->line('API Token: '.(strlen((string) $apiToken) > 0 ? '***'.substr((string) $apiToken, -4) : '(leer)'));
         $this->line('Zone Domain: '.($zoneDomain ?: '(leer)'));
         $this->newLine();
-
-        if (! $zoneId || ! $apiToken) {
-            $this->error('CLOUDFLARE_ZONE_ID und CLOUDFLARE_API_TOKEN müssen in .env gesetzt sein.');
-
-            return self::FAILURE;
-        }
 
         $response = Http::withHeaders([
             'Authorization' => 'Bearer '.$apiToken,
@@ -77,7 +87,7 @@ class CloudflareTestCommand extends Command
         $srvName = $this->option('srv-name');
         if ($srvName !== null && $srvName !== '') {
             $this->newLine();
-            $cf = app(CloudflareDnsService::class);
+            $cf = CloudflareDnsService::forBrand($brand, app(BrandExtensionService::class));
             $exists = $cf->srvRecordExists($srvName);
             $this->info('SRV-Eintrag "'.$srvName.'": '.($exists ? 'existiert bereits' : 'nicht vorhanden'));
         }

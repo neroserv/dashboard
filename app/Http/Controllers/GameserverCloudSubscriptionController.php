@@ -11,6 +11,7 @@ use App\Models\GameServerAccount;
 use App\Models\GameserverCloudSubscription;
 use App\Models\PterodactylEggConfig;
 use App\Services\BalancePaymentService;
+use App\Services\BrandExtensionService;
 use App\Services\CloudflareDnsService;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\MollieCustomerService;
@@ -407,7 +408,8 @@ class GameserverCloudSubscriptionController extends Controller
         $customSubdomain = $request->input('custom_subdomain') ? trim((string) $request->input('custom_subdomain')) : null;
         $srvProtocol = (string) ($eggConfigData['subdomain_srv_protocol'] ?? '');
         $protocolType = (string) ($eggConfigData['subdomain_protocol_type'] ?? 'none');
-        $cloudflareDnsForSrv = app(CloudflareDnsService::class);
+        $brandForDns = $request->attributes->get('current_brand') ?? $request->user()?->brand ?? Brand::getDefault();
+        $cloudflareDnsForSrv = CloudflareDnsService::forBrand($brandForDns, app(BrandExtensionService::class));
         $willCreateSrv = $srvProtocol !== '' && $protocolType !== 'none' && $cloudflareDnsForSrv->isConfigured();
 
         $subdomainForDns = null;
@@ -534,7 +536,7 @@ class GameserverCloudSubscriptionController extends Controller
 
             if ($subdomainForDns !== null && $subdomainForDns !== '') {
                 $protocolTypeForSrv = $protocolType === 'none' ? 'tcp' : $protocolType;
-                $cloudflareDns = app(CloudflareDnsService::class);
+                $cloudflareDns = CloudflareDnsService::forBrand($brandForDns, app(BrandExtensionService::class));
                 if ($srvProtocol !== '' && $cloudflareDns->isConfigured()) {
                     try {
                         $nodeAndPort = $client->getNodeFqdnAndPortForServer((int) $created['pterodactyl_server_id']);
@@ -599,7 +601,8 @@ class GameserverCloudSubscriptionController extends Controller
         }
         if ($srvRecordName !== null && $srvRecordName !== '') {
             try {
-                $cloudflare = app(CloudflareDnsService::class);
+                $brandForDns = $request->attributes->get('current_brand') ?? $subscription->user?->brand ?? Brand::getDefault();
+                $cloudflare = CloudflareDnsService::forBrand($brandForDns, app(BrandExtensionService::class));
                 if ($cloudflare->isConfigured()) {
                     $cloudflare->deleteSrvRecord((string) $srvRecordName);
                 }

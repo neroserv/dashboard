@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\BrandExtension;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
-test('brand getFeaturesArray returns gameserver_cloud false by default', function () {
+test('brand getFeaturesArray returns gameserver_cloud false without pterodactyl extension', function () {
     $brand = Brand::create([
         'key' => 'test-default',
         'name' => 'Test',
@@ -16,7 +18,7 @@ test('brand getFeaturesArray returns gameserver_cloud false by default', functio
     expect($features['gameserver_cloud'])->toBeFalse();
 });
 
-test('brand getFeaturesArray returns gameserver_cloud true when set in features', function () {
+test('brand getFeaturesArray returns gameserver_cloud true when pterodactyl installed and feature enabled', function () {
     $brand = Brand::create([
         'key' => 'test-cloud',
         'name' => 'Test Cloud',
@@ -25,11 +27,17 @@ test('brand getFeaturesArray returns gameserver_cloud true when set in features'
         'features' => ['gameserver_cloud' => true],
     ]);
 
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_PTERODACTYL,
+        'installed_at' => now(),
+    ]);
+
     $features = $brand->getFeaturesArray();
     expect($features['gameserver_cloud'])->toBeTrue();
 });
 
-test('admin can update brand with features.gameserver_cloud', function () {
+test('admin can update pterodactyl product flags via brand extensions', function () {
     Brand::query()->update(['is_default' => false]);
     $brand = Brand::create([
         'key' => 'test-edit',
@@ -39,21 +47,21 @@ test('admin can update brand with features.gameserver_cloud', function () {
         'features' => ['gaming' => true],
     ]);
 
-    $admin = User::factory()->create(['is_admin' => true, 'brand_id' => $brand->id]);
-    $this->actingAs($admin);
-
-    $response = $this->put(route('admin.brands.update', $brand), [
-        'name' => $brand->name,
-        'domains' => [],
-        'admin_domains' => [],
-        'is_default' => true,
-        'features' => [
-            'gaming' => true,
-            'gameserver_cloud' => true,
-        ],
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_PTERODACTYL,
+        'installed_at' => now(),
     ]);
 
-    $response->assertRedirect();
+    $admin = User::factory()->create(['is_admin' => true, 'brand_id' => $brand->id]);
+    $this->withoutMiddleware(ValidateCsrfToken::class);
+    $this->actingAs($admin);
+
+    $this->put(route('admin.brand-extensions.pterodactyl-product-flags.update'), [
+        'gaming' => true,
+        'gameserver_cloud' => true,
+    ])->assertRedirect(route('admin.brand-extensions.index'));
+
     $brand->refresh();
     expect($brand->getFeaturesArray()['gameserver_cloud'])->toBeTrue();
 });

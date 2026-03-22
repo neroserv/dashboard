@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreManualInvoiceRequest;
 use App\Http\Requests\Admin\UpdateManualInvoiceRequest;
+use App\Jobs\SyncInvoiceToInvoiceNinjaJob;
 use App\Models\AdminActivityLog;
 use App\Models\Invoice;
 use App\Models\InvoiceDunningLetter;
@@ -15,6 +16,7 @@ use App\Services\DunningPdfService;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -200,25 +202,30 @@ class InvoiceController extends Controller
         }
 
         $old = $invoice->only(['invoice_date', 'due_date', 'status', 'amount']);
-        $invoice->update([
-            'invoice_date' => Carbon::parse($data['invoice_date']),
-            'due_date' => isset($data['due_date']) ? Carbon::parse($data['due_date']) : null,
-            'status' => $data['status'] ?? $invoice->status,
-            'amount' => $amount,
-        ]);
 
-        $invoice->lineItems()->delete();
-        foreach ($data['line_items'] as $row) {
-            InvoiceLineItem::create([
-                'invoice_id' => $invoice->id,
-                'position' => (int) $row['position'],
-                'description' => $row['description'],
-                'quantity' => (float) $row['quantity'],
-                'unit' => $row['unit'] ?? 'Stück',
-                'unit_price' => (float) $row['unit_price'],
-                'amount' => (float) $row['amount'],
+        Model::withoutEvents(function () use ($invoice, $data, $amount): void {
+            $invoice->update([
+                'invoice_date' => Carbon::parse($data['invoice_date']),
+                'due_date' => isset($data['due_date']) ? Carbon::parse($data['due_date']) : null,
+                'status' => $data['status'] ?? $invoice->status,
+                'amount' => $amount,
             ]);
-        }
+
+            $invoice->lineItems()->delete();
+            foreach ($data['line_items'] as $row) {
+                InvoiceLineItem::create([
+                    'invoice_id' => $invoice->id,
+                    'position' => (int) $row['position'],
+                    'description' => $row['description'],
+                    'quantity' => (float) $row['quantity'],
+                    'unit' => $row['unit'] ?? 'Stück',
+                    'unit_price' => (float) $row['unit_price'],
+                    'amount' => (float) $row['amount'],
+                ]);
+            }
+        });
+
+        SyncInvoiceToInvoiceNinjaJob::dispatch($invoice->id);
 
         $pdfPath = $pdfService->generate($invoice->fresh(['user.brand', 'lineItems']));
         if ($pdfPath) {

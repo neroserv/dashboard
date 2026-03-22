@@ -1,13 +1,28 @@
 <?php
 
 use App\Models\AiTokenBalance;
+use App\Models\Brand;
+use App\Models\BrandExtension;
 use App\Models\User;
 use App\Services\OpenAiService;
-use Illuminate\Support\Facades\Config;
 
 beforeEach(function () {
-    Config::set('openai.api_key', 'test-key-for-ai-tests');
-    $this->user = User::factory()->create();
+    Brand::query()->update(['is_default' => false]);
+    $this->brand = Brand::create([
+        'key' => 'ai-api-test',
+        'name' => 'AI API Test',
+        'domains' => null,
+        'is_default' => true,
+    ]);
+
+    BrandExtension::query()->create([
+        'brand_id' => $this->brand->id,
+        'extension' => BrandExtension::EXTENSION_CHATGPT,
+        'installed_at' => now(),
+        'settings' => ['api_key' => 'test-key-from-brand-extension'],
+    ]);
+
+    $this->user = User::factory()->create(['brand_id' => $this->brand->id]);
     $this->actingAs($this->user);
 });
 
@@ -71,6 +86,25 @@ test('generate-text returns generated text when successful', function () {
 
     $response->assertOk();
     $response->assertJson(['text' => 'Expanded professional text.']);
+});
+
+test('generate-text returns 503 when chatgpt extension has no api key', function () {
+    $row = BrandExtension::query()
+        ->where('brand_id', $this->brand->id)
+        ->where('extension', BrandExtension::EXTENSION_CHATGPT)
+        ->first();
+    expect($row)->not->toBeNull();
+    $row->settings = [];
+    $row->save();
+
+    AiTokenBalance::create(['user_id' => $this->user->id, 'balance' => 1000]);
+
+    $response = $this->postJson('/api/ai/generate-text', [
+        'context' => 'Short text',
+        'prompt_template' => 'expand',
+    ]);
+
+    $response->assertStatus(503);
 });
 
 test('generate-text validates required fields', function () {

@@ -5,7 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\InstallBrandExtensionRequest;
 use App\Http\Requests\Admin\UninstallBrandExtensionRequest;
+use App\Http\Requests\Admin\UpdateChatgptBrandExtensionRequest;
+use App\Http\Requests\Admin\UpdateCloudflareBrandExtensionRequest;
+use App\Http\Requests\Admin\UpdateDiscordBrandExtensionRequest;
 use App\Http\Requests\Admin\UpdateInvoiceNinjaBrandExtensionRequest;
+use App\Http\Requests\Admin\UpdatePterodactylProductFlagsRequest;
 use App\Http\Requests\Admin\UpdateSkrimeBrandExtensionRequest;
 use App\Models\Brand;
 use App\Models\BrandExtension;
@@ -52,7 +56,7 @@ class BrandExtensionController extends Controller
 
         $skrimeConfig = $brandExtensionService->skrimeConfigForBrand($brand);
 
-        $extensions = [];
+        $brandExtensions = [];
         foreach (BrandExtension::allExtensionKeys() as $key) {
             $row = $rows->get($key);
             $installed = $row !== null && $row->installed_at !== null;
@@ -85,17 +89,45 @@ class BrandExtensionController extends Controller
                 ];
             }
 
-            $extensions[] = $item;
+            if ($key === BrandExtension::EXTENSION_CHATGPT && $installed) {
+                $item['chatgpt'] = [
+                    'has_api_key' => ! empty($settings['api_key']),
+                ];
+            }
+
+            if ($key === BrandExtension::EXTENSION_DISCORD && $installed) {
+                $item['discord'] = [
+                    'guild_id' => (string) ($settings['guild_id'] ?? ''),
+                    'customer_role_id' => (string) ($settings['customer_role_id'] ?? ''),
+                    'invite_url' => (string) ($settings['invite_url'] ?? ''),
+                ];
+            }
+
+            if ($key === BrandExtension::EXTENSION_CLOUDFLARE && $installed) {
+                $item['cloudflare'] = [
+                    'zone_id' => (string) ($settings['zone_id'] ?? ''),
+                    'zone_domain' => (string) ($settings['zone_domain'] ?? ''),
+                    'has_api_token' => ! empty($settings['api_token']),
+                ];
+            }
+
+            $brandExtensions[] = $item;
         }
 
+        $rawFeatures = $brand->features ?? [];
+
         return Inertia::render('admin/brand-extensions/Index', [
-            'brand' => [
+            'extension_brand' => [
                 'id' => $brand->id,
                 'name' => $brand->name,
                 'key' => $brand->key,
                 'logo_url' => BrandMediaUrl::primaryLogoAbsolute($brand, $request),
             ],
-            'extensions' => $extensions,
+            'brand_extensions' => $brandExtensions,
+            'pterodactyl_product_flags' => [
+                'gaming' => (bool) ($rawFeatures['gaming'] ?? true),
+                'gameserver_cloud' => (bool) ($rawFeatures['gameserver_cloud'] ?? false),
+            ],
             'canUpdate' => $request->user()?->hasPermission('admin.brand-extensions')
                 || $request->user()?->hasPermission('admin.brand-extensions.update'),
         ]);
@@ -115,7 +147,12 @@ class BrandExtensionController extends Controller
             'extension' => $extension,
         ]);
 
-        if ($row->settings === null && $extension === BrandExtension::EXTENSION_INVOICE_NINJA) {
+        if ($row->settings === null && in_array($extension, [
+            BrandExtension::EXTENSION_INVOICE_NINJA,
+            BrandExtension::EXTENSION_CHATGPT,
+            BrandExtension::EXTENSION_DISCORD,
+            BrandExtension::EXTENSION_CLOUDFLARE,
+        ], true)) {
             $row->settings = [];
         }
 
@@ -242,9 +279,123 @@ class BrandExtensionController extends Controller
         return redirect()->route('admin.brand-extensions.index')->with('success', 'Invoice-Ninja-Einstellungen gespeichert.');
     }
 
+    public function updateChatgpt(UpdateChatgptBrandExtensionRequest $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        $row = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_CHATGPT)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($row === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'ChatGPT ist nicht installiert.');
+        }
+
+        $data = $request->validated();
+        $settings = is_array($row->settings) ? $row->settings : [];
+
+        if ($request->filled('api_key')) {
+            $settings['api_key'] = (string) $data['api_key'];
+        }
+
+        $row->settings = $settings;
+        $row->save();
+
+        return redirect()->route('admin.brand-extensions.index')->with('success', 'ChatGPT-Einstellungen gespeichert.');
+    }
+
+    public function updateDiscord(UpdateDiscordBrandExtensionRequest $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        $row = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_DISCORD)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($row === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Discord ist nicht installiert.');
+        }
+
+        $data = $request->validated();
+        $settings = is_array($row->settings) ? $row->settings : [];
+        $settings['guild_id'] = trim((string) $data['guild_id']);
+        $settings['customer_role_id'] = trim((string) $data['customer_role_id']);
+        $settings['invite_url'] = trim((string) $data['invite_url']);
+
+        $row->settings = $settings;
+        $row->save();
+
+        return redirect()->route('admin.brand-extensions.index')->with('success', 'Discord-Einstellungen gespeichert.');
+    }
+
+    public function updateCloudflare(UpdateCloudflareBrandExtensionRequest $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        $row = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_CLOUDFLARE)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($row === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Cloudflare ist nicht installiert.');
+        }
+
+        $data = $request->validated();
+        $settings = is_array($row->settings) ? $row->settings : [];
+        $settings['zone_id'] = trim((string) $data['zone_id']);
+        $settings['zone_domain'] = trim((string) $data['zone_domain']);
+
+        if ($request->filled('api_token')) {
+            $settings['api_token'] = (string) $data['api_token'];
+        }
+
+        $row->settings = $settings;
+        $row->save();
+
+        return redirect()->route('admin.brand-extensions.index')->with('success', 'Cloudflare-Einstellungen gespeichert.');
+    }
+
+    public function updatePterodactylProductFlags(UpdatePterodactylProductFlagsRequest $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        if (! $brand->hasInstalledExtension(BrandExtension::EXTENSION_PTERODACTYL)) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Pterodactyl ist nicht installiert.');
+        }
+
+        $data = $request->validated();
+        $features = $brand->features ?? [];
+        $features['gaming'] = (bool) $data['gaming'];
+        $features['gameserver_cloud'] = (bool) $data['gameserver_cloud'];
+        $brand->update(['features' => $features]);
+
+        return redirect()->route('admin.brand-extensions.index')->with('success', 'Pterodactyl-Produkte gespeichert.');
+    }
+
     private function labelForExtension(string $key): string
     {
         return match ($key) {
+            BrandExtension::EXTENSION_CHATGPT => 'ChatGPT / KI',
+            BrandExtension::EXTENSION_CLOUDFLARE => 'Cloudflare',
+            BrandExtension::EXTENSION_DISCORD => 'Discord',
             BrandExtension::EXTENSION_INVOICE_NINJA => 'Invoice Ninja',
             BrandExtension::EXTENSION_PLESK => 'Plesk',
             BrandExtension::EXTENSION_PTERODACTYL => 'Pterodactyl',
@@ -257,6 +408,9 @@ class BrandExtensionController extends Controller
     private function descriptionForExtension(string $key): string
     {
         return match ($key) {
+            BrandExtension::EXTENSION_CHATGPT => 'AI-Tokens und KI-Textgenerierung (OpenAI API-Schlüssel pro Marke).',
+            BrandExtension::EXTENSION_CLOUDFLARE => 'SRV-Subdomains für Game-Server (Zone, API-Token und Domain im Panel).',
+            BrandExtension::EXTENSION_DISCORD => 'Discord-Server, Kunden-Rolle und Einladungslink; Benachrichtigungen optional per DM.',
             BrandExtension::EXTENSION_INVOICE_NINJA => 'Rechnungen werden bei Erstellung und Änderungen zu Invoice Ninja synchronisiert (API-URL und Token erforderlich).',
             BrandExtension::EXTENSION_PLESK => 'Plesk-Webspace: Hosting-Server und -Pläne mit Plesk-Panel.',
             BrandExtension::EXTENSION_PTERODACTYL => 'Gameserver: Hosting mit Pterodactyl-Panel.',
@@ -269,6 +423,9 @@ class BrandExtensionController extends Controller
     private function iconForExtension(string $key): string
     {
         return match ($key) {
+            BrandExtension::EXTENSION_CHATGPT => '/images/extensions/chatgpt.png',
+            BrandExtension::EXTENSION_CLOUDFLARE => '/images/extensions/cloudflare.png',
+            BrandExtension::EXTENSION_DISCORD => '/images/extensions/discord.png',
             BrandExtension::EXTENSION_INVOICE_NINJA => '/images/extensions/invoinceninja.png',
             BrandExtension::EXTENSION_PLESK => '/images/extensions/plesk.png',
             BrandExtension::EXTENSION_PTERODACTYL => '/images/extensions/pterodactyl.png',

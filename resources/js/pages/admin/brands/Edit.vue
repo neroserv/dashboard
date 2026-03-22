@@ -96,13 +96,6 @@ const form = useForm({
         ...defaultThemeColors,
         ...(props.brand.theme_colors ?? {}),
     } as ThemeColors,
-    feature_webspace: props.brand.features?.webspace ?? true,
-    feature_domains_shop: props.brand.features?.domains_shop ?? true,
-    feature_ai_tokens: props.brand.features?.ai_tokens ?? true,
-    feature_gaming: props.brand.features?.gaming ?? false,
-    feature_gameserver_cloud: props.brand.features?.gameserver_cloud ?? false,
-    feature_teamspeak: props.brand.features?.teamspeak ?? false,
-    feature_discord_notifications: props.brand.features?.discord_notifications ?? false,
     feature_prepaid_balance: props.brand.features?.prepaid_balance ?? false,
     feature_balance_topup: props.brand.features?.balance_topup ?? false,
     feature_balance_period_months: props.brand.features?.balance_period_months ?? 1,
@@ -131,13 +124,6 @@ const submit = () => {
         seo: data.seo,
         theme_colors: data.theme_colors,
         features: {
-            webspace: data.feature_webspace,
-            domains_shop: data.feature_domains_shop,
-            ai_tokens: data.feature_ai_tokens,
-            gaming: data.feature_gaming,
-            gameserver_cloud: data.feature_gameserver_cloud,
-            teamspeak: data.feature_teamspeak,
-            discord_notifications: data.feature_discord_notifications,
             prepaid_balance: data.feature_prepaid_balance,
             balance_topup: data.feature_balance_topup,
             balance_period_months: Math.max(1, Math.min(24, Number(data.feature_balance_period_months) || 1)),
@@ -169,7 +155,7 @@ const salutationOptions = [
                     <div class="mb-3">
                         <h4 class="mb-1">Marke bearbeiten</h4>
                         <p class="text-muted small mb-0">
-                            {{ props.brand.key }} – Name, Domains, Features und E-Mail-Inhalte
+                            {{ props.brand.key }} – Name, Domains, Prepaid und E-Mail-Inhalte
                         </p>
                     </div>
                 </BCol>
@@ -299,54 +285,6 @@ const salutationOptions = [
                                     placeholder="#000000"
                                 />
                             </div>
-                        </BCardBody>
-                    </BCard>
-                </BCol>
-
-                <BCol lg="6" class="mb-4">
-                    <BCard no-body>
-                        <BCardHeader>
-                            <BCardTitle class="mb-0">Features</BCardTitle>
-                            <p class="text-muted small mb-0 mt-1">
-                                Welche Produkte in diesem Portal sichtbar sind – aktivieren oder deaktivieren
-                            </p>
-                        </BCardHeader>
-                        <BCardBody>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_webspace" v-model="form.feature_webspace">
-                                    Webspace
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_domains" v-model="form.feature_domains_shop">
-                                    Domains-Shop
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_ai" v-model="form.feature_ai_tokens">
-                                    AI-Tokens
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_gaming" v-model="form.feature_gaming">
-                                    Gaming (Game-Server / Pterodactyl)
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_gameserver_cloud" v-model="form.feature_gameserver_cloud">
-                                    Gameserver Cloud
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_teamspeak" v-model="form.feature_teamspeak">
-                                    TeamSpeak (TeamSpeak-Server mieten)
-                                </BFormCheckbox>
-                            </BFormGroup>
-                            <BFormGroup class="mb-2">
-                                <BFormCheckbox id="feat_discord_notifications" v-model="form.feature_discord_notifications">
-                                    Discord-Benachrichtigungen (E-Mail-Vorlagen optional per Discord-DM)
-                                </BFormCheckbox>
-                            </BFormGroup>
                         </BCardBody>
                     </BCard>
                 </BCol>

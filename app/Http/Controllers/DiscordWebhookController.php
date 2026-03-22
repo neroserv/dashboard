@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\BrandExtensionService;
 use App\Services\DiscordApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,10 +84,15 @@ class DiscordWebhookController extends Controller
             ]);
         }
 
+        $guildId = (string) ($payload['guild_id'] ?? '');
+        $brandExtensionService = app(BrandExtensionService::class);
+        $brand = $guildId !== '' ? $brandExtensionService->findBrandByDiscordGuildId($guildId) : null;
+        $portal = $brand !== null ? $brandExtensionService->discordPortalConfigForBrand($brand) : null;
+
         $laravelUser = User::query()->where('discord_id', $discordUserId)->first();
 
         if ($laravelUser === null) {
-            $inviteUrl = config('services.discord.invite_url');
+            $inviteUrl = $portal['invite_url'] ?? null;
             $hint = $inviteUrl
                 ? " Kein verknüpftes Konto gefunden. Bitte verbinde Discord unter Einstellungen → Integration auf der Website. Falls du noch nicht auf dem Server bist: {$inviteUrl}"
                 : ' Kein verknüpftes Konto gefunden. Bitte verbinde Discord unter Einstellungen → Integration auf der Website.';
@@ -97,9 +103,12 @@ class DiscordWebhookController extends Controller
             ]);
         }
 
-        $roleId = config('services.discord.customer_role_id');
-        if (! empty($roleId)) {
-            app(DiscordApiService::class)->addRoleToMember($laravelUser->discord_id, $roleId);
+        if ($portal !== null) {
+            app(DiscordApiService::class)->addRoleToMember(
+                $laravelUser->discord_id,
+                $portal['guild_id'],
+                $portal['customer_role_id']
+            );
         }
 
         return response()->json([

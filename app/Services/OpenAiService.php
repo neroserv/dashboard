@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use OpenAI;
 use OpenAI\Contracts\ClientContract;
 
 class OpenAiService
@@ -17,9 +18,27 @@ class OpenAiService
         'ad_copy' => 'Formuliere den folgenden Text als werbewirksamen, ansprechenden Werbetext.',
     ];
 
-    public function __construct(
-        protected ClientContract $client
-    ) {}
+    private function clientForApiKey(string $apiKey): ClientContract
+    {
+        $organization = config('openai.organization');
+        $project = config('openai.project');
+        $baseUri = config('openai.base_uri');
+        $factory = OpenAI::factory()
+            ->withApiKey($apiKey)
+            ->withHttpClient(new \GuzzleHttp\Client(['timeout' => (int) config('openai.request_timeout', 30)]));
+
+        if (is_string($organization) && $organization !== '') {
+            $factory->withOrganization($organization);
+        }
+        if (is_string($project) && $project !== '') {
+            $factory->withProject($project);
+        }
+        if (is_string($baseUri) && $baseUri !== '') {
+            $factory->withBaseUri($baseUri);
+        }
+
+        return $factory->make();
+    }
 
     /**
      * @return array{
@@ -34,11 +53,12 @@ class OpenAiService
      *     twitter_image: string
      * }
      */
-    public function generateSeoSuggestions(string $pageContent, string $pageTitle): array
+    public function generateSeoSuggestions(string $apiKey, string $pageContent, string $pageTitle): array
     {
+        $client = $this->clientForApiKey($apiKey);
         $userPrompt = "Seitentitel: {$pageTitle}\n\nSeiteninhalt:\n".mb_substr(strip_tags($pageContent), 0, 4000);
 
-        $response = $this->client->chat()->create([
+        $response = $client->chat()->create([
             'model' => self::MODEL,
             'messages' => [
                 ['role' => 'system', 'content' => self::SEO_SYSTEM_PROMPT],
@@ -82,12 +102,14 @@ class OpenAiService
     }
 
     public function generateText(
+        string $apiKey,
         string $context,
         string $promptTemplate,
         ?string $pageName = null,
         ?string $blockType = null,
         ?string $additionalPrompt = null
     ): string {
+        $client = $this->clientForApiKey($apiKey);
         $systemPrompt = self::PROMPT_TEMPLATES[$promptTemplate] ?? self::PROMPT_TEMPLATES['expand'];
 
         $contextParts = [];
@@ -106,7 +128,7 @@ class OpenAiService
             $userContent .= "\n\nZusatzanweisung: {$additionalPrompt}";
         }
 
-        $response = $this->client->chat()->create([
+        $response = $client->chat()->create([
             'model' => self::MODEL,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],

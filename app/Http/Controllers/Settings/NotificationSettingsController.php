@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\EmailTemplate;
+use App\Services\BrandExtensionService;
 use App\Services\DiscordApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class NotificationSettingsController extends Controller
         $user = $request->user();
         $templates = EmailTemplate::query()->orderBy('key')->get(['key', 'name']);
         $brand = $user->brand;
-        $discordAvailable = ($brand && is_array($brand->features) && ! empty($brand->features['discord_notifications']));
+        $discordAvailable = $brand !== null && ($brand->getFeaturesArray()['discord_notifications'] ?? false);
 
         return Inertia::render('settings/Notifications', [
             'templates' => $templates,
@@ -79,9 +80,13 @@ class NotificationSettingsController extends Controller
         $user->save();
 
         if ($hasDiscordPreference && ! empty($user->discord_id)) {
-            $roleId = config('services.discord.customer_role_id');
-            if (! empty($roleId)) {
-                app(DiscordApiService::class)->addRoleToMember($user->discord_id, $roleId);
+            $portal = app(BrandExtensionService::class)->discordPortalConfigForBrand($user->brand);
+            if ($portal !== null) {
+                app(DiscordApiService::class)->addRoleToMember(
+                    $user->discord_id,
+                    $portal['guild_id'],
+                    $portal['customer_role_id']
+                );
             }
         }
 

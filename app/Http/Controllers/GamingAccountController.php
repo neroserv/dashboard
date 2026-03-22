@@ -12,6 +12,7 @@ use App\Models\GameServerAccount;
 use App\Models\PterodactylEggConfig;
 use App\Models\ResellerDomain;
 use App\Services\BalancePaymentService;
+use App\Services\BrandExtensionService;
 use App\Services\CloudflareDnsService;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\GameServerQueryService;
@@ -475,7 +476,8 @@ class GamingAccountController extends Controller
             return response()->json(['available' => false, 'error' => 'SRV nicht konfiguriert']);
         }
 
-        $cloudflare = app(CloudflareDnsService::class);
+        $brand = $request->attributes->get('current_brand') ?? $request->user()?->brand ?? Brand::getDefault();
+        $cloudflare = CloudflareDnsService::forBrand($brand, app(BrandExtensionService::class));
         if (! $cloudflare->isConfigured()) {
             return response()->json(['available' => false, 'error' => 'DNS nicht konfiguriert']);
         }
@@ -508,7 +510,8 @@ class GamingAccountController extends Controller
             return redirect()->back()->with('error', 'Server-Daten fehlen.');
         }
 
-        $cloudflare = app(CloudflareDnsService::class);
+        $brand = $request->attributes->get('current_brand') ?? $request->user()?->brand ?? Brand::getDefault();
+        $cloudflare = CloudflareDnsService::forBrand($brand, app(BrandExtensionService::class));
         if (! $cloudflare->isConfigured()) {
             return redirect()->back()->with('error', 'DNS ist nicht konfiguriert.');
         }
