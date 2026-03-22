@@ -21,24 +21,45 @@ class InvoiceNinjaSyncService
         $invoice->loadMissing(['user.brand', 'lineItems']);
 
         $user = $invoice->user;
-        if ($user === null || $user->brand_id === null) {
+        if ($user === null) {
+            $this->logSkip('missing_invoice_user', ['invoice_id' => $invoice->id]);
+
             return;
         }
 
-        $brand = $user->brand;
+        $brand = $user->brand ?? Brand::getDefault();
         if ($brand === null) {
+            $this->logSkip('no_brand_resolved', [
+                'invoice_id' => $invoice->id,
+                'user_id' => $user->id,
+                'user_brand_id' => $user->brand_id,
+            ]);
+
             return;
         }
 
         if (! $this->brandExtensionService->isInstalled($brand, BrandExtension::EXTENSION_INVOICE_NINJA)) {
+            $this->logSkip('invoice_ninja_extension_not_installed', [
+                'invoice_id' => $invoice->id,
+                'brand_id' => $brand->id,
+            ]);
+
             return;
         }
 
         if ($this->brandExtensionService->invoiceNinjaConfigForBrand($brand) === null) {
+            $this->logSkip('invoice_ninja_not_configured', [
+                'invoice_id' => $invoice->id,
+                'brand_id' => $brand->id,
+                'hint' => 'Set base_url and api_token in brand extension settings.',
+            ]);
+
             return;
         }
 
         if ($invoice->lineItems->isEmpty()) {
+            $this->logSkip('no_line_items', ['invoice_id' => $invoice->id]);
+
             return;
         }
 
@@ -269,6 +290,9 @@ class InvoiceNinjaSyncService
         }
 
         $id = $data['id'] ?? null;
+        if (is_int($id) || is_float($id)) {
+            $id = (string) $id;
+        }
 
         return is_string($id) && $id !== '' ? $id : null;
     }
@@ -280,5 +304,13 @@ class InvoiceNinjaSyncService
         $meta['invoice_ninja_synced_at'] = now()->toIso8601String();
 
         $invoice->forceFill(['metadata' => $meta])->saveQuietly();
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    protected function logSkip(string $reason, array $context = []): void
+    {
+        Log::info('Invoice Ninja sync skipped', array_merge(['reason' => $reason], $context));
     }
 }
