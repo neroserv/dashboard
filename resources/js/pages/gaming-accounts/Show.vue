@@ -20,8 +20,8 @@
         <BCard no-body>
           <BCardBody class="text-center">
             <BBadge :variant="statusVariant" class="mb-2">{{ displayStatus }}</BBadge>
-            <div class="mb-2">
-              <Icon icon="gamepad" class="fs-1 text-muted" />
+            <div class="mb-2 d-flex justify-content-center">
+              <Icon icon="device-gamepad-2" class="fs-1 text-muted" />
             </div>
             <h5 class="mb-1">{{ displayServerName }}</h5>
             <p class="text-muted small mb-0">Game-Server</p>
@@ -61,7 +61,7 @@
               </BButton>
               <Link v-if="showAboVerwalten" href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
               <Link v-if="connectDomainShowUrl && !isSuspendedOrExpired" :href="connectDomainShowUrl" class="btn btn-outline-secondary">
-                <Icon icon="globe" class="me-2" />
+                <Icon icon="world" class="me-2" />
                 Domain verbinden
               </Link>
             </div>
@@ -160,7 +160,7 @@
           </BCardBody>
         </BCard>
 
-        <BNav tabs class="mb-3 flex-wrap gaming-account-tabs">
+        <BNav tabs class="mb-3 flex-wrap">
           <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'console'" @click="activeTab = 'console'">
             <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
               <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
@@ -225,7 +225,7 @@
           >
             <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
               <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
-                <Icon icon="globe" />
+                <Icon icon="world" />
               </span>
               <span class="d-inline-flex align-items-center">Domain</span>
             </span>
@@ -1021,8 +1021,3 @@ function submitSubdomainChange() {
 }
 </script>
 
-<style scoped>
-.gaming-account-tabs :deep(.nav-link svg) {
-  display: block;
-}
-</style>

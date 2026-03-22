@@ -40,6 +40,9 @@ class BrandExtensionService
         if ($this->isInstalled($brand, BrandExtension::EXTENSION_PLESK)) {
             $types[] = ['value' => 'plesk', 'label' => 'Plesk'];
         }
+        if ($this->isInstalled($brand, BrandExtension::EXTENSION_KEYHELP)) {
+            $types[] = ['value' => 'keyhelp', 'label' => 'KeyHelp'];
+        }
         if ($this->isInstalled($brand, BrandExtension::EXTENSION_PTERODACTYL)) {
             $types[] = ['value' => 'pterodactyl', 'label' => 'Pterodactyl'];
         }
@@ -65,6 +68,7 @@ class BrandExtensionService
         $values = array_column($types, 'value');
         if (! in_array($currentPanelType, $values, true)) {
             $label = match ($currentPanelType) {
+                'keyhelp' => 'KeyHelp',
                 'pterodactyl' => 'Pterodactyl',
                 'teamspeak' => 'TeamSpeak',
                 default => 'Plesk',
@@ -293,5 +297,56 @@ class BrandExtensionService
         }
 
         return null;
+    }
+
+    /**
+     * Webspace panel options for the customer shop (Plesk and/or KeyHelp when both extensions are installed).
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function availableWebspacePanelTypes(Brand $brand): array
+    {
+        $types = [];
+        if ($this->isInstalled($brand, BrandExtension::EXTENSION_PLESK)) {
+            $types[] = ['value' => 'plesk', 'label' => 'Plesk'];
+        }
+        if ($this->isInstalled($brand, BrandExtension::EXTENSION_KEYHELP)) {
+            $types[] = ['value' => 'keyhelp', 'label' => 'KeyHelp'];
+        }
+
+        return $types;
+    }
+
+    /**
+     * Default panel query value for webspace shop when multiple panels are available (Plesk preferred).
+     */
+    public function defaultWebspacePanelQuery(Brand $brand): ?string
+    {
+        $types = $this->availableWebspacePanelTypes($brand);
+        if ($types === []) {
+            return null;
+        }
+        foreach ($types as $t) {
+            if ($t['value'] === 'plesk') {
+                return 'plesk';
+            }
+        }
+
+        return $types[0]['value'];
+    }
+
+    public function webspacePanelTypeIsAvailableForBrand(?Brand $brand, string $effectivePanelType): bool
+    {
+        if ($brand === null) {
+            return true;
+        }
+        if ($effectivePanelType === 'plesk') {
+            return $this->isInstalled($brand, BrandExtension::EXTENSION_PLESK);
+        }
+        if ($effectivePanelType === 'keyhelp') {
+            return $this->isInstalled($brand, BrandExtension::EXTENSION_KEYHELP);
+        }
+
+        return false;
     }
 }

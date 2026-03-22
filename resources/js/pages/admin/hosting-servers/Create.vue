@@ -35,9 +35,20 @@ const useSsl = ref(true);
 const panelType = ref(props.allowedPanelTypes[0]?.value ?? 'plesk');
 const config = ref<Record<string, string>>({});
 
-const showPleskFields = computed(() => panelType.value === 'plesk');
+/** Plesk + KeyHelp: Hostname-Zugang, Port, SSL, API-Token (KeyHelp: Header X-API-Key). */
+const showWebspaceApiFields = computed(() => panelType.value === 'plesk' || panelType.value === 'keyhelp');
+const showPleskOnlyFields = computed(() => panelType.value === 'plesk');
 const showPterodactylFields = computed(() => panelType.value === 'pterodactyl');
 const showTeamspeakFields = computed(() => panelType.value === 'teamspeak');
+
+const isKeyhelpPanel = computed(() => panelType.value === 'keyhelp');
+
+const apiTokenFieldLabel = computed(() =>
+    isKeyhelpPanel.value ? 'API-Schlüssel (X-API-Key) *' : 'API-Token / Passwort *',
+);
+const apiTokenPlaceholder = computed(() =>
+    isKeyhelpPanel.value ? 'KeyHelp API-Schlüssel aus den Panel-Einstellungen' : 'Plesk API Key oder Passwort bei Basic Auth',
+);
 
 const panelTypeOptions = computed(() =>
     props.allowedPanelTypes.map((o) => ({ value: o.value, text: o.label })),
@@ -62,14 +73,14 @@ const breadcrumbs: BreadcrumbItem[] = [
             <BCol>
                 <div class="mb-3">
                     <h4 class="mb-1">Neuer Hosting-Server</h4>
-                    <p class="text-muted small mb-0">Plesk-, Pterodactyl- oder TeamSpeak-Server anlegen</p>
+                    <p class="text-muted small mb-0">Plesk-, KeyHelp-, Pterodactyl- oder TeamSpeak-Server anlegen</p>
                 </div>
 
                 <BCard no-body>
                     <BCardHeader>
                         <BCardTitle class="mb-0">Server-Details</BCardTitle>
                         <p class="text-muted small mb-0 mt-1">
-                            Panel-Typ wählen, dann Hostname und API-Zugang. Plesk: REST API. Pterodactyl: Application API. TeamSpeak: Query-Adresse, Benutzer, Passwort und Port-Range.
+                            Panel-Typ wählen, dann Hostname und API-Zugang. Plesk: REST/XML API. KeyHelp: REST API mit Header X-API-Key. Pterodactyl: Application API. TeamSpeak: Query-Adresse, Benutzer, Passwort und Port-Range.
                         </p>
                     </BCardHeader>
                     <Form
@@ -227,7 +238,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     id="hostname"
                                     name="hostname"
                                     required
-                                    :placeholder="showPterodactylFields ? 'panel.example.com' : 'plesk.example.com'"
+                                    :placeholder="
+                                        showPterodactylFields ? 'panel.example.com' : isKeyhelpPanel ? 'keyhelp.example.com' : 'plesk.example.com'
+                                    "
                                     :aria-invalid="!!errors.hostname"
                                 />
                                 <InputError :message="errors.hostname" />
@@ -243,7 +256,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 <InputError :message="errors.hostname" />
                             </BFormGroup>
 
-                            <template v-if="showPleskFields">
+                            <template v-if="showWebspaceApiFields">
                                 <BRow>
                                     <BCol md="6">
                                         <BFormGroup label="Port (optional)" label-for="port">
@@ -268,35 +281,47 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         </BFormGroup>
                                     </BCol>
                                 </BRow>
-                                <BFormGroup label="API-Benutzername (optional)" label-for="api_username">
-                                    <BFormInput
-                                        id="api_username"
-                                        name="api_username"
-                                        placeholder="admin"
-                                        :aria-invalid="!!errors.api_username"
-                                    />
-                                    <p class="text-muted small mb-0 mt-1">Bei Angabe: REST API v2 mit Basic Auth (Benutzer + API-Token als Passwort)</p>
-                                    <InputError :message="errors.api_username" />
-                                </BFormGroup>
-                                <BFormGroup label="IP-Adresse" label-for="ip_address">
-                                    <BFormInput
-                                        id="ip_address"
-                                        name="ip_address"
-                                        placeholder="z. B. Shared-IP aus dem Reseller-Pool"
-                                        :aria-invalid="!!errors.ip_address"
-                                    />
-                                    <p class="text-muted small mb-0 mt-1">Für Plesk Reseller: Muss eine IP aus Ihrem Reseller-IP-Pool sein (Plesk → IP-Adressen).</p>
-                                    <InputError :message="errors.ip_address" />
-                                </BFormGroup>
-                                <BFormGroup label="API-Token / Passwort *" label-for="api_token">
+                                <p v-if="isKeyhelpPanel" class="text-muted small mb-0 mt-1">
+                                    Leerer Port = HTTPS 443 bzw. HTTP 80 (Standard). KeyHelp nutzt nicht den Plesk-Port 8443.
+                                </p>
+                                <template v-if="showPleskOnlyFields">
+                                    <BFormGroup label="API-Benutzername (optional)" label-for="api_username">
+                                        <BFormInput
+                                            id="api_username"
+                                            name="api_username"
+                                            placeholder="admin"
+                                            :aria-invalid="!!errors.api_username"
+                                        />
+                                        <p class="text-muted small mb-0 mt-1">
+                                            Bei Angabe: REST API v2 mit Basic Auth (Benutzer + API-Token als Passwort)
+                                        </p>
+                                        <InputError :message="errors.api_username" />
+                                    </BFormGroup>
+                                    <BFormGroup label="IP-Adresse" label-for="ip_address">
+                                        <BFormInput
+                                            id="ip_address"
+                                            name="ip_address"
+                                            placeholder="z. B. Shared-IP aus dem Reseller-Pool"
+                                            :aria-invalid="!!errors.ip_address"
+                                        />
+                                        <p class="text-muted small mb-0 mt-1">
+                                            Für Plesk Reseller: Muss eine IP aus Ihrem Reseller-IP-Pool sein (Plesk → IP-Adressen).
+                                        </p>
+                                        <InputError :message="errors.ip_address" />
+                                    </BFormGroup>
+                                </template>
+                                <BFormGroup :label="apiTokenFieldLabel" label-for="api_token">
                                     <BFormInput
                                         id="api_token"
                                         name="api_token"
                                         type="password"
                                         required
-                                        placeholder="Plesk API Key oder Passwort bei Basic Auth"
+                                        :placeholder="apiTokenPlaceholder"
                                         :aria-invalid="!!errors.api_token"
                                     />
+                                    <p v-if="isKeyhelpPanel" class="text-muted small mb-0 mt-1">
+                                        Wird als HTTP-Header <code class="small">X-API-Key</code> gesendet (KeyHelp API).
+                                    </p>
                                     <InputError :message="errors.api_token" />
                                 </BFormGroup>
                             </template>

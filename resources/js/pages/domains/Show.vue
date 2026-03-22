@@ -35,8 +35,10 @@
               <BBadge variant="success" class="shrink-0">Aktiv</BBadge>
             </div>
             <div class="text-center">
-              <Icon icon="server" class="fs-1 text-muted" />
-              <h5 class="mt-2 mb-0">Domain</h5>
+              <div class="mb-2 d-flex justify-content-center">
+                <Icon icon="server" class="fs-1 text-muted" />
+              </div>
+              <h5 class="mt-0 mb-0">Domain</h5>
               <p class="text-muted small mb-0">{{ domain.domain }}</p>
             </div>
           </BCardBody>
@@ -65,12 +67,52 @@
         </BCard>
       </aside>
       <div class="col-lg-9">
-        <BNav tabs class="mb-3">
-          <BNavItem :active="activeTab === 'overview'" @click="activeTab = 'overview'">Übersicht</BNavItem>
-          <BNavItem :active="activeTab === 'dns'" @click="activeTab = 'dns'; loadDnsRecords()">DNS Manager</BNavItem>
-          <BNavItem :active="activeTab === 'contact'" @click="activeTab = 'contact'; loadContact()">Kontakt</BNavItem>
-          <BNavItem :active="activeTab === 'whois'" @click="activeTab = 'whois'; loadWhoisLookup()">Whois Privacy</BNavItem>
-          <BNavItem v-if="canManageCollaborators" :active="activeTab === 'sharing'" @click="activeTab = 'sharing'">Teilen</BNavItem>
+        <BNav tabs class="mb-3 flex-wrap">
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'overview'" @click="activeTab = 'overview'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="layout-dashboard" />
+              </span>
+              <span>Übersicht</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'dns'" @click="activeTab = 'dns'; loadDnsRecords()">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="world-www" />
+              </span>
+              <span>DNS Manager</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'contact'" @click="activeTab = 'contact'; loadContact()">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="user" />
+              </span>
+              <span>Kontakt</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'whois'" @click="activeTab = 'whois'; loadWhoisLookup()">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="shield-check" />
+              </span>
+              <span>Whois Privacy</span>
+            </span>
+          </BNavItem>
+          <BNavItem
+            v-if="canManageCollaborators"
+            link-class="d-inline-flex align-items-center"
+            :active="activeTab === 'sharing'"
+            @click="activeTab = 'sharing'"
+          >
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="share" />
+              </span>
+              <span>Teilen</span>
+            </span>
+          </BNavItem>
         </BNav>
 
         <BCard v-show="activeTab === 'overview'" no-body>

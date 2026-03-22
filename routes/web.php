@@ -414,6 +414,7 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('hosting-servers/{hostingServer}/pterodactyl-nests/{nest}/eggs/{egg}', [PterodactylEggController::class, 'showEgg'])->name('hosting-servers.pterodactyl-nests.eggs.show');
     Route::put('hosting-servers/{hostingServer}/pterodactyl-nests/{nest}/eggs/{egg}/config', [PterodactylEggController::class, 'updateConfig'])->name('hosting-servers.pterodactyl-nests.eggs.config.update');
     Route::get('hosting-plans/pterodactyl-options', [HostingPlanController::class, 'pterodactylOptions'])->name('hosting-plans.pterodactyl-options');
+    Route::get('hosting-plans/keyhelp-hosting-plans', [HostingPlanController::class, 'keyhelpHostingPlans'])->name('hosting-plans.keyhelp-hosting-plans');
     Route::resource('hosting-plans', HostingPlanController::class);
     Route::resource('gameserver-cloud-plans', GameserverCloudPlanController::class)->except(['show']);
     Route::get('webspace-accounts', [\App\Http\Controllers\Admin\WebspaceAccountController::class, 'index'])->name('webspace-accounts.index');

@@ -8,9 +8,9 @@ use App\Http\Requests\Admin\UpdateHostingServerRequest;
 use App\Models\Brand;
 use App\Models\HostingServer;
 use App\Services\BrandExtensionService;
-use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\ControlPanels\TeamSpeakClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -208,9 +208,7 @@ class HostingServerController extends Controller
                 $client->setServer($hostingServer);
                 $result = $client->testConnection();
             } else {
-                $client = app(PleskClient::class);
-                $client->setServer($hostingServer);
-                $result = $client->testConnection();
+                $result = app(WebspacePanelDispatcher::class)->testConnection($hostingServer);
             }
         } catch (\Throwable $e) {
             $hostingServer->update([

@@ -22,6 +22,7 @@ class WebspaceAccount extends Model
         'product_id',
         'domain',
         'plesk_username',
+        'keyhelp_user_id',
         'plesk_password_encrypted',
         'status',
         'mollie_subscription_id',

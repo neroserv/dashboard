@@ -84,4 +84,34 @@ class HostingServer extends Model
     {
         return $this->hasMany(PterodactylEggConfig::class);
     }
+
+    /**
+     * Active hosting server for webspace provisioning (Plesk or KeyHelp), matched to plan brand when possible.
+     */
+    public static function resolveActiveForWebspacePlan(HostingPlan $plan): ?self
+    {
+        $panelType = $plan->getAttribute('panel_type') ?? 'plesk';
+        if (! in_array($panelType, ['plesk', 'keyhelp'], true)) {
+            return null;
+        }
+
+        $exactBrand = static::query()
+            ->where('is_active', true)
+            ->where('panel_type', $panelType)
+            ->where('brand_id', $plan->brand_id)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->first();
+        if ($exactBrand !== null) {
+            return $exactBrand;
+        }
+
+        return static::query()
+            ->where('is_active', true)
+            ->where('panel_type', $panelType)
+            ->whereNull('brand_id')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->first();
+    }
 }

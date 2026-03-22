@@ -613,14 +613,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             />
                             <InputError :message="errors.price" />
                         </div>
-                        <div class="space-y-2">
-                            <Label for="stripe_price_id">Stripe Price ID (optional)</Label>
-                            <Input
-                                id="stripe_price_id"
-                                name="stripe_price_id"
-                                :model-value="hostingPlan.stripe_price_id ?? ''"
-                            />
-                        </div>
+                        <input type="hidden" name="stripe_price_id" :value="hostingPlan.stripe_price_id ?? ''" />
                         <div class="space-y-2">
                             <Label for="sort_order">Sortierung</Label>
                             <Input id="sort_order" name="sort_order" type="number" min="0" :model-value="hostingPlan.sort_order" />

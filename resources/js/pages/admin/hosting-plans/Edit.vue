@@ -18,6 +18,7 @@ import {
 } from 'bootstrap-vue-next';
 import InputError from '@/components/InputError.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import { notify } from '@/composables/useNotify';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
@@ -45,6 +46,47 @@ type PanelTypeOption = { value: string; label: string };
 
 type PterodactylServer = { id: number; name: string; hostname: string };
 
+type KeyhelpRemotePlan = {
+    id: number;
+    name: string;
+    disk_gb: number | null;
+    disk_unlimited?: boolean;
+    traffic_gb: number | null;
+    traffic_unlimited: boolean;
+    domains: number | null;
+    domains_unlimited?: boolean;
+    subdomains: number | null;
+    subdomains_unlimited?: boolean;
+    mailboxes: number | null;
+    mailboxes_unlimited?: boolean;
+    databases: number | null;
+    databases_unlimited?: boolean;
+};
+
+/** Speichert „unbegrenzt“ wie bisher im Shop (KeyHelp: negative API-Werte). */
+const keyhelpUnlimitedStoreValue = 999_999;
+
+function keyhelpQuotaToStore(unlimited: boolean | undefined, value: number | null | undefined): number {
+    if (unlimited) {
+        return keyhelpUnlimitedStoreValue;
+    }
+
+    return Math.max(0, value ?? 0);
+}
+
+function keyhelpPlanSelectLabel(p: KeyhelpRemotePlan): string {
+    const hasAnyUnlimited =
+        p.disk_unlimited ||
+        p.traffic_unlimited ||
+        p.domains_unlimited ||
+        p.subdomains_unlimited ||
+        p.mailboxes_unlimited ||
+        p.databases_unlimited;
+    const base = `${p.name} (ID ${p.id})`;
+
+    return hasAnyUnlimited ? `${base} — unbegrenzt (teilweise)` : base;
+}
+
 type PterodactylOption = { id: number; name: string };
 
 type PlanOptionChoice = { value: string; label: string; price_delta?: number };
@@ -71,6 +113,7 @@ type Props = {
     hostingPlan: HostingPlan;
     allowedPanelTypes: PanelTypeOption[];
     pterodactylHostingServers: PterodactylServer[];
+    keyhelpHostingServers: PterodactylServer[];
     teamspeakHostingServers: PterodactylServer[];
     availableOptionIdsPterodactyl: AvailableOptionId[];
     availableOptionIdsPlesk: AvailableOptionId[];
@@ -78,6 +121,7 @@ type Props = {
 };
 
 const props = withDefaults(defineProps<Props>(), {
+    keyhelpHostingServers: () => [],
     teamspeakHostingServers: () => [],
     availableOptionIdsTeamspeak: () => [],
 });
@@ -144,7 +188,19 @@ const isActive = ref(props.hostingPlan.is_active);
 const panelType = ref(props.hostingPlan.panel_type ?? 'plesk');
 const config = ref<Record<string, unknown>>(normalizeConfig(props.hostingPlan.config));
 const hostingServerId = ref(String(props.hostingPlan.hosting_server_id ?? ''));
+const planName = ref(props.hostingPlan.name);
+const planPleskPackage = ref(props.hostingPlan.plesk_package_name);
+const planDiskGb = ref(props.hostingPlan.disk_gb);
+const planTrafficGb = ref(props.hostingPlan.traffic_gb);
+const planDomains = ref(props.hostingPlan.domains);
+const planSubdomains = ref(props.hostingPlan.subdomains);
+const planMailboxes = ref(props.hostingPlan.mailboxes);
+const planDatabases = ref(props.hostingPlan.databases);
 const loadingOptions = ref(false);
+const keyhelpServerIdForPlans = ref('');
+const keyhelpRemotePlans = ref<KeyhelpRemotePlan[]>([]);
+const loadingKeyhelpPlans = ref(false);
+const selectedKeyhelpPlanId = ref('');
 const pterodactylOptions = ref<{
     locations: PterodactylOption[];
     nodes: PterodactylOption[];
@@ -152,7 +208,27 @@ const pterodactylOptions = ref<{
     eggs: PterodactylOption[];
 }>({ locations: [], nodes: [], nests: [], eggs: [] });
 
-const showPleskFields = computed(() => panelType.value === 'plesk');
+watch(
+    () => props.hostingPlan,
+    (p) => {
+        planName.value = p.name;
+        planPleskPackage.value = p.plesk_package_name;
+        planDiskGb.value = p.disk_gb;
+        planTrafficGb.value = p.traffic_gb;
+        planDomains.value = p.domains;
+        planSubdomains.value = p.subdomains;
+        planMailboxes.value = p.mailboxes;
+        planDatabases.value = p.databases;
+    },
+    { deep: true },
+);
+
+const showPleskFields = computed(() => panelType.value === 'plesk' || panelType.value === 'keyhelp');
+
+const webspacePackageLabel = computed(() => (panelType.value === 'keyhelp' ? 'KeyHelp-Paket-ID *' : 'Plesk-Paketname (Paket-ID) *'));
+const webspacePackagePlaceholder = computed(() =>
+    panelType.value === 'keyhelp' ? 'Numerische Paket-ID aus KeyHelp (z. B. 3)' : 'Exakter Name in Plesk',
+);
 const showPterodactylFields = computed(() => panelType.value === 'pterodactyl');
 const showTeamspeakFields = computed(() => panelType.value === 'teamspeak');
 
@@ -230,6 +306,68 @@ async function fetchPterodactylOptions(nestId?: number) {
     }
 }
 
+async function fetchKeyhelpHostingPlans(): Promise<void> {
+    const sid = keyhelpServerIdForPlans.value ? Number(keyhelpServerIdForPlans.value) : 0;
+    if (sid < 1) {
+        if (props.keyhelpHostingServers.length === 0) {
+            notify.error(
+                'Kein KeyHelp-Server für diese Marken-Ansicht: aktiv, Panel-Typ KeyHelp, und dieser Marke zugeordnet oder ohne Marken-Zuweisung.',
+            );
+        } else {
+            notify.error('Bitte einen KeyHelp-Server für den Import wählen.');
+        }
+
+        return;
+    }
+    loadingKeyhelpPlans.value = true;
+    keyhelpRemotePlans.value = [];
+    selectedKeyhelpPlanId.value = '';
+    try {
+        const url = new URL('/admin/hosting-plans/keyhelp-hosting-plans', window.location.origin);
+        url.searchParams.set('hosting_server_id', String(sid));
+        const res = await fetch(url.toString());
+        const data = (await res.json().catch(() => ({}))) as { message?: string; plans?: KeyhelpRemotePlan[] };
+        if (!res.ok) {
+            throw new Error(data.message ?? res.statusText);
+        }
+        keyhelpRemotePlans.value = Array.isArray(data.plans) ? data.plans : [];
+        if (keyhelpRemotePlans.value.length === 0) {
+            notify.info('KeyHelp hat keine Hosting-Pläne zurückgegeben.');
+        } else {
+            notify.success(`${keyhelpRemotePlans.value.length} Hosting-Pläne von KeyHelp geladen.`);
+        }
+    } catch (e) {
+        notify.error(e instanceof Error ? e.message : 'KeyHelp-Pläne konnten nicht geladen werden.');
+    } finally {
+        loadingKeyhelpPlans.value = false;
+    }
+}
+
+function applyKeyhelpRemotePlanFromApi(p: KeyhelpRemotePlan): void {
+    planPleskPackage.value = String(p.id);
+    planName.value = p.name;
+    planDiskGb.value = keyhelpQuotaToStore(p.disk_unlimited, p.disk_gb);
+    planTrafficGb.value = keyhelpQuotaToStore(p.traffic_unlimited, p.traffic_gb);
+    planDomains.value = keyhelpQuotaToStore(p.domains_unlimited, p.domains);
+    planSubdomains.value = keyhelpQuotaToStore(p.subdomains_unlimited, p.subdomains);
+    planMailboxes.value = keyhelpQuotaToStore(p.mailboxes_unlimited, p.mailboxes);
+    planDatabases.value = keyhelpQuotaToStore(p.databases_unlimited, p.databases);
+    notify.success(
+        'Felder aus KeyHelp-Plan übernommen. „Unbegrenzt“ aus KeyHelp wird als 999999 gespeichert (Shop-Limit) — bitte prüfen.',
+    );
+}
+
+watch(selectedKeyhelpPlanId, (v) => {
+    const id = v ? Number(v) : 0;
+    if (id < 1) {
+        return;
+    }
+    const p = keyhelpRemotePlans.value.find((x) => x.id === id);
+    if (p) {
+        applyKeyhelpRemotePlanFromApi(p);
+    }
+});
+
 function onServerChange() {
     config.value.nest_id = '';
     config.value.egg_id = '';
@@ -275,23 +413,30 @@ const panelTypeOptions = computed(() =>
     props.allowedPanelTypes.map((o) => ({ value: o.value, text: o.label })),
 );
 
-const breadcrumbs: BreadcrumbItem[] = [
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     { title: 'Dashboard', href: dashboard().url },
     { title: 'Webspace-Pakete', href: '/admin/hosting-plans' },
-    { title: props.hostingPlan.name, href: '#' },
-];
+    { title: planName.value, href: '#' },
+]);
 </script>
 
 <template>
     <AdminLayout :breadcrumbs="breadcrumbs">
-        <Head :title="`${hostingPlan.name} bearbeiten`" />
+        <Head :title="`${planName} bearbeiten`" />
 
         <BRow>
             <BCol>
                 <div class="mb-3">
-                    <h4 class="mb-1">{{ hostingPlan.name }} bearbeiten</h4>
+                    <h4 class="mb-1">{{ planName }} bearbeiten</h4>
                     <p class="text-muted small mb-0">
-                        {{ hostingPlan.panel_type === 'plesk' ? `Plesk-Paket: ${hostingPlan.plesk_package_name}` : 'Pterodactyl Game-Server-Paket' }}
+                        <template
+                            v-if="hostingPlan.panel_type === 'plesk' || hostingPlan.panel_type === 'keyhelp' || !hostingPlan.panel_type"
+                        >
+                            {{ hostingPlan.panel_type === 'keyhelp' ? 'KeyHelp' : 'Plesk' }}-Paket:
+                            {{ planPleskPackage }}
+                        </template>
+                        <template v-else-if="hostingPlan.panel_type === 'pterodactyl'">Pterodactyl Game-Server-Paket</template>
+                        <template v-else>TeamSpeak-Paket</template>
                     </p>
                 </div>
 
@@ -326,21 +471,89 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         <BFormInput
                                             id="name"
                                             name="name"
-                                            :model-value="hostingPlan.name"
+                                            v-model="planName"
                                             required
                                             :aria-invalid="!!errors.name"
                                         />
                                         <InputError :message="errors.name" />
                                     </BFormGroup>
-                                    <BFormGroup v-if="showPleskFields" label="Plesk-Paketname (Paket-ID) *" label-for="plesk_package_name">
+                                    <BFormGroup v-if="showPleskFields" :label="webspacePackageLabel" label-for="plesk_package_name">
                                         <BFormInput
                                             id="plesk_package_name"
                                             name="plesk_package_name"
-                                            :model-value="hostingPlan.plesk_package_name"
+                                            v-model="planPleskPackage"
                                             required
+                                            :placeholder="webspacePackagePlaceholder"
                                             :aria-invalid="!!errors.plesk_package_name"
                                         />
                                         <InputError :message="errors.plesk_package_name" />
+                                        <p v-if="panelType === 'keyhelp'" class="text-muted small mb-0 mt-1">
+                                            Nur Ziffern, ohne Leerzeichen (API: <code class="small">id_hosting_plan</code> beim Anlegen eines Clients).
+                                        </p>
+                                        <template v-if="panelType === 'keyhelp'">
+                                            <p
+                                                v-if="keyhelpHostingServers.length === 0"
+                                                class="alert alert-warning small py-2 mb-0 mt-2"
+                                                role="alert"
+                                            >
+                                                Hier erscheinen nur aktive KeyHelp-Server, die <strong>dieser Marke</strong>
+                                                zugeordnet sind oder <strong>ohne Marke</strong> (gemeinsam) gespeichert
+                                                wurden. Prüfen Sie im Hosting-Server-Eintrag Panel-Typ, Aktiv und Marke.
+                                            </p>
+                                            <BFormGroup
+                                                class="mt-3 mb-0"
+                                                label="KeyHelp-Server (Import)"
+                                                label-for="keyhelp_import_server"
+                                            >
+                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                    <div class="min-w-0 flex-grow-1">
+                                                        <BFormSelect
+                                                            id="keyhelp_import_server"
+                                                            v-model="keyhelpServerIdForPlans"
+                                                            class="w-100"
+                                                            :options="[
+                                                                { value: '', text: 'Bitte wählen' },
+                                                                ...keyhelpHostingServers.map((s) => ({
+                                                                    value: String(s.id),
+                                                                    text: `${s.name} (${s.hostname})`,
+                                                                })),
+                                                            ]"
+                                                        />
+                                                    </div>
+                                                    <BButton
+                                                        type="button"
+                                                        variant="outline-primary"
+                                                        size="sm"
+                                                        class="flex-shrink-0"
+                                                        :disabled="loadingKeyhelpPlans"
+                                                        @click="fetchKeyhelpHostingPlans"
+                                                    >
+                                                        {{ loadingKeyhelpPlans ? 'Laden…' : 'Pläne von KeyHelp laden' }}
+                                                    </BButton>
+                                                </div>
+                                                <p class="text-muted small mb-0 mt-1">
+                                                    Ruft <code class="small">GET /api/v2/hosting-plans</code> am gewählten Panel auf.
+                                                </p>
+                                            </BFormGroup>
+                                            <BFormGroup
+                                                v-if="keyhelpRemotePlans.length"
+                                                class="mt-2 mb-0"
+                                                label="Plan übernehmen"
+                                                label-for="keyhelp_plan_pick"
+                                            >
+                                                <BFormSelect
+                                                    id="keyhelp_plan_pick"
+                                                    v-model="selectedKeyhelpPlanId"
+                                                    :options="[
+                                                        { value: '', text: '— Plan wählen —' },
+                                                        ...keyhelpRemotePlans.map((p) => ({
+                                                            value: String(p.id),
+                                                            text: keyhelpPlanSelectLabel(p),
+                                                        })),
+                                                    ]"
+                                                />
+                                            </BFormGroup>
+                                        </template>
                                     </BFormGroup>
                                     <template v-if="showTeamspeakFields">
                                         <input type="hidden" name="plesk_package_name" value="" />
@@ -531,43 +744,71 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         <BRow>
                                             <BCol md="6">
                                                 <BFormGroup label="Disk (GB)" label-for="disk_gb">
-                                                    <BFormInput id="disk_gb" name="disk_gb" type="number" min="0" :model-value="hostingPlan.disk_gb" />
+                                                    <BFormInput id="disk_gb" name="disk_gb" type="number" min="0" v-model.number="planDiskGb" />
                                                 </BFormGroup>
                                             </BCol>
                                             <BCol md="6">
                                                 <BFormGroup label="Traffic (GB/Monat)" label-for="traffic_gb">
-                                                    <BFormInput id="traffic_gb" name="traffic_gb" type="number" min="0" :model-value="hostingPlan.traffic_gb" />
+                                                    <BFormInput
+                                                        id="traffic_gb"
+                                                        name="traffic_gb"
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="planTrafficGb"
+                                                    />
                                                 </BFormGroup>
                                             </BCol>
                                             <BCol md="6">
                                                 <BFormGroup label="Domains" label-for="domains">
-                                                    <BFormInput id="domains" name="domains" type="number" min="0" :model-value="hostingPlan.domains" />
+                                                    <BFormInput id="domains" name="domains" type="number" min="0" v-model.number="planDomains" />
                                                 </BFormGroup>
                                             </BCol>
                                             <BCol md="6">
                                                 <BFormGroup label="Subdomains" label-for="subdomains">
-                                                    <BFormInput id="subdomains" name="subdomains" type="number" min="0" :model-value="hostingPlan.subdomains" />
+                                                    <BFormInput
+                                                        id="subdomains"
+                                                        name="subdomains"
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="planSubdomains"
+                                                    />
                                                 </BFormGroup>
                                             </BCol>
                                             <BCol md="6">
                                                 <BFormGroup label="Mailpostfächer" label-for="mailboxes">
-                                                    <BFormInput id="mailboxes" name="mailboxes" type="number" min="0" :model-value="hostingPlan.mailboxes" />
+                                                    <BFormInput
+                                                        id="mailboxes"
+                                                        name="mailboxes"
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="planMailboxes"
+                                                    />
                                                 </BFormGroup>
                                             </BCol>
                                             <BCol md="6">
                                                 <BFormGroup label="Datenbanken" label-for="databases">
-                                                    <BFormInput id="databases" name="databases" type="number" min="0" :model-value="hostingPlan.databases" />
+                                                    <BFormInput
+                                                        id="databases"
+                                                        name="databases"
+                                                        type="number"
+                                                        min="0"
+                                                        v-model.number="planDatabases"
+                                                    />
                                                 </BFormGroup>
                                             </BCol>
                                         </BRow>
+                                        <p v-if="panelType === 'keyhelp'" class="text-muted small mb-0 mt-1">
+                                            KeyHelp „unbegrenzt“ wird beim Import als <strong>999999</strong> übernommen
+                                            (Traffic, Speicher, Domains, …). So bleibt es mit dem Shop kompatibel.
+                                        </p>
                                     </template>
                                     <template v-else>
-                                        <input type="hidden" name="disk_gb" :value="hostingPlan.disk_gb" />
-                                        <input type="hidden" name="traffic_gb" :value="hostingPlan.traffic_gb" />
-                                        <input type="hidden" name="domains" :value="hostingPlan.domains" />
-                                        <input type="hidden" name="subdomains" :value="hostingPlan.subdomains" />
-                                        <input type="hidden" name="mailboxes" :value="hostingPlan.mailboxes" />
-                                        <input type="hidden" name="databases" :value="hostingPlan.databases" />
+                                        <input type="hidden" name="disk_gb" :value="planDiskGb" />
+                                        <input type="hidden" name="traffic_gb" :value="planTrafficGb" />
+                                        <input type="hidden" name="domains" :value="planDomains" />
+                                        <input type="hidden" name="subdomains" :value="planSubdomains" />
+                                        <input type="hidden" name="mailboxes" :value="planMailboxes" />
+                                        <input type="hidden" name="databases" :value="planDatabases" />
                                     </template>
 
                                     <BFormGroup :label="showTeamspeakFields ? 'Grundpreis (€/Monat) – 0 = nur Preis pro Slot' : 'Preis (€/Monat) *'" label-for="price">
@@ -583,13 +824,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         />
                                         <InputError :message="errors.price" />
                                     </BFormGroup>
-                                    <BFormGroup label="Stripe Price ID (optional)" label-for="stripe_price_id">
-                                        <BFormInput
-                                            id="stripe_price_id"
-                                            name="stripe_price_id"
-                                            :model-value="hostingPlan.stripe_price_id ?? ''"
-                                        />
-                                    </BFormGroup>
+                                    <input type="hidden" name="stripe_price_id" :value="hostingPlan.stripe_price_id ?? ''" />
                                     <BFormGroup label="Sortierung" label-for="sort_order">
                                         <BFormInput id="sort_order" name="sort_order" type="number" min="0" :model-value="hostingPlan.sort_order" />
                                     </BFormGroup>

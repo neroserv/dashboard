@@ -32,3 +32,31 @@ test('admin can view hosting plans index with webspace, pterodactyl, teamspeak a
         ->where('brandHasGameserverCloud', false)
     );
 });
+
+test('admin can view hosting plan create page with same inertia props as controller', function () {
+    Brand::query()->update(['is_default' => false]);
+    Brand::create([
+        'key' => 'test',
+        'name' => 'Test Brand',
+        'domains' => null,
+        'is_default' => true,
+        'features' => ['webspace' => true, 'gaming' => true, 'teamspeak' => true, 'gameserver_cloud' => false],
+    ]);
+
+    $admin = User::factory()->create(['is_admin' => true]);
+    $this->actingAs($admin);
+
+    $response = $this->get(route('admin.hosting-plans.create'));
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('admin/hosting-plans/Create')
+        ->has('allowedPanelTypes')
+        ->has('pterodactylHostingServers')
+        ->has('keyhelpHostingServers')
+        ->has('teamspeakHostingServers')
+        ->has('availableOptionIdsPterodactyl')
+        ->has('availableOptionIdsPlesk')
+        ->has('availableOptionIdsTeamspeak')
+    );
+});

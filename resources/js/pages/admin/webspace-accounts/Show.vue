@@ -1,7 +1,7 @@
 <!-- Admin: Webspace-Account (Detail) -->
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import {
     BRow,
     BCol,
@@ -24,14 +24,15 @@ type WebspaceAccount = {
     uuid: string;
     domain: string;
     plesk_username: string;
+    keyhelp_user_id?: number | null;
     status: string;
     mollie_subscription_id: string | null;
     current_period_ends_at: string | null;
     cancel_at_period_end: boolean;
     ends_at: string | null;
     user: { id: number; name: string; email: string };
-    hosting_plan: { id: number; name: string };
-    hosting_server: { id: number; hostname: string } | null;
+    hosting_plan: { id: number; name: string; panel_type?: string };
+    hosting_server: { id: number; hostname: string; panel_type?: string } | null;
 };
 
 type Props = {
@@ -58,8 +59,20 @@ watch(
     { immediate: true },
 );
 
-const canRetryPlesk = () =>
+const panelType = computed(() => props.webspaceAccount.hosting_plan.panel_type ?? 'plesk');
+
+const isKeyhelpPanel = computed(() => panelType.value === 'keyhelp');
+
+const canRetryPanelProvisioning = () =>
     props.webspaceAccount.status === 'pending' || props.webspaceAccount.status === 'active';
+
+const retryPanelButtonLabel = computed(() =>
+    isKeyhelpPanel.value ? 'KeyHelp-Anlage erneut ausführen' : 'Plesk-Anlage erneut ausführen',
+);
+
+const panelUsernameFieldLabel = computed(() =>
+    isKeyhelpPanel.value ? 'Benutzername (lokal / API)' : 'Plesk-Benutzer',
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -84,17 +97,19 @@ const formatDate = (d: string | null) =>
                             <h4 class="mb-1">{{ webspaceAccount.domain }}</h4>
                             <p class="text-muted small mb-0">
                                 Webspace-Account · {{ webspaceAccount.hosting_plan.name }}
+                                <span v-if="isKeyhelpPanel" class="text-muted"> · KeyHelp</span>
+                                <span v-else class="text-muted"> · Plesk</span>
                             </p>
                         </div>
                     </div>
                     <Form
-                        v-if="canRetryPlesk()"
+                        v-if="canRetryPanelProvisioning()"
                         :action="`/admin/webspace-accounts/${webspaceAccount.uuid}/retry-plesk`"
                         method="post"
                         class="d-inline"
                     >
                         <input type="hidden" name="_token" :value="csrfToken()" />
-                        <BButton type="submit" variant="outline-primary">Plesk-Anlage erneut ausführen</BButton>
+                        <BButton type="submit" variant="outline-primary">{{ retryPanelButtonLabel }}</BButton>
                     </Form>
                 </div>
 
@@ -115,8 +130,14 @@ const formatDate = (d: string | null) =>
                                 <code class="bg-light rounded px-2 py-1 small">{{ webspaceAccount.domain }}</code>
                             </BCol>
                             <BCol md="6">
-                                <p class="text-muted small mb-1">Plesk-Benutzer</p>
+                                <p class="text-muted small mb-1">{{ panelUsernameFieldLabel }}</p>
                                 <p class="font-monospace small mb-0">{{ webspaceAccount.plesk_username }}</p>
+                            </BCol>
+                            <BCol v-if="isKeyhelpPanel" md="6">
+                                <p class="text-muted small mb-1">KeyHelp-Benutzer-ID</p>
+                                <p class="font-monospace small mb-0">
+                                    {{ webspaceAccount.keyhelp_user_id != null ? String(webspaceAccount.keyhelp_user_id) : '–' }}
+                                </p>
                             </BCol>
                             <BCol md="6">
                                 <p class="text-muted small mb-1">Plan</p>

@@ -1,6 +1,7 @@
 <!-- Admin: Hosting-Plan (Detail) -->
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import {
     BRow,
     BCol,
@@ -20,6 +21,7 @@ import type { BreadcrumbItem } from '@/types';
 type HostingPlan = {
     id: number;
     name: string;
+    panel_type?: string | null;
     plesk_package_name: string;
     disk_gb: number;
     traffic_gb: number;
@@ -39,6 +41,19 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+
+const webspacePackageLine = computed(() => {
+    const t = props.hostingPlan.panel_type ?? 'plesk';
+    if (t === 'pterodactyl') {
+        return 'Panel: Pterodactyl';
+    }
+    if (t === 'teamspeak') {
+        return 'Panel: TeamSpeak';
+    }
+    const label = t === 'keyhelp' ? 'KeyHelp-Paket-ID' : 'Plesk-Paket';
+
+    return `${label}: ${props.hostingPlan.plesk_package_name}`;
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -80,7 +95,7 @@ const accountTableFields = [
                     <div>
                         <h4 class="mb-1">{{ hostingPlan.name }}</h4>
                         <p class="text-muted small mb-0">
-                            Plesk-Paket: {{ hostingPlan.plesk_package_name }}
+                            {{ webspacePackageLine }}
                         </p>
                     </div>
                     <Link :href="`/admin/hosting-plans/${hostingPlan.id}/edit`">

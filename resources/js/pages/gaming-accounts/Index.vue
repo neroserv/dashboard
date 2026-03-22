@@ -11,13 +11,16 @@
         </p>
       </div>
       <Link href="/gaming" class="btn btn-primary">
-        <Icon icon="gamepad" class="me-2" />
+        <Icon icon="device-gamepad-2" class="me-2" />
         Game Server mieten
       </Link>
     </div>
 
-    <div v-if="gameServerAccounts.length === 0" class="text-center py-5 px-3 border border-dashed rounded">
-      <Icon icon="gamepad" class="fs-1 text-muted opacity-50" />
+    <div
+      v-if="gameServerAccounts.length === 0"
+      class="py-5 px-3 border border-dashed rounded d-flex flex-column align-items-center text-center"
+    >
+      <Icon icon="device-gamepad-2" class="fs-1 text-muted opacity-50" />
       <h5 class="mt-3">Noch keine Game-Server</h5>
       <p class="text-muted">
         Sie haben noch keine Game-Server-Accounts. Buchen Sie Ihren ersten Server.
@@ -33,7 +36,7 @@
               <div class="d-flex align-items-start justify-content-between gap-2 mb-3">
                 <div class="d-flex align-items-center gap-2 min-w-0">
                   <div class="rounded bg-primary bg-opacity-10 p-2 flex-shrink-0">
-                    <Icon icon="gamepad" class="text-primary" />
+                    <Icon icon="device-gamepad-2" class="text-primary" />
                   </div>
                   <div class="min-w-0">
                     <h6 class="mb-0">{{ acc.name }}</h6>

@@ -6,8 +6,19 @@
     <div class="mb-4">
       <h4 class="mb-1">Webspace</h4>
       <p class="text-muted mb-0">
-        Professioneller Webspace mit Plesk – wählen Sie Ihr Paket
+        Professioneller Webspace – wählen Sie bei mehreren Angeboten die Steuerungssoftware und Ihr Paket
       </p>
+    </div>
+
+    <div v-if="available_webspace_panels.length > 1" class="mb-4">
+      <label class="form-label" for="webspace-panel">Steuerungssoftware</label>
+      <BFormSelect
+        id="webspace-panel"
+        :model-value="selected_webspace_panel"
+        :options="panelSelectOptions"
+        class="max-w-md"
+        @update:model-value="onPanelChange"
+      />
     </div>
 
     <BRow class="g-4">
@@ -33,7 +44,10 @@
               <span class="text-muted small">/ Monat</span>
             </p>
             <div class="mt-auto">
-              <Link :href="`/webspace/checkout?plan=${plan.id}`" class="btn btn-primary w-100">
+              <Link
+                :href="`/webspace/checkout?plan=${plan.id}&panel=${encodeURIComponent(selected_webspace_panel)}`"
+                class="btn btn-primary w-100"
+              >
                 Jetzt buchen
               </Link>
             </div>
@@ -49,8 +63,9 @@
 </template>
 
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
-import { BCol, BCard, BCardBody, BRow } from 'bootstrap-vue-next'
+import { Head, Link, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { BCol, BCard, BCardBody, BFormSelect, BRow } from 'bootstrap-vue-next'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import Icon from '@/components/wrappers/Icon.vue'
@@ -68,7 +83,22 @@ type HostingPlan = {
   price: string
 }
 
-defineProps<{
+type PanelOption = { value: string; label: string }
+
+const props = defineProps<{
   hostingPlans: HostingPlan[]
+  available_webspace_panels: PanelOption[]
+  selected_webspace_panel: string
 }>()
+
+const panelSelectOptions = computed(() =>
+  props.available_webspace_panels.map((p) => ({ value: p.value, text: p.label })),
+)
+
+function onPanelChange(v: string | number | null): void {
+  if (v === null || v === undefined || v === '') {
+    return
+  }
+  router.get('/webspace', { panel: String(v) }, { preserveState: true, preserveScroll: true })
+}
 </script>

@@ -10,7 +10,9 @@ use App\Models\GameserverCloudPlan;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
 use App\Services\BrandExtensionService;
+use App\Services\ControlPanels\KeyHelpClient;
 use App\Services\ControlPanels\PterodactylClient;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -95,6 +97,23 @@ class HostingPlanController extends Controller
     }
 
     /**
+     * Hosting servers may omit brand_id (shared / legacy). Those are visible in admin lists for every brand context.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<HostingServer>  $query
+     */
+    protected function whereHostingServerForBrandContext(\Illuminate\Database\Eloquent\Builder $query, ?Brand $brand): void
+    {
+        if ($brand === null) {
+            return;
+        }
+
+        $query->where(function (\Illuminate\Database\Eloquent\Builder $q) use ($brand): void {
+            $q->whereNull('brand_id')
+                ->orWhere('brand_id', $brand->id);
+        });
+    }
+
+    /**
      * Return Pterodactyl API options for the given panel server (locations, nodes, nests, optional eggs).
      */
     public function pterodactylOptions(Request $request): JsonResponse
@@ -158,6 +177,63 @@ class HostingPlanController extends Controller
         }
     }
 
+    /**
+     * List KeyHelp hosting plans from a KeyHelp panel server (for admin plan form import).
+     */
+    public function keyhelpHostingPlans(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', HostingPlan::class);
+
+        $serverId = $request->integer('hosting_server_id');
+        if ($serverId < 1) {
+            return response()->json(['message' => 'hosting_server_id is required'], 400);
+        }
+
+        $currentBrand = $this->currentBrand($request);
+        $server = HostingServer::query()
+            ->where('id', $serverId)
+            ->where('panel_type', 'keyhelp')
+            ->where('is_active', true)
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
+            ->first();
+
+        if (! $server) {
+            return response()->json(['message' => 'KeyHelp-Server nicht gefunden oder inaktiv.'], 404);
+        }
+
+        $sort = $request->query('sort', 'id');
+        $order = $request->query('order', 'asc');
+        $sort = is_string($sort) ? $sort : 'id';
+        $order = is_string($order) ? $order : 'asc';
+
+        try {
+            $rows = app(KeyHelpClient::class)
+                ->setServer($server)
+                ->listHostingPlans($sort, $order);
+
+            $plans = array_map(fn (array $row): array => [
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'disk_gb' => $row['disk_gb'],
+                'disk_unlimited' => $row['disk_unlimited'],
+                'traffic_gb' => $row['traffic_gb'],
+                'traffic_unlimited' => $row['traffic_unlimited'],
+                'domains' => $row['domains'],
+                'domains_unlimited' => $row['domains_unlimited'],
+                'subdomains' => $row['subdomains'],
+                'subdomains_unlimited' => $row['subdomains_unlimited'],
+                'mailboxes' => $row['mailboxes'],
+                'mailboxes_unlimited' => $row['mailboxes_unlimited'],
+                'databases' => $row['databases'],
+                'databases_unlimited' => $row['databases_unlimited'],
+            ], $rows);
+
+            return response()->json(['plans' => $plans]);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+    }
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', HostingPlan::class);
@@ -172,7 +248,13 @@ class HostingPlanController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name');
 
-        $hostingPlans = $baseQuery()->where('panel_type', 'plesk')->paginate(15)->withQueryString();
+        $hostingPlans = $baseQuery()
+            ->where(function ($q) {
+                $q->whereIn('panel_type', ['plesk', 'keyhelp'])
+                    ->orWhereNull('panel_type');
+            })
+            ->paginate(15)
+            ->withQueryString();
 
         $hostingPlansPterodactyl = [
             'data' => [],
@@ -226,7 +308,7 @@ class HostingPlanController extends Controller
         $pterodactylHostingServers = HostingServer::query()
             ->where('panel_type', 'pterodactyl')
             ->where('is_active', true)
-            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -234,7 +316,15 @@ class HostingPlanController extends Controller
         $teamspeakHostingServers = HostingServer::query()
             ->where('panel_type', 'teamspeak')
             ->where('is_active', true)
-            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
+            ->orderBy('name')
+            ->get(['id', 'name', 'hostname'])
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
+
+        $keyhelpHostingServers = HostingServer::query()
+            ->where('panel_type', 'keyhelp')
+            ->where('is_active', true)
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -242,6 +332,7 @@ class HostingPlanController extends Controller
         return Inertia::render('admin/hosting-plans/Create', [
             'allowedPanelTypes' => $allowedPanelTypes,
             'pterodactylHostingServers' => $pterodactylHostingServers,
+            'keyhelpHostingServers' => $keyhelpHostingServers,
             'teamspeakHostingServers' => $teamspeakHostingServers,
             'availableOptionIdsPterodactyl' => static::availableOptionIdsPterodactyl(),
             'availableOptionIdsPlesk' => static::availableOptionIdsPlesk(),
@@ -319,7 +410,7 @@ class HostingPlanController extends Controller
         $pterodactylHostingServers = HostingServer::query()
             ->where('panel_type', 'pterodactyl')
             ->where('is_active', true)
-            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -327,7 +418,15 @@ class HostingPlanController extends Controller
         $teamspeakHostingServers = HostingServer::query()
             ->where('panel_type', 'teamspeak')
             ->where('is_active', true)
-            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
+            ->orderBy('name')
+            ->get(['id', 'name', 'hostname'])
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
+
+        $keyhelpHostingServers = HostingServer::query()
+            ->where('panel_type', 'keyhelp')
+            ->where('is_active', true)
+            ->tap(fn (Builder $q) => $this->whereHostingServerForBrandContext($q, $currentBrand))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -336,6 +435,7 @@ class HostingPlanController extends Controller
             'hostingPlan' => $hostingPlan,
             'allowedPanelTypes' => $allowedPanelTypes,
             'pterodactylHostingServers' => $pterodactylHostingServers,
+            'keyhelpHostingServers' => $keyhelpHostingServers,
             'teamspeakHostingServers' => $teamspeakHostingServers,
             'availableOptionIdsPterodactyl' => static::availableOptionIdsPterodactyl(),
             'availableOptionIdsPlesk' => static::availableOptionIdsPlesk(),

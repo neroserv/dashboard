@@ -9,9 +9,9 @@ use App\Models\GameServerAccount;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\WebspaceAccount;
 use App\Services\BalancePaymentService;
-use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\ControlPanels\TeamSpeakClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -193,11 +193,10 @@ class AutoRenewPrepaidWithBalanceJob implements ShouldQueue
 
         if ($wasSuspended && $account->hostingServer) {
             try {
-                $plesk = app(PleskClient::class);
-                $plesk->setServer($account->hostingServer);
-                $plesk->unsuspendAccount($account->plesk_username);
+                $account->loadMissing('hostingPlan');
+                app(WebspacePanelDispatcher::class)->unsuspendWebspaceAccount($account);
             } catch (\Throwable $e) {
-                Log::debug('AutoRenewPrepaidWithBalance: Plesk unsuspend skipped', ['account_id' => $account->id, 'message' => $e->getMessage()]);
+                Log::debug('AutoRenewPrepaidWithBalance: panel unsuspend skipped', ['account_id' => $account->id, 'message' => $e->getMessage()]);
             }
         }
 

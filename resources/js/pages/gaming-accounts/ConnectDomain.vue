@@ -54,7 +54,7 @@
                 <div v-if="form.errors.subdomain" class="invalid-feedback d-block">{{ form.errors.subdomain }}</div>
               </div>
               <div v-if="previewHost" class="alert alert-secondary small mb-4">
-                <Icon icon="globe" class="me-1" />
+                <Icon icon="world" class="me-1" />
                 {{ previewHost }} zeigt nach dem Verbinden auf Ihren Server.
               </div>
               <div class="d-flex gap-2">

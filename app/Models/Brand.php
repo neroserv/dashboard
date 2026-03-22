@@ -168,7 +168,8 @@ class Brand extends Model
         $features = $this->features ?? [];
 
         $defaults = [
-            'webspace' => $this->hasInstalledExtension(BrandExtension::EXTENSION_PLESK),
+            'webspace' => $this->hasInstalledExtension(BrandExtension::EXTENSION_PLESK)
+                || $this->hasInstalledExtension(BrandExtension::EXTENSION_KEYHELP),
             'domains_shop' => $this->hasInstalledExtension(BrandExtension::EXTENSION_SKRIME),
             'ai_tokens' => $brandExtensions->openAiApiKeyForBrand($this) !== null,
             'gaming' => false,

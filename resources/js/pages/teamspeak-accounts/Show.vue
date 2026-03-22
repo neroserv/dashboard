@@ -12,7 +12,7 @@
         <BCard no-body>
           <BCardBody class="text-center">
             <BBadge :variant="statusVariant" class="mb-2">{{ displayStatus }}</BBadge>
-            <div class="mb-2">
+            <div class="mb-2 d-flex justify-content-center">
               <Icon icon="headphones" class="fs-1 text-muted" />
             </div>
             <h5 class="mb-1">TeamSpeak-Server</h5>
@@ -53,7 +53,7 @@
               </BButton>
               <Link v-if="showAboVerwalten" href="/billing/subscriptions" class="btn btn-outline-secondary">Abo verwalten</Link>
               <Link v-if="connectDomainShowUrl && !isSuspendedOrExpired" :href="connectDomainShowUrl" class="btn btn-outline-secondary">
-                <Icon icon="globe" class="me-2" />
+                <Icon icon="world" class="me-2" />
                 Domain verbinden
               </Link>
             </div>
@@ -61,12 +61,52 @@
         </BCard>
       </BCol>
       <BCol lg="8">
-        <BNav tabs class="mb-3">
-          <BNavItem :active="activeTab === 'overview'" @click="activeTab = 'overview'">Übersicht</BNavItem>
-          <BNavItem :active="activeTab === 'access'" @click="activeTab = 'access'">Zugang</BNavItem>
-          <BNavItem :active="activeTab === 'tokens'" @click="activeTab = 'tokens'">Tokens</BNavItem>
-          <BNavItem :active="activeTab === 'backups'" @click="activeTab = 'backups'">Backups</BNavItem>
-          <BNavItem v-if="canManageCollaborators" :active="activeTab === 'sharing'" @click="activeTab = 'sharing'">Teilen</BNavItem>
+        <BNav tabs class="mb-3 flex-wrap">
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'overview'" @click="activeTab = 'overview'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="layout-dashboard" />
+              </span>
+              <span>Übersicht</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'access'" @click="activeTab = 'access'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="router" />
+              </span>
+              <span>Zugang</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'tokens'" @click="activeTab = 'tokens'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="key" />
+              </span>
+              <span>Tokens</span>
+            </span>
+          </BNavItem>
+          <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'backups'" @click="activeTab = 'backups'">
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="archive" />
+              </span>
+              <span>Backups</span>
+            </span>
+          </BNavItem>
+          <BNavItem
+            v-if="canManageCollaborators"
+            link-class="d-inline-flex align-items-center"
+            :active="activeTab === 'sharing'"
+            @click="activeTab = 'sharing'"
+          >
+            <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+              <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                <Icon icon="share" />
+              </span>
+              <span>Teilen</span>
+            </span>
+          </BNavItem>
         </BNav>
 
         <BCard v-if="activeTab === 'overview'" no-body>

@@ -61,9 +61,16 @@ watch(
     },
     { deep: true },
 );
-const showPleskFields = computed(() => panelType.value === 'plesk');
+const showWebspaceApiFields = computed(() => panelType.value === 'plesk' || panelType.value === 'keyhelp');
+const showPleskOnlyFields = computed(() => panelType.value === 'plesk');
 const showPterodactylFields = computed(() => panelType.value === 'pterodactyl');
 const showTeamspeakFields = computed(() => panelType.value === 'teamspeak');
+
+const isKeyhelpPanel = computed(() => panelType.value === 'keyhelp');
+
+const apiTokenFieldLabel = computed(() =>
+    isKeyhelpPanel.value ? 'API-Schlüssel (X-API-Key)' : 'API-Token / Passwort',
+);
 
 const panelTypeOptions = computed(() =>
     props.allowedPanelTypes.map((o) => ({ value: o.value, text: o.label })),
@@ -95,7 +102,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     <BCardHeader>
                         <BCardTitle class="mb-0">Server-Details</BCardTitle>
                         <p class="text-muted small mb-0 mt-1">
-                            Panel-Typ, Hostname und API-Zugang. Plesk: REST API. Pterodactyl: Application API. TeamSpeak: Query-Adresse, Benutzer, Passwort und Port-Range.
+                            Panel-Typ, Hostname und API-Zugang. Plesk: REST/XML API. KeyHelp: REST API mit Header X-API-Key. Pterodactyl: Application API. TeamSpeak: Query-Adresse, Benutzer, Passwort und Port-Range.
                         </p>
                     </BCardHeader>
                     <Form
@@ -271,7 +278,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 <InputError :message="errors.hostname" />
                             </BFormGroup>
 
-                            <template v-if="showPleskFields">
+                            <template v-if="showWebspaceApiFields">
                                 <BRow>
                                     <BCol md="6">
                                         <BFormGroup label="Port (optional)" label-for="port">
@@ -297,41 +304,50 @@ const breadcrumbs: BreadcrumbItem[] = [
                                         </BFormGroup>
                                     </BCol>
                                 </BRow>
-                                <BFormGroup label="API-Benutzername (optional)" label-for="api_username">
+                                <p v-if="isKeyhelpPanel" class="text-muted small mb-0 mt-1">
+                                    Leerer Port = HTTPS 443 bzw. HTTP 80 (Standard). KeyHelp nutzt nicht den Plesk-Port 8443.
+                                </p>
+                                <template v-if="showPleskOnlyFields">
+                                    <BFormGroup label="API-Benutzername (optional)" label-for="api_username">
+                                        <BFormInput
+                                            id="api_username"
+                                            name="api_username"
+                                            :model-value="hostingServer.api_username ?? ''"
+                                            placeholder="admin"
+                                            :aria-invalid="!!errors.api_username"
+                                        />
+                                        <InputError :message="errors.api_username" />
+                                    </BFormGroup>
+                                    <BFormGroup label="IP-Adresse" label-for="ip_address">
+                                        <BFormInput
+                                            id="ip_address"
+                                            name="ip_address"
+                                            :model-value="hostingServer.ip_address ?? ''"
+                                            placeholder="z. B. Shared-IP aus dem Reseller-Pool"
+                                            :aria-invalid="!!errors.ip_address"
+                                        />
+                                        <p class="text-muted small mb-0 mt-1">
+                                            Für Plesk Reseller: Muss eine IP aus Ihrem Reseller-IP-Pool sein (Plesk → IP-Adressen).
+                                        </p>
+                                        <InputError :message="errors.ip_address" />
+                                    </BFormGroup>
+                                </template>
+                                <BFormGroup :label="apiTokenFieldLabel" label-for="api_token">
                                     <BFormInput
-                                        id="api_username"
-                                        name="api_username"
-                                        :model-value="hostingServer.api_username ?? ''"
-                                        placeholder="admin"
-                                        :aria-invalid="!!errors.api_username"
+                                        id="api_token"
+                                        name="api_token"
+                                        type="password"
+                                        placeholder="Leer lassen um beizubehalten"
+                                        :aria-invalid="!!errors.api_token"
                                     />
-                                    <InputError :message="errors.api_username" />
-                                </BFormGroup>
-                                <BFormGroup label="IP-Adresse" label-for="ip_address">
-                                    <BFormInput
-                                        id="ip_address"
-                                        name="ip_address"
-                                        :model-value="hostingServer.ip_address ?? ''"
-                                        placeholder="z. B. Shared-IP aus dem Reseller-Pool"
-                                        :aria-invalid="!!errors.ip_address"
-                                    />
-                                    <p class="text-muted small mb-0 mt-1">Für Plesk Reseller: Muss eine IP aus Ihrem Reseller-IP-Pool sein (Plesk → IP-Adressen).</p>
-                                    <InputError :message="errors.ip_address" />
+                                    <p v-if="isKeyhelpPanel" class="text-muted small mb-0 mt-1">
+                                        Wird als HTTP-Header <code class="small">X-API-Key</code> gesendet (KeyHelp API).
+                                    </p>
+                                    <InputError :message="errors.api_token" />
                                 </BFormGroup>
                             </template>
 
-                            <BFormGroup v-if="showPleskFields" label="API-Token / Passwort" label-for="api_token">
-                                <BFormInput
-                                    id="api_token"
-                                    name="api_token"
-                                    type="password"
-                                    placeholder="Leer lassen um beizubehalten"
-                                    :aria-invalid="!!errors.api_token"
-                                />
-                                <InputError :message="errors.api_token" />
-                            </BFormGroup>
-
-                            <BFormGroup v-if="showPleskFields" label="Bind-Zone (.bind)" label-for="bind_zone_content">
+                            <BFormGroup v-if="showPleskOnlyFields" label="Bind-Zone (.bind)" label-for="bind_zone_content">
                                 <BFormTextarea
                                     id="bind_zone_content"
                                     name="bind_zone_content"

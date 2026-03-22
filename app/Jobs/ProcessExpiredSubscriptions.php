@@ -15,9 +15,9 @@ use App\Notifications\TeamSpeakDeletedAfterGraceNotification;
 use App\Notifications\TeamSpeakSuspendedNotification;
 use App\Notifications\WebspaceDeactivatedNotification;
 use App\Notifications\WebspaceDeletedAfterGraceNotification;
-use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\ControlPanels\TeamSpeakClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
@@ -51,7 +51,7 @@ class ProcessExpiredSubscriptions implements ShouldQueue
     protected function processWebspaceAccounts(Carbon $now, Carbon $graceCutoff): void
     {
         $toSuspend = WebspaceAccount::query()
-            ->with('user', 'hostingServer')
+            ->with('user', 'hostingServer', 'hostingPlan')
             ->where('status', 'active')
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $now)
@@ -68,11 +68,9 @@ class ProcessExpiredSubscriptions implements ShouldQueue
             $server = $account->hostingServer;
             if ($server) {
                 try {
-                    $plesk = app(PleskClient::class);
-                    $plesk->setServer($server);
-                    $plesk->suspendAccount($account->plesk_username);
+                    app(WebspacePanelDispatcher::class)->suspendWebspaceAccount($account);
                 } catch (\Throwable $e) {
-                    Log::warning('ProcessExpiredSubscriptions: Webspace Plesk suspend failed', [
+                    Log::warning('ProcessExpiredSubscriptions: Webspace panel suspend failed', [
                         'webspace_account_id' => $account->id,
                         'error' => $e->getMessage(),
                     ]);
@@ -87,7 +85,7 @@ class ProcessExpiredSubscriptions implements ShouldQueue
         }
 
         $toTerminate = WebspaceAccount::query()
-            ->with('user', 'hostingServer')
+            ->with('user', 'hostingServer', 'hostingPlan')
             ->where('status', 'suspended')
             ->whereNotNull('current_period_ends_at')
             ->where('current_period_ends_at', '<', $graceCutoff->format('Y-m-d H:i:s'))
@@ -106,11 +104,9 @@ class ProcessExpiredSubscriptions implements ShouldQueue
             $server = $account->hostingServer;
             if ($server) {
                 try {
-                    $plesk = app(PleskClient::class);
-                    $plesk->setServer($server);
-                    $plesk->terminateAccount($account->plesk_username);
+                    app(WebspacePanelDispatcher::class)->terminateWebspaceAccount($account);
                 } catch (\Throwable $e) {
-                    Log::warning('ProcessExpiredSubscriptions: Webspace Plesk terminate failed', [
+                    Log::warning('ProcessExpiredSubscriptions: Webspace panel terminate failed', [
                         'webspace_account_id' => $account->id,
                         'error' => $e->getMessage(),
                     ]);

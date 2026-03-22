@@ -23,6 +23,7 @@ import type { BreadcrumbItem } from '@/types';
 type HostingPlan = {
     id: number;
     name: string;
+    panel_type?: string | null;
     plesk_package_name: string;
     disk_gb: number;
     traffic_gb: number;
@@ -125,6 +126,11 @@ function hostingPlanStatusLabel(active: boolean): string {
     return active ? 'Aktiv' : 'Inaktiv';
 }
 
+function webspacePanelLabel(panelType: string | null | undefined): string {
+    if (panelType === 'keyhelp') return 'KeyHelp';
+    return 'Plesk';
+}
+
 function cloudPlanBadgeVariant(active: boolean): 'success' | 'secondary' {
     return active ? 'success' : 'secondary';
 }
@@ -136,7 +142,8 @@ function destroyCloudPlan(plan: GameserverCloudPlan) {
 
 const webspaceTableFields = [
     { key: 'name', label: 'Name', sortable: false },
-    { key: 'plesk_package_name', label: 'Plesk-Paketname', sortable: false },
+    { key: 'panel', label: 'Panel', sortable: false },
+    { key: 'plesk_package_name', label: 'Paket-ID / Name', sortable: false },
     { key: 'specs', label: 'Specs', sortable: false },
     { key: 'price', label: 'Preis', sortable: false },
     { key: 'webspace_accounts_count', label: 'Accounts', sortable: false },
@@ -228,7 +235,7 @@ const cloudTableFields = [
                             <div class="flex-grow-1 min-w-0">
                                 <h5 class="mb-1">Webspace-Pakete</h5>
                                 <p class="text-muted small mb-0">
-                                    Plesk-Pakete für den Verkauf. Plesk-Paketname = exakter Service-Plan-Name in Plesk.
+                                    Webspace-Pakete (Plesk und/oder KeyHelp). Paket-ID = Service-Plan in Plesk bzw. numerische Paket-ID in KeyHelp.
                                 </p>
                             </div>
                             <Link href="/admin/hosting-plans/create">
@@ -242,7 +249,7 @@ const cloudTableFields = [
                     <BCard no-body>
                         <BCardHeader>
                             <BCardTitle class="mb-0">Alle Pakete</BCardTitle>
-                            <p class="text-muted small mb-0 mt-1">Plesk-Paketname = exakter Service-Plan-Name in Plesk</p>
+                            <p class="text-muted small mb-0 mt-1">Plesk: exakter Planname · KeyHelp: numerische Paket-ID</p>
                         </BCardHeader>
                         <BCardBody class="p-0">
                             <BTable
@@ -256,6 +263,11 @@ const cloudTableFields = [
                             >
                                 <template #cell(name)="row">
                                     <span class="fw-medium">{{ row.item.name }}</span>
+                                </template>
+                                <template #cell(panel)="row">
+                                    <BBadge :variant="row.item.panel_type === 'keyhelp' ? 'warning' : 'info'" class="text-nowrap">
+                                        {{ webspacePanelLabel(row.item.panel_type) }}
+                                    </BBadge>
                                 </template>
                                 <template #cell(plesk_package_name)="row">
                                     <code class="small bg-light px-2 py-1 rounded">{{ row.item.plesk_package_name || '–' }}</code>

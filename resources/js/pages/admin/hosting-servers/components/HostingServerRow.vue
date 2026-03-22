@@ -20,6 +20,7 @@ defineProps<{
 
 const panelTypeLabel = (type: string | undefined): string => {
     if (type === 'pterodactyl') return 'Pterodactyl';
+    if (type === 'keyhelp') return 'KeyHelp';
     return type === 'plesk' ? 'Plesk' : type === 'teamspeak' ? 'TeamSpeak' : type ?? '–';
 };
 </script>

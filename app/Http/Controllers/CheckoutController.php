@@ -12,9 +12,9 @@ use App\Models\Invoice;
 use App\Models\TeamSpeakServerAccount;
 use App\Models\WebspaceAccount;
 use App\Notifications\WebspaceOrderCompletedNotification;
-use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\ControlPanels\TeamSpeakClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use App\Services\InvoiceEInvoiceService;
 use App\Services\InvoicePdfService;
 use App\Services\MollieCustomerService;
@@ -572,9 +572,8 @@ class CheckoutController extends Controller
         ]);
         if ($wasSuspended && $account->hostingServer) {
             try {
-                $plesk = app(\App\Services\ControlPanels\PleskClient::class);
-                $plesk->setServer($account->hostingServer);
-                $plesk->unsuspendAccount($account->plesk_username);
+                $account->loadMissing('hostingPlan');
+                app(WebspacePanelDispatcher::class)->unsuspendWebspaceAccount($account);
             } catch (\Throwable) {
                 // status already active
             }
@@ -1756,7 +1755,7 @@ class CheckoutController extends Controller
 
         $periodMonths = max(1, min(6, (int) ($payload['period_months'] ?? $this->getBalancePeriodMonths($request, $user))));
         $periodEndsAt = now()->addMonths($periodMonths);
-        $server = HostingServer::where('is_active', true)->first();
+        $server = HostingServer::resolveActiveForWebspacePlan($plan);
 
         if (! $server) {
             Log::error('Webspace balance checkout: no active HostingServer');
@@ -1775,7 +1774,7 @@ class CheckoutController extends Controller
                 $account->update(['product_id' => $plan->product->id]);
             }
 
-            return redirect()->route('webspace-accounts.show', $account->id)
+            return redirect()->route('webspace-accounts.show', $account)
                 ->with('error', 'Webspace wird eingerichtet. Es ist kein aktiver Hosting-Server konfiguriert – bitte kontaktieren Sie uns.');
         }
 
@@ -1801,26 +1800,25 @@ class CheckoutController extends Controller
 
         $ok = false;
         try {
-            $plesk = app(PleskClient::class);
-            $plesk->setServer($server);
-            $ok = $plesk->createAccount($pleskUsername, $domain, $plan->plesk_package_name, $password);
+            $dispatcher = app(WebspacePanelDispatcher::class);
+            $ok = $dispatcher->provisionWebspaceAccount($account, $server, $plan, $pleskUsername, $domain, $password, $user->email);
         } catch (\Throwable $e) {
-            Log::error('Webspace balance checkout: Plesk createAccount exception', [
+            Log::error('Webspace balance checkout: panel createAccount exception', [
                 'account_id' => $account->id,
                 'message' => $e->getMessage(),
             ]);
 
-            return redirect()->route('webspace-accounts.show', $account->id)
+            return redirect()->route('webspace-accounts.show', $account)
                 ->with('error', 'Der Webspace konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
 
         if ($ok) {
             $account->update(['status' => 'active']);
-            Log::debug('Webspace balance checkout: Plesk account created', ['account_id' => $account->id]);
+            Log::debug('Webspace balance checkout: panel account created', ['account_id' => $account->id]);
             $user->notify(new WebspaceOrderCompletedNotification($account, $password));
         }
 
-        return redirect()->route('webspace-accounts.show', $account->id)
+        return redirect()->route('webspace-accounts.show', $account)
             ->with('success', $ok ? 'Ihr Webspace wurde erfolgreich eingerichtet.' : 'Ihr Webspace wird eingerichtet. Bei Fragen kontaktieren Sie uns.');
     }
 
@@ -1852,7 +1850,7 @@ class CheckoutController extends Controller
             ->orWhere('mollie_subscription_id', $molliePaymentId)
             ->first();
         if ($existing) {
-            return redirect()->route('webspace-accounts.show', $existing->id)->with('success', 'Ihr Webspace ist aktiv.');
+            return redirect()->route('webspace-accounts.show', $existing)->with('success', 'Ihr Webspace ist aktiv.');
         }
 
         $plan = HostingPlan::find($planId);
@@ -1863,7 +1861,7 @@ class CheckoutController extends Controller
         $isPrepaid = ($metadata['prepaid'] ?? '0') === '1';
         $periodMonths = max(1, min(6, (int) ($metadata['period_months'] ?? 1)));
         $periodEnd = now()->addMonths($periodMonths);
-        $server = HostingServer::where('is_active', true)->first();
+        $server = HostingServer::resolveActiveForWebspacePlan($plan);
 
         $baseData = [
             'hosting_plan_id' => $plan->id,
@@ -1891,7 +1889,7 @@ class CheckoutController extends Controller
             ]));
             $plan->product?->id && $account->update(['product_id' => $plan->product->id]);
 
-            return redirect()->route('webspace-accounts.show', $account->id)
+            return redirect()->route('webspace-accounts.show', $account)
                 ->with('error', 'Webspace wird eingerichtet. Es ist kein aktiver Hosting-Server konfiguriert – bitte kontaktieren Sie uns.');
         }
 
@@ -1910,11 +1908,10 @@ class CheckoutController extends Controller
 
         $ok = false;
         try {
-            $plesk = app(PleskClient::class);
-            $plesk->setServer($server);
-            $ok = $plesk->createAccount($pleskUsername, $domain, $plan->plesk_package_name, $password);
+            $dispatcher = app(WebspacePanelDispatcher::class);
+            $ok = $dispatcher->provisionWebspaceAccount($account, $server, $plan, $pleskUsername, $domain, $password, $user->email);
         } catch (\Throwable $e) {
-            Log::error('Checkout success webspace: Plesk createAccount exception', [
+            Log::error('Checkout success webspace: panel createAccount exception', [
                 'account_id' => $account->id,
                 'server' => $server->hostname,
                 'plesk_package_name' => $plan->plesk_package_name,
@@ -1923,16 +1920,16 @@ class CheckoutController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('webspace-accounts.show', $account->id)
+            return redirect()->route('webspace-accounts.show', $account)
                 ->with('error', 'Der Webspace konnte nicht automatisch angelegt werden: '.$e->getMessage().'. Bitte kontaktieren Sie uns.');
         }
 
         if ($ok) {
             $account->update(['status' => 'active']);
-            Log::debug('Checkout success webspace: Plesk account created', ['account_id' => $account->id]);
+            Log::debug('Checkout success webspace: panel account created', ['account_id' => $account->id]);
             $user->notify(new WebspaceOrderCompletedNotification($account, $password));
         } else {
-            Log::warning('Checkout success webspace: Plesk createAccount failed', [
+            Log::warning('Checkout success webspace: panel createAccount failed', [
                 'account_id' => $account->id,
                 'server' => $server->hostname,
                 'plesk_package_name' => $plan->plesk_package_name,
@@ -1941,11 +1938,11 @@ class CheckoutController extends Controller
         }
 
         if ($ok) {
-            return redirect()->route('webspace-accounts.show', $account->id)
+            return redirect()->route('webspace-accounts.show', $account)
                 ->with('success', 'Ihr Webspace wurde erfolgreich eingerichtet.');
         }
 
-        return redirect()->route('webspace-accounts.show', $account->id)
+        return redirect()->route('webspace-accounts.show', $account)
             ->with('error', 'Der Webspace konnte auf dem Server nicht automatisch angelegt werden. Bitte kontaktieren Sie uns und nennen Sie Ihre Domain: '.$domain);
     }
 

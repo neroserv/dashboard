@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateHostingPlanRequest extends FormRequest
 {
@@ -15,16 +16,35 @@ class UpdateHostingPlanRequest extends FormRequest
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'plesk_package_name.regex' => 'Bei KeyHelp muss die Paket-ID eine positive ganze Zahl sein (z. B. 3), ohne führende Nullen.',
+        ];
+    }
+
+    /**
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         $rules = [
             'hosting_server_id' => ['required_if:panel_type,pterodactyl', 'required_if:panel_type,teamspeak', 'nullable', 'exists:hosting_servers,id'],
-            'panel_type' => ['required', 'string', 'in:plesk,pterodactyl,teamspeak'],
+            'panel_type' => ['required', 'string', 'in:plesk,keyhelp,pterodactyl,teamspeak'],
             'config' => ['nullable', 'array'],
             'name' => ['required', 'string', 'max:255'],
-            'plesk_package_name' => ['required_if:panel_type,plesk', 'nullable', 'string', 'max:255'],
+            'plesk_package_name' => [
+                Rule::requiredIf(fn () => in_array($this->input('panel_type'), ['plesk', 'keyhelp'], true)),
+                'nullable',
+                'string',
+                'max:255',
+                Rule::when(
+                    $this->input('panel_type') === 'keyhelp',
+                    ['regex:/^[1-9][0-9]*$/'],
+                ),
+            ],
             'disk_gb' => ['integer', 'min:0'],
             'traffic_gb' => ['integer', 'min:0'],
             'domains' => ['integer', 'min:0'],

@@ -10,7 +10,8 @@ use App\Models\ResellerDomain;
 use App\Models\WebspaceAccount;
 use App\Services\BalancePaymentService;
 use App\Services\BindZoneParser;
-use App\Services\ControlPanels\PleskClient;
+use App\Services\ControlPanels\KeyHelpClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use App\Services\MollieCustomerService;
 use App\Services\SkrimeApiService;
 use App\Support\MollieWebhookUrl;
@@ -69,25 +70,32 @@ class WebspaceAccountController extends Controller
 
         $resourceUsage = null;
         $server = $webspaceAccount->hostingServer;
-        if ($server) {
-            $plesk = app(PleskClient::class);
-            $plesk->setServer($server);
-            $usage = $plesk->getWebspaceResourceUsage($webspaceAccount->domain);
-            $plan = $webspaceAccount->hostingPlan;
-            if ($usage !== null && $plan) {
-                $diskLimitBytes = $plan->disk_gb ? (int) ($plan->disk_gb * 1024 * 1024 * 1024) : 0;
-                $resourceUsage = [
-                    'disk_used_bytes' => $usage['disk_bytes'],
-                    'disk_limit_bytes' => $diskLimitBytes,
-                    'domains_used' => $usage['domains_used'],
-                    'domains_limit' => (int) ($plan->domains ?? 1),
-                    'subdomains_used' => $usage['subdomains_used'],
-                    'subdomains_limit' => (int) ($plan->subdomains ?? 0),
-                    'mailboxes_used' => $usage['mailboxes_used'],
-                    'mailboxes_limit' => (int) ($plan->mailboxes ?? 0),
-                    'databases_used' => $usage['databases_used'],
-                    'databases_limit' => (int) ($plan->databases ?? 0),
-                ];
+        $plan = $webspaceAccount->hostingPlan;
+        if ($server && $plan) {
+            $usageCtx = app(WebspacePanelDispatcher::class)->getWebspaceResourceUsageForShow($webspaceAccount);
+            if ($usageCtx !== null) {
+                if ($usageCtx['keyhelp_stats'] !== null) {
+                    $resourceUsage = KeyHelpClient::resourceUsagePayloadForKeyhelp(
+                        $plan,
+                        $usageCtx['usage'],
+                        $usageCtx['keyhelp_stats'],
+                    );
+                } else {
+                    $usage = $usageCtx['usage'];
+                    $diskLimitBytes = $plan->disk_gb ? (int) ($plan->disk_gb * 1024 * 1024 * 1024) : 0;
+                    $resourceUsage = [
+                        'disk_used_bytes' => $usage['disk_bytes'],
+                        'disk_limit_bytes' => $diskLimitBytes,
+                        'domains_used' => $usage['domains_used'],
+                        'domains_limit' => (int) ($plan->domains ?? 1),
+                        'subdomains_used' => $usage['subdomains_used'],
+                        'subdomains_limit' => (int) ($plan->subdomains ?? 0),
+                        'mailboxes_used' => $usage['mailboxes_used'],
+                        'mailboxes_limit' => (int) ($plan->mailboxes ?? 0),
+                        'databases_used' => $usage['databases_used'],
+                        'databases_limit' => (int) ($plan->databases ?? 0),
+                    ];
+                }
             }
         }
 
@@ -139,7 +147,7 @@ class WebspaceAccountController extends Controller
 
         $webspaceAccount->makeHidden('id');
 
-        return Inertia::render('webspace-accounts/Show', [
+        $inertiaProps = [
             'webspaceAccount' => $webspaceAccount,
             'pleskPassword' => $pleskPassword,
             'webmailUrl' => 'https://webmail.'.$webspaceAccount->domain,
@@ -158,7 +166,25 @@ class WebspaceAccountController extends Controller
             'allowedSharePermissions' => $allowedSharePermissions,
             'storeInvitationUrl' => $storeInvitationUrl,
             'connectDomainShowUrl' => route('webspace-accounts.connect-domain.show', $webspaceAccount),
-        ]);
+        ];
+
+        if (($plan?->getAttribute('panel_type') ?? '') === 'keyhelp'
+            && $webspaceAccount->keyhelp_user_id
+            && $server) {
+            $inertiaProps['keyhelpResources'] = Inertia::defer(function () use ($webspaceAccount) {
+                $webspaceAccount->loadMissing('hostingServer');
+                $hostingServer = $webspaceAccount->hostingServer;
+                if (! $hostingServer || ! $webspaceAccount->keyhelp_user_id) {
+                    return null;
+                }
+
+                return app(KeyHelpClient::class)
+                    ->setServer($hostingServer)
+                    ->getClientResourcesSanitized((int) $webspaceAccount->keyhelp_user_id);
+            });
+        }
+
+        return Inertia::render('webspace-accounts/Show', $inertiaProps);
     }
 
     /**
@@ -318,11 +344,10 @@ class WebspaceAccountController extends Controller
             ]);
             if ($wasSuspended && $webspaceAccount->hostingServer) {
                 try {
-                    $plesk = app(PleskClient::class);
-                    $plesk->setServer($webspaceAccount->hostingServer);
-                    $plesk->unsuspendAccount($webspaceAccount->plesk_username);
+                    $webspaceAccount->loadMissing('hostingPlan');
+                    app(WebspacePanelDispatcher::class)->unsuspendWebspaceAccount($webspaceAccount);
                 } catch (\Throwable) {
-                    // status already active; Plesk unsuspend can be retried manually if needed
+                    // status already active; panel unsuspend can be retried manually if needed
                 }
             }
 
@@ -529,7 +554,7 @@ class WebspaceAccountController extends Controller
     }
 
     /**
-     * Redirect to Plesk panel with session (create_session API).
+     * Redirect to hosting panel (Plesk session or KeyHelp URL when available).
      */
     public function pleskLogin(Request $request, WebspaceAccount $webspaceAccount): RedirectResponse
     {
@@ -539,24 +564,27 @@ class WebspaceAccountController extends Controller
             return redirect()->back()->with('error', 'Der Webspace ist gesperrt oder abgelaufen. Bitte verlängern Sie zuerst.');
         }
 
+        $webspaceAccount->loadMissing('hostingPlan', 'hostingServer');
         $server = $webspaceAccount->hostingServer;
         if (! $server) {
             return redirect()->back()->with('error', 'Kein Hosting-Server zugeordnet.');
         }
 
-        $plesk = app(PleskClient::class);
-        $plesk->setServer($server);
         $clientIp = $request->ip() ?? '127.0.0.1';
-        $token = $plesk->createCustomerSession($webspaceAccount->plesk_username, $clientIp);
+        $url = app(WebspacePanelDispatcher::class)->panelLoginUrl($webspaceAccount, $clientIp);
 
-        if (! $token) {
-            return redirect()->back()->with('error', 'Plesk-Login konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.');
+        if ($url !== null) {
+            return redirect()->away($url);
         }
 
-        $protocol = ($server->use_ssl ?? true) ? 'https' : 'http';
-        $port = $server->port !== null && (int) $server->port > 0 ? (int) $server->port : 8443;
-        $url = $protocol.'://'.$server->hostname.':'.$port.'/enterprise/rsession_init.php?PHPSESSID='.urlencode($token);
+        $plan = $webspaceAccount->hostingPlan;
+        if (($plan?->getAttribute('panel_type') ?? 'plesk') === 'keyhelp') {
+            $base = app(KeyHelpClient::class)->setServer($server)->panelBaseUrl();
+            if ($base !== '') {
+                return redirect()->away($base);
+            }
+        }
 
-        return redirect()->away($url);
+        return redirect()->back()->with('error', 'Panel-Login konnte nicht erstellt werden. Bitte versuchen Sie es später erneut oder nutzen Sie die Zugangsdaten auf dieser Seite.');
     }
 }

@@ -15,6 +15,8 @@ class BrandExtension extends Model
 
     public const EXTENSION_INVOICE_NINJA = 'invoice_ninja';
 
+    public const EXTENSION_KEYHELP = 'keyhelp';
+
     public const EXTENSION_PLESK = 'plesk';
 
     public const EXTENSION_PTERODACTYL = 'pterodactyl';
@@ -33,6 +35,7 @@ class BrandExtension extends Model
             self::EXTENSION_CLOUDFLARE,
             self::EXTENSION_DISCORD,
             self::EXTENSION_INVOICE_NINJA,
+            self::EXTENSION_KEYHELP,
             self::EXTENSION_PLESK,
             self::EXTENSION_PTERODACTYL,
             self::EXTENSION_SKRIME,

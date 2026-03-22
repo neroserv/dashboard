@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\HostingServer;
 use App\Models\WebspaceAccount;
-use App\Services\ControlPanels\PleskClient;
+use App\Services\ControlPanels\WebspacePanelDispatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -45,8 +45,8 @@ class WebspaceAccountController extends Controller
     }
 
     /**
-     * Retry Plesk account creation (e.g. after failed checkout or missing server).
-     * Uses existing account data; picks an active server if none set. Only for pending/retry cases.
+     * Retry webspace panel provisioning (Plesk or KeyHelp, from plan panel_type).
+     * Uses existing account data; picks an active server if none set. For pending/active retry cases.
      */
     public function retryPlesk(Request $request, WebspaceAccount $webspaceAccount): RedirectResponse
     {
@@ -57,7 +57,12 @@ class WebspaceAccountController extends Controller
             return redirect()->back()->with('error', 'Kein Hosting-Plan zugeordnet.');
         }
 
-        $server = $webspaceAccount->hostingServer ?? HostingServer::where('is_active', true)->first();
+        $panelType = $plan->getAttribute('panel_type') ?? 'plesk';
+        $server = $webspaceAccount->hostingServer;
+        if ($server && ($server->getAttribute('panel_type') ?? 'plesk') !== $panelType) {
+            $server = null;
+        }
+        $server = $server ?? HostingServer::resolveActiveForWebspacePlan($plan);
         if (! $server) {
             return redirect()->back()->with('error', 'Kein aktiver Hosting-Server vorhanden. Bitte unter Admin → Hosting-Server einen Server anlegen und aktivieren.');
         }
@@ -70,35 +75,40 @@ class WebspaceAccountController extends Controller
         $pleskUsername = 'ws'.str_pad((string) $webspaceAccount->id, 4, '0', STR_PAD_LEFT).Str::lower(Str::random(6));
         $webspaceAccount->update(['plesk_username' => $pleskUsername]);
 
-        $plesk = app(PleskClient::class);
-        $plesk->setServer($server);
+        $dispatcher = app(WebspacePanelDispatcher::class);
         $ok = false;
 
         try {
-            $ok = $plesk->createAccount(
+            $ok = $dispatcher->provisionWebspaceAccount(
+                $webspaceAccount,
+                $server,
+                $plan,
                 $pleskUsername,
                 $webspaceAccount->domain,
-                $plan->plesk_package_name,
                 $password,
                 $webspaceAccount->user?->email
             );
         } catch (\Throwable $e) {
-            Log::error('Admin retry Plesk: exception', [
+            Log::error('Admin retry webspace panel: exception', [
                 'webspace_account_id' => $webspaceAccount->id,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->back()->with('error', 'Plesk-Fehler: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Panel-Fehler: '.$e->getMessage());
+        }
+
+        if (! $ok) {
+            return redirect()->back()->with('error', 'Der Account konnte auf dem Panel nicht angelegt werden.');
         }
 
         $webspaceAccount->update([
             'status' => 'active',
             'plesk_password_encrypted' => Crypt::encryptString($password),
         ]);
-        Log::info('Admin retry Plesk: account created', ['webspace_account_id' => $webspaceAccount->id]);
+        Log::info('Admin retry webspace panel: account created', ['webspace_account_id' => $webspaceAccount->id]);
 
-        return redirect()->back()->with('success', 'Plesk-Account wurde angelegt. Der Kunde kann sich nun anmelden.');
+        return redirect()->back()->with('success', 'Hosting-Account wurde angelegt. Der Kunde kann sich nun anmelden.');
     }
 
     /**

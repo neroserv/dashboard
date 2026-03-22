@@ -17,14 +17,25 @@ class HostingPlanController extends ApiV1Controller
         $brand = $this->resolveBrand($request);
         $brandId = $brand?->id;
         $type = $request->query('type', 'all');
+        $panel = $request->query('panel');
 
         $query = HostingPlan::query()
             ->where('is_active', true)
             ->when($brandId !== null, fn ($q) => $q->where('brand_id', $brandId));
 
-        $query->when($type === 'webspace', fn ($q) => $q->where(function ($q) {
-            $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
-        }));
+        $query->when($type === 'webspace', function ($q) use ($panel) {
+            if ($panel === 'keyhelp') {
+                $q->where('panel_type', 'keyhelp');
+            } elseif ($panel === 'plesk') {
+                $q->where(function ($q2) {
+                    $q2->where('panel_type', 'plesk')->orWhereNull('panel_type');
+                });
+            } else {
+                $q->where(function ($q2) {
+                    $q2->whereIn('panel_type', ['plesk', 'keyhelp'])->orWhereNull('panel_type');
+                });
+            }
+        });
         $query->when($type === 'gaming', fn ($q) => $q->where('panel_type', 'pterodactyl'));
         $query->when($type === 'teamspeak', fn ($q) => $q->where('panel_type', 'teamspeak'));
 

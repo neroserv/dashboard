@@ -27,7 +27,7 @@ class UpdateHostingServerRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'panel_type' => ['required', 'string', 'in:plesk,pterodactyl,teamspeak'],
+            'panel_type' => ['required', 'string', 'in:plesk,keyhelp,pterodactyl,teamspeak'],
             'config' => ['nullable', 'array'],
             'bind_zone_content' => ['nullable', 'string', 'max:65535'],
             'name' => ['nullable', 'string', 'max:255'],

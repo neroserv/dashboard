@@ -101,7 +101,6 @@ const formData = ref({
     name: props.template.name,
     slug: props.template.slug,
     price: props.template.price,
-    stripe_price_id: props.template.stripe_price_id ?? '',
     is_active: props.template.is_active ?? false,
     preview_image: props.template.preview_image ?? '',
 });
@@ -238,7 +237,7 @@ const submit = () => {
         name: formData.value.name,
         slug: formData.value.slug,
         price: formData.value.price,
-        stripe_price_id: formData.value.stripe_price_id || null,
+        stripe_price_id: props.template.stripe_price_id ?? null,
         is_active: formData.value.is_active,
         preview_image: formData.value.preview_image || null,
         page_data: templateData.value,
@@ -473,20 +472,6 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     :aria-invalid="!!errors.price"
                                 />
                                 <InputError :message="errors.price" />
-                            </div>
-                            <div class="space-y-2">
-                                <Label for="stripe_price_id">Stripe Price ID (optional)</Label>
-                                <Input
-                                    id="stripe_price_id"
-                                    v-model="formData.stripe_price_id"
-                                    type="text"
-                                    placeholder="Leer = wird automatisch aus „Preis“ erzeugt"
-                                    :aria-invalid="!!errors.stripe_price_id"
-                                />
-                                <InputError :message="errors.stripe_price_id" />
-                                <Text class="text-xs text-muted-foreground">
-                                    Normalerweise leer lassen: Wenn in .env <strong>STRIPE_MEINE_SEITEN_PRODUCT_ID</strong> gesetzt ist (Stripe-Produkt-ID <code class="text-xs">prod_…</code>), wird beim Speichern automatisch ein Stripe-Preis aus dem Feld „Preis (monatlich)“ angelegt. Nur bei Bedarf manuell eintragen.
-                                </Text>
                             </div>
                             <div class="space-y-2">
                                 <div class="flex items-center gap-2">

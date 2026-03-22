@@ -16,7 +16,10 @@
       </Link>
     </div>
 
-    <div v-if="domains.length === 0" class="rounded border border-secondary border-dashed bg-light p-5 text-center">
+    <div
+      v-if="domains.length === 0"
+      class="rounded border border-secondary border-dashed bg-light p-5 d-flex flex-column align-items-center text-center"
+    >
       <Icon icon="world" class="fs-1 text-muted opacity-50" />
       <h5 class="mt-3">Noch keine Domains</h5>
       <p class="text-muted mb-0">

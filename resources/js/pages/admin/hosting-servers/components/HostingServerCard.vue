@@ -25,6 +25,7 @@ const props = defineProps<{
 const panelLabel = computed(() => {
     const t = props.server.panel_type;
     if (t === 'pterodactyl') return 'Pterodactyl';
+    if (t === 'keyhelp') return 'KeyHelp';
     return t === 'plesk' ? 'Plesk' : t === 'teamspeak' ? 'TeamSpeak' : '–';
 });
 
@@ -39,6 +40,7 @@ const panelBadgeVariant = computed(() => {
     const t = props.server.panel_type;
     if (t === 'pterodactyl') return 'primary';
     if (t === 'teamspeak') return 'success';
+    if (t === 'keyhelp') return 'warning';
     return 'info';
 });
 
@@ -122,8 +124,11 @@ const runApiCheck = async () => {
                     :class="{
                         'bg-primary': server.panel_type === 'pterodactyl',
                         'bg-info': server.panel_type === 'plesk',
+                        'bg-warning': server.panel_type === 'keyhelp',
                         'bg-success': server.panel_type === 'teamspeak',
-                        'bg-secondary': !server.panel_type || !['plesk', 'pterodactyl', 'teamspeak'].includes(server.panel_type),
+                        'bg-secondary':
+                            !server.panel_type ||
+                            !['plesk', 'keyhelp', 'pterodactyl', 'teamspeak'].includes(server.panel_type),
                     }"
                 >
                     <Icon :icon="panelIcon" class="fs-4" />

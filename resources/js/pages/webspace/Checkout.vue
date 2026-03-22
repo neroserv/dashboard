@@ -1,7 +1,7 @@
 <template>
   <DefaultLayout>
     <Head title="Webspace buchen" />
-    <PageBreadcrumb title="Checkout" subtitle="Webspace" subtitle-url="/webspace" />
+    <PageBreadcrumb title="Checkout" subtitle="Webspace" :subtitle-url="webspaceIndexUrl" />
 
     <div class="mb-4">
       <h4 class="mb-1">Webspace buchen</h4>
@@ -103,12 +103,12 @@
                   <BButton type="submit" variant="primary" :disabled="form.processing || !canSubmit">
                     {{ form.processing ? 'Wird weitergeleitet…' : (form.payment_method === 'balance' && canSubmitWithBalance ? 'Mit Guthaben bezahlen' : 'Kostenpflichtig bestellen') }}
                   </BButton>
-                  <Link href="/webspace" class="btn btn-outline-secondary">Abbrechen</Link>
+                  <Link :href="webspaceIndexUrl" class="btn btn-outline-secondary">Abbrechen</Link>
                 </div>
               </template>
               <template v-else>
                 <p class="text-muted small mb-0">Bitte wählen Sie links ein Paket aus.</p>
-                <Link href="/webspace" class="btn btn-outline-primary mt-3">Zur Übersicht</Link>
+                <Link :href="webspaceIndexUrl" class="btn btn-outline-primary mt-3">Zur Übersicht</Link>
               </template>
             </BCardBody>
           </BCard>
@@ -137,15 +137,33 @@ type HostingPlan = {
   price: string
 }
 
-const props = defineProps<{
-  hostingPlans: HostingPlan[]
-  selectedPlan: HostingPlan | null
-  canPayWithBalance?: boolean
-  customerBalance?: number
-  amountRequired?: number
-  tosUrl?: string
-  privacyUrl?: string
-}>()
+type PanelOption = { value: string; label: string }
+
+const props = withDefaults(
+  defineProps<{
+    hostingPlans: HostingPlan[]
+    selectedPlan: HostingPlan | null
+    available_webspace_panels: PanelOption[]
+    selected_webspace_panel: string
+    canPayWithBalance?: boolean
+    customerBalance?: number
+    amountRequired?: number
+    tosUrl?: string
+    privacyUrl?: string
+  }>(),
+  {
+    available_webspace_panels: () => [],
+    selected_webspace_panel: 'plesk',
+  },
+)
+
+const needsPanelField = computed(() => props.available_webspace_panels.length > 1)
+
+const webspaceIndexUrl = computed(() =>
+  needsPanelField.value
+    ? `/webspace?panel=${encodeURIComponent(props.selected_webspace_panel)}`
+    : '/webspace',
+)
 
 const form = useForm({
   domain: '',
@@ -154,6 +172,7 @@ const form = useForm({
   accept_tos: false,
   accept_early_execution: false,
   payment_method: 'mollie',
+  panel: props.selected_webspace_panel,
 })
 
 const currentPlan = computed((): HostingPlan | null => {

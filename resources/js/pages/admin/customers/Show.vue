@@ -619,17 +619,37 @@ onMounted(() => {
             </BCardHeader>
             <BCardBody>
                 <BNav tabs class="mb-4 flex-wrap">
-                    <BNavItem :active="productsTab === 'webspace'" @click="productsTab = 'webspace'">
-                        <Icon icon="device-desktop" class="me-1" /> Webspace ({{ customer.webspace_accounts?.length ?? 0 }})
+                    <BNavItem link-class="d-inline-flex align-items-center" :active="productsTab === 'webspace'" @click="productsTab = 'webspace'">
+                        <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+                            <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                                <Icon icon="device-desktop" />
+                            </span>
+                            <span>Webspace ({{ customer.webspace_accounts?.length ?? 0 }})</span>
+                        </span>
                     </BNavItem>
-                    <BNavItem :active="productsTab === 'gaming'" @click="productsTab = 'gaming'">
-                        <Icon icon="server" class="me-1" /> Game-Server ({{ customer.game_server_accounts?.length ?? 0 }})
+                    <BNavItem link-class="d-inline-flex align-items-center" :active="productsTab === 'gaming'" @click="productsTab = 'gaming'">
+                        <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+                            <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                                <Icon icon="server" />
+                            </span>
+                            <span>Game-Server ({{ customer.game_server_accounts?.length ?? 0 }})</span>
+                        </span>
                     </BNavItem>
-                    <BNavItem :active="productsTab === 'teamspeak'" @click="productsTab = 'teamspeak'">
-                        <Icon icon="headphones" class="me-1" /> TeamSpeak ({{ customer.team_speak_server_accounts?.length ?? 0 }})
+                    <BNavItem link-class="d-inline-flex align-items-center" :active="productsTab === 'teamspeak'" @click="productsTab = 'teamspeak'">
+                        <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+                            <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                                <Icon icon="headphones" />
+                            </span>
+                            <span>TeamSpeak ({{ customer.team_speak_server_accounts?.length ?? 0 }})</span>
+                        </span>
                     </BNavItem>
-                    <BNavItem :active="productsTab === 'domains'" @click="productsTab = 'domains'">
-                        <Icon icon="world" class="me-1" /> Reseller-Domains ({{ customer.reseller_domains?.length ?? 0 }})
+                    <BNavItem link-class="d-inline-flex align-items-center" :active="productsTab === 'domains'" @click="productsTab = 'domains'">
+                        <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
+                            <span class="d-inline-flex flex-shrink-0 align-items-center justify-content-center" style="line-height: 0">
+                                <Icon icon="world" />
+                            </span>
+                            <span>Reseller-Domains ({{ customer.reseller_domains?.length ?? 0 }})</span>
+                        </span>
                     </BNavItem>
                 </BNav>
 

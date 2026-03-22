@@ -28,7 +28,7 @@ class StoreHostingServerRequest extends FormRequest
     {
         $rules = [
             'brand_id' => ['nullable', 'exists:brands,id'],
-            'panel_type' => ['required', 'string', 'in:plesk,pterodactyl,teamspeak'],
+            'panel_type' => ['required', 'string', 'in:plesk,keyhelp,pterodactyl,teamspeak'],
             'config' => ['nullable', 'array'],
             'name' => ['nullable', 'string', 'max:255'],
             'hostname' => ['required_unless:panel_type,teamspeak', 'nullable', 'string', 'max:255'],

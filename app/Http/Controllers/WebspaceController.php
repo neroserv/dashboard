@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientBalanceException;
+use App\Http\Controllers\Concerns\ResolvesWebspaceShopPanels;
 use App\Models\Brand;
 use App\Models\CustomerBalance;
 use App\Models\DiscountCode;
 use App\Models\HostingPlan;
 use App\Services\BalancePaymentService;
+use App\Services\BrandExtensionService;
 use App\Services\DiscountCodeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,22 +18,25 @@ use Inertia\Response;
 
 class WebspaceController extends Controller
 {
+    use ResolvesWebspaceShopPanels;
+
     /**
-     * List active webspace (Plesk) plans for customers. Excludes gaming (pterodactyl) plans.
+     * List active webspace plans (Plesk and/or KeyHelp). Excludes gaming (pterodactyl) plans.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $ctx = $this->webspaceShopContext($request);
         $plans = HostingPlan::query()
             ->where('is_active', true)
-            ->where(function ($q) {
-                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
-            })
+            ->tap(fn ($q) => $this->scopeActiveWebspacePlansForPanel($q, $ctx['panel']))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
         return Inertia::render('webspace/Index', [
             'hostingPlans' => $plans,
+            'available_webspace_panels' => $ctx['available_panels'],
+            'selected_webspace_panel' => $ctx['panel'],
         ]);
     }
 
@@ -40,21 +45,18 @@ class WebspaceController extends Controller
      */
     public function checkout(Request $request): Response|RedirectResponse
     {
+        $ctx = $this->webspaceShopContext($request);
         $planId = $request->query('plan');
         $plan = $planId ? HostingPlan::query()
-            ->where(function ($q) {
-                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
-            })
+            ->tap(fn ($q) => $this->scopeActiveWebspacePlansForPanel($q, $ctx['panel']))
             ->find($planId) : null;
         if ($planId && ! $plan) {
-            return redirect()->route('webspace.index')->with('error', 'Paket nicht gefunden.');
+            return redirect()->route('webspace.index', ['panel' => $ctx['panel']])->with('error', 'Paket nicht gefunden.');
         }
 
         $plans = HostingPlan::query()
             ->where('is_active', true)
-            ->where(function ($q) {
-                $q->where('panel_type', 'plesk')->orWhereNull('panel_type');
-            })
+            ->tap(fn ($q) => $this->scopeActiveWebspacePlansForPanel($q, $ctx['panel']))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -64,6 +66,8 @@ class WebspaceController extends Controller
         $payload = [
             'hostingPlans' => $plans,
             'selectedPlan' => $plan,
+            'available_webspace_panels' => $ctx['available_panels'],
+            'selected_webspace_panel' => $ctx['panel'],
             'tosUrl' => config('billing.tos_url', '#'),
             'privacyUrl' => config('billing.privacy_url', '#'),
         ];
@@ -90,6 +94,7 @@ class WebspaceController extends Controller
             'period_months' => ['required', 'integer', 'in:1,3,6'],
             'accept_tos' => ['required', 'accepted'],
             'accept_early_execution' => ['required', 'accepted'],
+            'panel' => ['nullable', 'string', 'in:plesk,keyhelp'],
         ], [
             'domain.regex' => 'Bitte eine gültige Domain angeben (z. B. example.com).',
             'accept_tos.accepted' => 'Bitte bestätigen Sie die AGB und Datenschutzerklärung.',
@@ -99,6 +104,25 @@ class WebspaceController extends Controller
         $plan = HostingPlan::find($validated['hosting_plan_id']);
         if (! $plan || ! $plan->is_active) {
             return redirect()->route('webspace.checkout')->with('error', 'Paket nicht verfügbar.');
+        }
+
+        $effectivePanel = $this->effectiveWebspacePanelForPlan($plan->panel_type);
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        if (! app(BrandExtensionService::class)->webspacePanelTypeIsAvailableForBrand($currentBrand, $effectivePanel)) {
+            return redirect()->route('webspace.index')->with('error', 'Dieses Webspace-Paket ist für diese Marke nicht verfügbar.');
+        }
+        $submittedPanel = isset($validated['panel']) ? (string) $validated['panel'] : '';
+        $availablePanels = app(BrandExtensionService::class)->availableWebspacePanelTypes($currentBrand);
+        if (count($availablePanels) > 1) {
+            if ($submittedPanel !== $effectivePanel) {
+                return redirect()
+                    ->route('webspace.checkout', ['plan' => $plan->id, 'panel' => $effectivePanel])
+                    ->with('error', 'Bitte wählen Sie die passende Steuerungssoftware und bestellen Sie erneut.');
+            }
+        } elseif ($submittedPanel !== '' && $submittedPanel !== $effectivePanel) {
+            return redirect()
+                ->route('webspace.checkout', ['plan' => $plan->id, 'panel' => $effectivePanel])
+                ->with('error', 'Die Panel-Auswahl passt nicht zum gewählten Paket.');
         }
 
         $periodMonths = (int) $validated['period_months'];
@@ -116,7 +140,6 @@ class WebspaceController extends Controller
             }
         }
 
-        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
         $paymentMethod = $validated['payment_method'] ?? 'mollie';
 
@@ -127,7 +150,7 @@ class WebspaceController extends Controller
                     'description' => 'Webspace '.$plan->name.' – '.$validated['domain'].' ('.$periodMonths.' Monat(e))',
                 ]);
             } catch (InsufficientBalanceException $e) {
-                return redirect()->route('webspace.checkout', ['plan' => $plan->id])
+                return redirect()->route('webspace.checkout', ['plan' => $plan->id, 'panel' => $effectivePanel])
                     ->with('error', $e->getMessage());
             }
 

@@ -71,6 +71,7 @@ const panelLabel = computed(() => {
     const t = panelType.value;
     if (t === 'pterodactyl') return 'Pterodactyl-Panel';
     if (t === 'teamspeak') return 'TeamSpeak-Node';
+    if (t === 'keyhelp') return 'KeyHelp-Hosting-Server';
     return 'Plesk-Hosting-Server';
 });
 
