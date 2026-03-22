@@ -116,6 +116,9 @@ class PermissionSeeder extends Seeder
             ['key' => 'admin.legacy-migration.view', 'name' => 'Legacy-Migration ansehen', 'label' => 'Legacy-Migration nur ansehen', 'category' => 'System'],
             ['key' => 'admin.update', 'name' => 'Panel-Update (voll)', 'label' => 'Panel-Update ausführen', 'category' => 'System'],
             ['key' => 'admin.update.view', 'name' => 'Panel-Update ansehen', 'label' => 'Panel-Update nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.brand-extensions', 'name' => 'Erweiterungen (voll)', 'label' => 'Marken-Erweiterungen', 'category' => 'System'],
+            ['key' => 'admin.brand-extensions.view', 'name' => 'Erweiterungen ansehen', 'label' => 'Marken-Erweiterungen nur ansehen', 'category' => 'System'],
+            ['key' => 'admin.brand-extensions.update', 'name' => 'Erweiterungen bearbeiten', 'label' => 'Marken-Erweiterungen bearbeiten', 'category' => 'System'],
         ];
 
         foreach ($permissions as $attrs) {

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Brand;
 use App\Models\CronDailyStats;
 use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
@@ -29,9 +30,12 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
             ->whereNotNull('user_id')
             ->whereNotNull('expires_at')
             ->whereBetween('expires_at', [$targetFrom, $targetTo])
-            ->with('user')
+            ->with(['user', 'brand'])
             ->get()
             ->each(function (ResellerDomain $domain) use ($pricing, $pdfService, &$createdCount): void {
+                $brand = $domain->brand ?? Brand::getDefault();
+                $pricingForDomain = $brand !== null ? $pricing->forBrand($brand) : $pricing;
+
                 $expiresAt = $domain->expires_at->format('Y-m-d');
                 $existing = Invoice::query()
                     ->where('type', 'domain_renewal')
@@ -45,7 +49,7 @@ class CreateDomainRenewalInvoicesJob implements ShouldQueue
                 $createdCount++;
 
                 $tld = $domain->tld ?? substr(strrchr($domain->domain, '.'), 1);
-                $salePrice = $pricing->getSalePrice($tld, 'renew');
+                $salePrice = $pricingForDomain->getSalePrice($tld, 'renew');
 
                 $year = date('Y');
                 $nextSeq = (int) Invoice::whereYear('invoice_date', $year)->max('id') + 1;

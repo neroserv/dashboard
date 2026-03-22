@@ -40,7 +40,13 @@ test('api v1 stats returns data with valid token', function () {
 });
 
 test('api v1 domains tlds returns paginated list with valid token', function () {
+    $brand = Brand::create([
+        'key' => 'api-tlds-paginated',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     TldPricelist::create([
+        'brand_id' => $brand->id,
         'tld' => 'de',
         'create_price' => 5.00,
         'renew_price' => 5.00,
@@ -64,8 +70,14 @@ test('api v1 domains tlds returns paginated list with valid token', function () 
 });
 
 test('api v1 domains tlds returns priority TLDs first in order de net com eu at ch', function () {
+    $brand = Brand::create([
+        'key' => 'api-tlds-priority',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     foreach (['at', 'ch', 'com', 'de', 'eu', 'net', 'io', 'org'] as $tld) {
         TldPricelist::create([
+            'brand_id' => $brand->id,
             'tld' => $tld,
             'create_price' => 5.00,
             'renew_price' => 5.00,
@@ -87,8 +99,14 @@ test('api v1 domains tlds returns priority TLDs first in order de net com eu at 
 });
 
 test('api v1 domains tlds paginates at 15 per page', function () {
+    $brand = Brand::create([
+        'key' => 'api-tlds-pages',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     for ($i = 0; $i < 20; $i++) {
         TldPricelist::create([
+            'brand_id' => $brand->id,
             'tld' => 'tld'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
             'create_price' => 5.00,
             'renew_price' => 5.00,
@@ -115,8 +133,14 @@ test('api v1 domains tlds paginates at 15 per page', function () {
 });
 
 test('api v1 domains check-availability returns searched_domain first when domain has tld', function () {
+    $brand = Brand::create([
+        'key' => 'api-check-tld',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     foreach (['de', 'net', 'com', 'eu', 'at', 'ch', 'io'] as $tld) {
         TldPricelist::create([
+            'brand_id' => $brand->id,
             'tld' => $tld,
             'create_price' => 5.00,
             'renew_price' => 5.00,
@@ -127,6 +151,7 @@ test('api v1 domains check-availability returns searched_domain first when domai
         ]);
     }
     $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
         $mock->shouldReceive('checkAvailability')
             ->andReturnUsing(fn (string $domain) => [
                 'available' => $domain === 'beispiel.de',
@@ -149,8 +174,13 @@ test('api v1 domains check-availability returns searched_domain first when domai
 });
 
 test('api v1 domains check-availability accepts name without tld and returns priority then paginated other', function () {
+    $brand = Brand::create([
+        'key' => 'api-check-name',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     foreach (['de', 'net', 'com', 'eu', 'at', 'ch', 'io', 'org', 'info', 'biz', 'xyz'] as $tld) {
-        TldPricelist::firstOrCreate(['tld' => $tld], [
+        TldPricelist::firstOrCreate(['brand_id' => $brand->id, 'tld' => $tld], [
             'create_price' => 5.00,
             'renew_price' => 5.00,
             'transfer_price' => 5.00,
@@ -160,6 +190,7 @@ test('api v1 domains check-availability accepts name without tld and returns pri
         ]);
     }
     $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
         $mock->shouldReceive('checkAvailability')
             ->andReturn(['available' => false, 'premium' => false, 'domain' => 'test.de']);
     });
@@ -177,8 +208,13 @@ test('api v1 domains check-availability accepts name without tld and returns pri
 });
 
 test('api v1 domains check-availability other tlds paginate with page param', function () {
+    $brand = Brand::create([
+        'key' => 'api-check-page',
+        'name' => 'API',
+        'is_default' => true,
+    ]);
     foreach (['de', 'net', 'com', 'eu', 'at', 'ch', 'io', 'org', 'info', 'biz', 'xyz'] as $tld) {
-        TldPricelist::firstOrCreate(['tld' => $tld], [
+        TldPricelist::firstOrCreate(['brand_id' => $brand->id, 'tld' => $tld], [
             'create_price' => 5.00,
             'renew_price' => 5.00,
             'transfer_price' => 5.00,
@@ -188,6 +224,7 @@ test('api v1 domains check-availability other tlds paginate with page param', fu
         ]);
     }
     $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
         $mock->shouldReceive('checkAvailability')
             ->andReturn(['available' => false, 'premium' => false, 'domain' => 'x']);
     });

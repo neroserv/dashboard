@@ -1,0 +1,37 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        if (Schema::hasTable('brand_extensions')) {
+            return;
+        }
+
+        Schema::create('brand_extensions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('brand_id')->constrained()->cascadeOnDelete();
+            $table->string('extension', 64);
+            $table->timestamp('installed_at')->nullable();
+            $table->text('settings')->nullable();
+            $table->timestamps();
+
+            $table->unique(['brand_id', 'extension']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('brand_extensions');
+    }
+};

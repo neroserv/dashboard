@@ -1,8 +1,17 @@
 <?php
 
+use App\Models\Brand;
 use App\Models\TldPricelist;
 use App\Models\User;
 use App\Services\SkrimeApiService;
+
+beforeEach(function () {
+    Brand::query()->create([
+        'key' => 'tld-test-brand',
+        'name' => 'TLD Test Brand',
+        'is_default' => true,
+    ]);
+});
 
 test('admin can access tld pricelist index', function () {
     $admin = User::factory()->create(['is_admin' => true]);
@@ -26,7 +35,9 @@ test('non-admin cannot access tld pricelist index', function () {
 test('admin can bulk update margin for tlds', function () {
     $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
     $admin = User::factory()->create(['is_admin' => true]);
+    $brandId = Brand::query()->where('is_default', true)->value('id');
     TldPricelist::create([
+        'brand_id' => $brandId,
         'tld' => 'de',
         'create_price' => 10,
         'renew_price' => 10,
@@ -34,6 +45,7 @@ test('admin can bulk update margin for tlds', function () {
         'margin_value' => 2,
     ]);
     TldPricelist::create([
+        'brand_id' => $brandId,
         'tld' => 'com',
         'create_price' => 12,
         'renew_price' => 12,
@@ -57,6 +69,7 @@ test('admin sync populates tld pricelist from skrime', function () {
     $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
     $admin = User::factory()->create(['is_admin' => true]);
     $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
         $mock->shouldReceive('getPricelist')->once()->andReturn([
             ['tld' => 'de', 'create' => '8.50', 'renew' => '8.50', 'transfer' => '8.50', 'restore' => '30', 'offer' => false, 'offerTypes' => []],
         ]);
@@ -66,7 +79,7 @@ test('admin sync populates tld pricelist from skrime', function () {
     $response = $this->post(route('admin.domains.tld-pricelist.sync'));
 
     $response->assertRedirect(route('admin.domains.tld-pricelist.index'));
-    $row = TldPricelist::where('tld', 'de')->first();
+    $row = TldPricelist::query()->where('tld', 'de')->first();
     expect($row)->not->toBeNull();
     expect((float) $row->create_price)->toBe(8.5);
 });

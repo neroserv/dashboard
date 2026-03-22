@@ -59,7 +59,7 @@ class SupportController extends Controller
         ];
 
         if (! empty($features['domains_shop'])) {
-            $services['domains'] = $user->resellerDomains()
+            $services['domains'] = $user->resellerDomainsForBrand($user->brand)
                 ->orderBy('domain')
                 ->get(['id', 'domain'])
                 ->map(fn ($d) => ['type' => 'reseller_domain', 'id' => $d->id, 'label' => $d->domain])

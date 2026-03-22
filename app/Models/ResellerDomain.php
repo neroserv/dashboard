@@ -17,6 +17,7 @@ class ResellerDomain extends Model
      */
     protected $fillable = [
         'uuid',
+        'brand_id',
         'domain',
         'user_id',
         'skrime_id',
@@ -48,6 +49,14 @@ class ResellerDomain extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<Brand, ResellerDomain>
+     */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function profitMargin(): float

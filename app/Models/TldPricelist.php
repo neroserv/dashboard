@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TldPricelist extends Model
 {
@@ -12,6 +13,7 @@ class TldPricelist extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'brand_id',
         'tld',
         'create_price',
         'renew_price',
@@ -37,5 +39,13 @@ class TldPricelist extends Model
             'margin_renew_value' => 'decimal:2',
             'margin_transfer_value' => 'decimal:2',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Brand, TldPricelist>
+     */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 }

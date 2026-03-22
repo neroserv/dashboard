@@ -2,24 +2,51 @@
 
 namespace App\Services;
 
+use App\Models\Brand;
 use App\Models\TldPricelist;
 use Illuminate\Support\Facades\Cache;
 
 class DomainPricingService
 {
+    protected ?Brand $brand = null;
+
     public function __construct(
-        protected SkrimeApiService $skrimeApi
+        protected SkrimeApiService $skrimeApi,
+        protected BrandExtensionService $brandExtensionService,
     ) {}
 
+    public function forBrand(Brand $brand): static
+    {
+        $clone = clone $this;
+        $clone->brand = $brand;
+
+        return $clone;
+    }
+
+    protected function effectiveBrand(): ?Brand
+    {
+        return $this->brand ?? Brand::getDefault();
+    }
+
+    protected function skrimeClient(): SkrimeApiService
+    {
+        $brand = $this->effectiveBrand();
+
+        return $brand !== null ? $this->skrimeApi->forBrand($brand) : $this->skrimeApi;
+    }
+
     /**
-     * Get pricelist from Skrime, cached for 1 hour.
+     * Get pricelist from Skrime, cached for 1 hour per brand.
      *
      * @return array<int, array{tld: string, create: string, renew: string, transfer: string, restore: string, offer: bool, offerTypes: array}>
      */
     public function getPricelist(): array
     {
-        return Cache::remember('skrime_pricelist', 3600, function () {
-            return $this->skrimeApi->getPricelist();
+        $brand = $this->effectiveBrand();
+        $keySuffix = $brand?->id ?? 'global';
+
+        return Cache::remember("skrime_pricelist:{$keySuffix}", 3600, function () {
+            return $this->skrimeClient()->getPricelist();
         });
     }
 
@@ -33,7 +60,7 @@ class DomainPricingService
             return 0;
         }
 
-        $row = TldPricelist::query()->where('tld', $tldKey)->first();
+        $row = $this->tldPricelistRow($tldKey);
         if ($row) {
             $price = match ($type) {
                 'renew' => (float) $row->renew_price,
@@ -45,6 +72,17 @@ class DomainPricingService
         }
 
         return $this->getPurchasePriceFromSkrime($tldKey, $type);
+    }
+
+    protected function tldPricelistRow(string $tldKey): ?TldPricelist
+    {
+        $query = TldPricelist::query()->where('tld', $tldKey);
+        $brand = $this->effectiveBrand();
+        if ($brand !== null) {
+            $query->where('brand_id', $brand->id);
+        }
+
+        return $query->first();
     }
 
     /**
@@ -73,7 +111,7 @@ class DomainPricingService
     public function calculateSalePrice(float $purchasePrice, string $tld = '', string $type = 'create'): float
     {
         $tldKey = strtolower(ltrim($tld, '.'));
-        $row = $tldKey !== '' ? TldPricelist::query()->where('tld', $tldKey)->first() : null;
+        $row = $tldKey !== '' ? $this->tldPricelistRow($tldKey) : null;
         if ($row) {
             $marginType = $row->margin_type ?? 'fixed';
             $marginValue = (float) match ($type) {
@@ -88,9 +126,10 @@ class DomainPricingService
             return round($purchasePrice + $marginValue, 2);
         }
 
-        $tlds = config('skrime.tlds', []);
-        $marginType = $tlds[$tldKey]['margin_type'] ?? config('skrime.margin_type', 'fixed');
-        $marginValue = (float) ($tlds[$tldKey]['margin_value'] ?? config('skrime.margin_value', 0));
+        $c = $this->brandExtensionService->skrimeConfigForBrand($this->effectiveBrand());
+        $tlds = $c['tlds'] ?? [];
+        $marginType = $tlds[$tldKey]['margin_type'] ?? $c['margin_type'];
+        $marginValue = (float) ($tlds[$tldKey]['margin_value'] ?? $c['margin_value']);
         if ($marginType === 'percent') {
             return round($purchasePrice * (1 + $marginValue / 100), 2);
         }

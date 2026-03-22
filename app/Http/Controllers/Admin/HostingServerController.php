@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreHostingServerRequest;
 use App\Http\Requests\Admin\UpdateHostingServerRequest;
 use App\Models\Brand;
 use App\Models\HostingServer;
+use App\Services\BrandExtensionService;
 use App\Services\ControlPanels\PleskClient;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\ControlPanels\TeamSpeakClient;
@@ -18,6 +19,10 @@ use Inertia\Response;
 
 class HostingServerController extends Controller
 {
+    public function __construct(
+        protected BrandExtensionService $brandExtensionService,
+    ) {}
+
     protected function currentBrand(Request $request): ?Brand
     {
         $brand = $request->attributes->get('current_brand');
@@ -47,22 +52,9 @@ class HostingServerController extends Controller
         $this->authorize('create', HostingServer::class);
 
         $currentBrand = $this->currentBrand($request);
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false];
-        $allowedPanelTypes = [];
-        if ($brandFeatures['webspace'] ?? false) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
-        $gamingEnabled = ($brandFeatures['gaming'] ?? false) || $currentBrand?->key === 'gaming';
-        if ($gamingEnabled) {
-            $allowedPanelTypes[] = ['value' => 'pterodactyl', 'label' => 'Pterodactyl'];
-        }
-        $teamspeakEnabled = ($brandFeatures['teamspeak'] ?? false) || ($brandFeatures['gaming'] ?? false);
-        if ($teamspeakEnabled) {
-            $allowedPanelTypes[] = ['value' => 'teamspeak', 'label' => 'TeamSpeak'];
-        }
-        if (empty($allowedPanelTypes)) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
+        $allowedPanelTypes = $currentBrand !== null
+            ? $this->brandExtensionService->allowedPanelTypes($currentBrand)
+            : [['value' => 'plesk', 'label' => 'Plesk']];
 
         return Inertia::render('admin/hosting-servers/Create', [
             'allowedPanelTypes' => $allowedPanelTypes,
@@ -161,23 +153,10 @@ class HostingServerController extends Controller
         $this->authorize('update', $hostingServer);
 
         $currentBrand = $this->currentBrand($request);
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false];
-        $allowedPanelTypes = [];
-        if ($brandFeatures['webspace'] ?? false) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
-        $gamingEnabled = ($brandFeatures['gaming'] ?? false) || $currentBrand?->key === 'gaming';
-        if ($gamingEnabled) {
-            $allowedPanelTypes[] = ['value' => 'pterodactyl', 'label' => 'Pterodactyl'];
-        }
-        $teamspeakEnabled = ($brandFeatures['teamspeak'] ?? false) || ($brandFeatures['gaming'] ?? false);
-        $isTeamSpeakServer = ($hostingServer->getAttribute('panel_type') ?? '') === 'teamspeak';
-        if ($teamspeakEnabled || $isTeamSpeakServer) {
-            $allowedPanelTypes[] = ['value' => 'teamspeak', 'label' => 'TeamSpeak'];
-        }
-        if (empty($allowedPanelTypes)) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
+        $panelType = $hostingServer->getAttribute('panel_type') ?? 'plesk';
+        $allowedPanelTypes = $currentBrand !== null
+            ? $this->brandExtensionService->allowedPanelTypesForHostingServerEdit($currentBrand, $panelType)
+            : [['value' => 'plesk', 'label' => 'Plesk']];
 
         $hostingServerData = $hostingServer->toArray();
         $hostingServerData['panel_type'] = $hostingServer->getAttribute('panel_type') ?? 'plesk';

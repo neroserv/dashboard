@@ -186,6 +186,19 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<ResellerDomain>
+     */
+    public function resellerDomainsForBrand(?Brand $brand): HasMany
+    {
+        $relation = $this->hasMany(ResellerDomain::class);
+        if ($brand !== null) {
+            $relation->where('brand_id', $brand->id);
+        }
+
+        return $relation;
+    }
+
+    /**
      * Webspace accounts (Plesk hosting) owned by this user.
      *
      * @return HasMany<WebspaceAccount>

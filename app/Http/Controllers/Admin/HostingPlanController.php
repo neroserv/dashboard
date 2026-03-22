@@ -9,6 +9,7 @@ use App\Models\Brand;
 use App\Models\GameserverCloudPlan;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
+use App\Services\BrandExtensionService;
 use App\Services\ControlPanels\PterodactylClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,10 @@ use Inertia\Response;
 
 class HostingPlanController extends Controller
 {
+    public function __construct(
+        protected BrandExtensionService $brandExtensionService,
+    ) {}
+
     /**
      * Option IDs available for plan_options when panel_type is pterodactyl (same keys as config in Edit form).
      *
@@ -214,26 +219,14 @@ class HostingPlanController extends Controller
         $this->authorize('create', HostingPlan::class);
 
         $currentBrand = $this->currentBrand($request);
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false];
-        $allowedPanelTypes = [];
-        if ($brandFeatures['webspace'] ?? false) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
-        $gamingEnabled = ($brandFeatures['gaming'] ?? false) || $currentBrand?->key === 'gaming';
-        if ($gamingEnabled) {
-            $allowedPanelTypes[] = ['value' => 'pterodactyl', 'label' => 'Pterodactyl'];
-        }
-        $teamspeakEnabled = ($brandFeatures['teamspeak'] ?? false) || ($brandFeatures['gaming'] ?? false);
-        if ($teamspeakEnabled) {
-            $allowedPanelTypes[] = ['value' => 'teamspeak', 'label' => 'TeamSpeak'];
-        }
-        if (empty($allowedPanelTypes)) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
+        $allowedPanelTypes = $currentBrand !== null
+            ? $this->brandExtensionService->allowedPanelTypes($currentBrand)
+            : [['value' => 'plesk', 'label' => 'Plesk']];
 
         $pterodactylHostingServers = HostingServer::query()
             ->where('panel_type', 'pterodactyl')
             ->where('is_active', true)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -241,6 +234,7 @@ class HostingPlanController extends Controller
         $teamspeakHostingServers = HostingServer::query()
             ->where('panel_type', 'teamspeak')
             ->where('is_active', true)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -317,26 +311,15 @@ class HostingPlanController extends Controller
         $this->ensureBrandMatches($request, $hostingPlan->brand_id);
 
         $currentBrand = $this->currentBrand($request);
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? ['webspace' => true, 'gaming' => false];
-        $allowedPanelTypes = [];
-        if ($brandFeatures['webspace'] ?? false) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
-        $gamingEnabled = ($brandFeatures['gaming'] ?? false) || $currentBrand?->key === 'gaming';
-        if ($gamingEnabled) {
-            $allowedPanelTypes[] = ['value' => 'pterodactyl', 'label' => 'Pterodactyl'];
-        }
-        $teamspeakEnabled = ($brandFeatures['teamspeak'] ?? false) || ($brandFeatures['gaming'] ?? false);
-        if ($teamspeakEnabled) {
-            $allowedPanelTypes[] = ['value' => 'teamspeak', 'label' => 'TeamSpeak'];
-        }
-        if (empty($allowedPanelTypes)) {
-            $allowedPanelTypes[] = ['value' => 'plesk', 'label' => 'Plesk'];
-        }
+        $panelType = $hostingPlan->getAttribute('panel_type') ?? 'plesk';
+        $allowedPanelTypes = $currentBrand !== null
+            ? $this->brandExtensionService->allowedPanelTypesForHostingServerEdit($currentBrand, $panelType)
+            : [['value' => 'plesk', 'label' => 'Plesk']];
 
         $pterodactylHostingServers = HostingServer::query()
             ->where('panel_type', 'pterodactyl')
             ->where('is_active', true)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);
@@ -344,6 +327,7 @@ class HostingPlanController extends Controller
         $teamspeakHostingServers = HostingServer::query()
             ->where('panel_type', 'teamspeak')
             ->where('is_active', true)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->orderBy('name')
             ->get(['id', 'name', 'hostname'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name ?? $s->hostname, 'hostname' => $s->hostname]);

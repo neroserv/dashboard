@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Brand;
 use App\Models\GameServerAccount;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -33,7 +34,8 @@ class ConnectGameServerDomainRequest extends FormRequest
             return true;
         }
 
-        $domain = $this->user()?->resellerDomains()->where('uuid', $resellerDomainUuid)->first();
+        $brand = $this->attributes->get('current_brand') ?? Brand::getDefault();
+        $domain = $this->user()?->resellerDomainsForBrand($brand)->where('uuid', $resellerDomainUuid)->first();
 
         return $domain !== null;
     }

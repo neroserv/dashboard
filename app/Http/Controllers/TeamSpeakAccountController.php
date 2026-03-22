@@ -226,8 +226,9 @@ class TeamSpeakAccountController extends Controller
                 ->with('error', 'Domain-Verbindung für TeamSpeak ist nicht konfiguriert. Bitte Support kontaktieren.');
         }
 
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $resellerDomains = $request->user()
-            ->resellerDomains()
+            ->resellerDomainsForBrand($currentBrand)
             ->orderBy('domain')
             ->get()
             ->map(fn (ResellerDomain $d) => ['uuid' => $d->uuid, 'domain' => $d->domain]);
@@ -286,7 +287,7 @@ class TeamSpeakAccountController extends Controller
         $srvName = strtolower($srvService.'.'.$srvProtocol.'.'.$subdomain);
         $srvData = $priority.' '.$weight.' '.$port.' '.$target.'.';
 
-        $skrime = app(SkrimeApiService::class);
+        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
         try {
             $existingRecords = $skrime->getDns($resellerDomain->domain);
             $records = array_map(fn ($r) => [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Requests\Api\CheckDomainAvailabilityRequest;
+use App\Models\Brand;
 use App\Models\TldPricelist;
 use App\Services\DomainPricingService;
 use App\Services\SkrimeApiService;
@@ -28,12 +29,20 @@ class DomainController extends ApiV1Controller
      */
     public function tlds(Request $request, DomainPricingService $pricing): JsonResponse
     {
+        $brand = $this->resolveBrand($request);
+        if ($brand === null) {
+            return response()->json(['message' => 'Brand required'], 422);
+        }
+
+        $pricing = $pricing->forBrand($brand);
+
         $cases = [];
         foreach (self::PRIORITY_TLDS as $i => $tld) {
             $cases[] = "WHEN '".addslashes($tld)."' THEN ".($i + 1);
         }
         $orderCase = 'CASE tld '.implode(' ', $cases).' ELSE '.(count(self::PRIORITY_TLDS) + 1).' END';
         $query = TldPricelist::query()
+            ->where('brand_id', $brand->id)
             ->orderByRaw("{$orderCase} ASC")
             ->orderBy('tld');
 
@@ -79,6 +88,14 @@ class DomainController extends ApiV1Controller
      */
     public function checkAvailability(CheckDomainAvailabilityRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): JsonResponse
     {
+        $brand = $this->resolveBrand($request);
+        if ($brand === null) {
+            return response()->json(['message' => 'Brand required'], 422);
+        }
+
+        $skrime = $skrime->forBrand($brand);
+        $pricing = $pricing->forBrand($brand);
+
         $input = strtolower(trim($request->input('domain')));
         $baseName = $input;
         $searchedTld = null;
@@ -117,7 +134,7 @@ class DomainController extends ApiV1Controller
             $searchedDomain = $checkOne($baseName.'.'.$searchedTld, $searchedTld);
         }
 
-        $allTlds = $this->getOrderedTldList();
+        $allTlds = $this->getOrderedTldList($brand);
         $priorityTlds = array_values(array_intersect(self::PRIORITY_TLDS, $allTlds));
         $otherTlds = array_values(array_diff($allTlds, self::PRIORITY_TLDS));
 
@@ -170,7 +187,7 @@ class DomainController extends ApiV1Controller
     /**
      * @return list<string>
      */
-    private function getOrderedTldList(): array
+    private function getOrderedTldList(Brand $brand): array
     {
         $cases = [];
         foreach (self::PRIORITY_TLDS as $i => $tld) {
@@ -179,6 +196,7 @@ class DomainController extends ApiV1Controller
         $orderCase = 'CASE tld '.implode(' ', $cases).' ELSE '.(count(self::PRIORITY_TLDS) + 1).' END';
 
         return TldPricelist::query()
+            ->where('brand_id', $brand->id)
             ->orderByRaw("{$orderCase} ASC")
             ->orderBy('tld')
             ->pluck('tld')

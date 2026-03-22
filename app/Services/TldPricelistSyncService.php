@@ -2,22 +2,28 @@
 
 namespace App\Services;
 
+use App\Models\Brand;
 use App\Models\TldPricelist;
 
 class TldPricelistSyncService
 {
+    public function __construct(
+        protected BrandExtensionService $brandExtensionService,
+    ) {}
+
     /**
      * Apply pricelist from Skrime (array of rows or object keyed by TLD).
      * Returns number of TLDs processed.
      *
      * @param  array<int|string, array{tld?: string, create?: mixed, renew?: mixed, transfer?: mixed, restore?: mixed}>  $list
      */
-    public function applyPricelist(array $list): int
+    public function applyPricelist(array $list, Brand $brand): int
     {
         $rows = $this->normalizePricelistRows($list);
-        $defaultMarginType = config('skrime.margin_type', 'fixed');
-        $defaultMarginValue = (float) config('skrime.margin_value', 0);
-        $existing = TldPricelist::query()->get()->keyBy('tld');
+        $c = $this->brandExtensionService->skrimeConfigForBrand($brand);
+        $defaultMarginType = $c['margin_type'];
+        $defaultMarginValue = (float) $c['margin_value'];
+        $existing = TldPricelist::query()->where('brand_id', $brand->id)->get()->keyBy('tld');
 
         foreach ($rows as $row) {
             $tld = strtolower(ltrim((string) ($row['tld'] ?? ''), '.'));
@@ -39,6 +45,7 @@ class TldPricelistSyncService
                 ]);
             } else {
                 $new = TldPricelist::create([
+                    'brand_id' => $brand->id,
                     'tld' => $tld,
                     'create_price' => $create,
                     'renew_price' => $renew,

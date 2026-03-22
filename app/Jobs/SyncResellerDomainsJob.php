@@ -19,10 +19,20 @@ class SyncResellerDomainsJob implements ShouldQueue
     {
         ResellerDomain::query()
             ->whereNotNull('skrime_id')
+            ->with('brand')
             ->get()
             ->each(function (ResellerDomain $domain) use ($skrime): void {
+                $brand = $domain->brand;
+                if ($brand === null) {
+                    Log::warning('SyncResellerDomains: missing brand', ['domain' => $domain->domain]);
+
+                    return;
+                }
+
+                $client = $skrime->forBrand($brand);
+
                 try {
-                    $data = $skrime->getProduct(domain: $domain->domain);
+                    $data = $client->getProduct(domain: $domain->domain);
                 } catch (\Throwable $e) {
                     Log::warning('SyncResellerDomains: getProduct failed', [
                         'domain' => $domain->domain,

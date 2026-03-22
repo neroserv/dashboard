@@ -14,13 +14,23 @@ use Inertia\Response as InertiaResponse;
 
 class DomainManageController extends Controller
 {
-    public function show(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime, DomainPricingService $pricing): InertiaResponse|RedirectResponse
+    protected function skrimeFor(ResellerDomain $domain): SkrimeApiService
+    {
+        return app(SkrimeApiService::class)->forBrand($domain->brand);
+    }
+
+    protected function pricingFor(ResellerDomain $domain): DomainPricingService
+    {
+        return app(DomainPricingService::class)->forBrand($domain->brand);
+    }
+
+    public function show(Request $request, ResellerDomain $reseller_domain): InertiaResponse|RedirectResponse
     {
         $this->authorize('view', $reseller_domain);
 
         $nameservers = [];
         try {
-            $result = $skrime->getNameserver($reseller_domain->domain);
+            $result = $this->skrimeFor($reseller_domain)->getNameserver($reseller_domain->domain);
             $nameservers = $result['nameserver'] ?? [];
         } catch (\Throwable) {
             // ignore
@@ -28,7 +38,7 @@ class DomainManageController extends Controller
 
         $renewPrice = null;
         if ($reseller_domain->tld) {
-            $renewPrice = $pricing->getPricingForTld($reseller_domain->tld, 'renew')['sale_price'] ?? null;
+            $renewPrice = $this->pricingFor($reseller_domain)->getPricingForTld($reseller_domain->tld, 'renew')['sale_price'] ?? null;
         }
 
         $domain = [
@@ -88,12 +98,12 @@ class DomainManageController extends Controller
         ]);
     }
 
-    public function authcode(ResellerDomain $reseller_domain, SkrimeApiService $skrime): JsonResponse
+    public function authcode(ResellerDomain $reseller_domain): JsonResponse
     {
         $this->authorize('view', $reseller_domain);
 
         try {
-            $code = $skrime->getAuthcode($reseller_domain->domain);
+            $code = $this->skrimeFor($reseller_domain)->getAuthcode($reseller_domain->domain);
 
             return response()->json(['authcode' => $code]);
         } catch (\Throwable $e) {
@@ -104,10 +114,9 @@ class DomainManageController extends Controller
     public function updateNameserver(
         \App\Http\Requests\UpdateDomainNameserverRequest $request,
         ResellerDomain $reseller_domain,
-        SkrimeApiService $skrime
     ): RedirectResponse {
         try {
-            $skrime->setNameserver($reseller_domain->domain, $request->validated('nameservers'));
+            $this->skrimeFor($reseller_domain)->setNameserver($reseller_domain->domain, $request->validated('nameservers'));
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Nameserver konnten nicht gesetzt werden: '.$e->getMessage());
@@ -117,12 +126,12 @@ class DomainManageController extends Controller
             ->with('success', 'Nameserver aktualisiert.');
     }
 
-    public function dns(ResellerDomain $reseller_domain, SkrimeApiService $skrime): JsonResponse|RedirectResponse
+    public function dns(ResellerDomain $reseller_domain): JsonResponse|RedirectResponse
     {
         $this->authorize('view', $reseller_domain);
 
         try {
-            $records = $skrime->getDns($reseller_domain->domain);
+            $records = $this->skrimeFor($reseller_domain)->getDns($reseller_domain->domain);
 
             return response()->json(['records' => $records]);
         } catch (\Throwable $e) {
@@ -130,7 +139,7 @@ class DomainManageController extends Controller
         }
     }
 
-    public function updateDns(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function updateDns(Request $request, ResellerDomain $reseller_domain): RedirectResponse
     {
         $this->authorize('update', $reseller_domain);
 
@@ -148,7 +157,7 @@ class DomainManageController extends Controller
         ], $request->input('records', []));
 
         try {
-            $skrime->setDns($reseller_domain->domain, $records);
+            $this->skrimeFor($reseller_domain)->setDns($reseller_domain->domain, $records);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'DNS-Zone konnte nicht gespeichert werden: '.$e->getMessage());
@@ -158,12 +167,12 @@ class DomainManageController extends Controller
             ->with('success', 'DNS-Zone aktualisiert.');
     }
 
-    public function getDnssec(ResellerDomain $reseller_domain, SkrimeApiService $skrime): JsonResponse
+    public function getDnssec(ResellerDomain $reseller_domain): JsonResponse
     {
         $this->authorize('view', $reseller_domain);
 
         try {
-            $data = $skrime->getDnssec($reseller_domain->domain);
+            $data = $this->skrimeFor($reseller_domain)->getDnssec($reseller_domain->domain);
 
             return response()->json($data);
         } catch (\Throwable $e) {
@@ -171,7 +180,7 @@ class DomainManageController extends Controller
         }
     }
 
-    public function setDnssec(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function setDnssec(Request $request, ResellerDomain $reseller_domain): RedirectResponse
     {
         $this->authorize('update', $reseller_domain);
 
@@ -182,7 +191,7 @@ class DomainManageController extends Controller
         ]);
 
         try {
-            $skrime->setDnssec($reseller_domain->domain, [
+            $this->skrimeFor($reseller_domain)->setDnssec($reseller_domain->domain, [
                 'flags' => (int) $request->input('flags'),
                 'algorithm' => (int) $request->input('algorithm'),
                 'publicKey' => $request->input('publicKey'),
@@ -196,12 +205,12 @@ class DomainManageController extends Controller
             ->with('success', 'DNSSEC aktiviert.');
     }
 
-    public function deleteDnssec(ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function deleteDnssec(ResellerDomain $reseller_domain): RedirectResponse
     {
         $this->authorize('update', $reseller_domain);
 
         try {
-            $skrime->deleteDnssec($reseller_domain->domain);
+            $this->skrimeFor($reseller_domain)->deleteDnssec($reseller_domain->domain);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'DNSSEC konnte nicht deaktiviert werden: '.$e->getMessage());
@@ -211,7 +220,7 @@ class DomainManageController extends Controller
             ->with('success', 'DNSSEC deaktiviert.');
     }
 
-    public function renew(ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function renew(ResellerDomain $reseller_domain): RedirectResponse
     {
         $this->authorize('update', $reseller_domain);
 
@@ -221,7 +230,7 @@ class DomainManageController extends Controller
         }
 
         try {
-            $data = $skrime->renewProduct(domain: $reseller_domain->domain);
+            $data = $this->skrimeFor($reseller_domain)->renewProduct(domain: $reseller_domain->domain);
             $reseller_domain->update([
                 'expires_at' => isset($data['expireAt']) ? \Carbon\Carbon::parse($data['expireAt']) : null,
             ]);
@@ -234,7 +243,7 @@ class DomainManageController extends Controller
             ->with('success', 'Domain verlängert.');
     }
 
-    public function setAutoRenew(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function setAutoRenew(Request $request, ResellerDomain $reseller_domain): RedirectResponse
     {
         $this->authorize('update', $reseller_domain);
 
@@ -247,7 +256,7 @@ class DomainManageController extends Controller
         }
 
         try {
-            $skrime->setAutoRenew($enabled, domain: $reseller_domain->domain);
+            $this->skrimeFor($reseller_domain)->setAutoRenew($enabled, domain: $reseller_domain->domain);
             $reseller_domain->update(['auto_renew' => $enabled]);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
@@ -258,12 +267,12 @@ class DomainManageController extends Controller
             ->with('success', $enabled ? 'Auto-Verlängerung aktiviert.' : 'Auto-Verlängerung deaktiviert.');
     }
 
-    public function getContact(ResellerDomain $reseller_domain, SkrimeApiService $skrime): JsonResponse
+    public function getContact(ResellerDomain $reseller_domain): JsonResponse
     {
         $this->authorize('view', $reseller_domain);
 
         try {
-            $data = $skrime->getContact($reseller_domain->domain);
+            $data = $this->skrimeFor($reseller_domain)->getContact($reseller_domain->domain);
 
             return response()->json($data);
         } catch (\Throwable $e) {
@@ -274,7 +283,6 @@ class DomainManageController extends Controller
     public function updateContact(
         \App\Http\Requests\UpdateDomainContactRequest $request,
         ResellerDomain $reseller_domain,
-        SkrimeApiService $skrime
     ): RedirectResponse {
         $contact = $request->validated('contact');
         $normalized = [
@@ -294,7 +302,7 @@ class DomainManageController extends Controller
         }
 
         try {
-            $skrime->setContact($reseller_domain->domain, $normalized);
+            $this->skrimeFor($reseller_domain)->setContact($reseller_domain->domain, $normalized);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Kontaktdaten konnten nicht gespeichert werden: '.$e->getMessage());
@@ -307,12 +315,11 @@ class DomainManageController extends Controller
     public function updateWhoisPrivacy(
         UpdateDomainWhoisRequest $request,
         ResellerDomain $reseller_domain,
-        SkrimeApiService $skrime
     ): JsonResponse {
         $privacy = $request->validated('privacy');
 
         try {
-            $data = $skrime->updateWhoisPrivacy($reseller_domain->domain, $privacy);
+            $data = $this->skrimeFor($reseller_domain)->updateWhoisPrivacy($reseller_domain->domain, $privacy);
 
             return response()->json([
                 'response' => 'Successfully updated whois settings',

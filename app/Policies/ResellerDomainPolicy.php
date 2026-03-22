@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 
@@ -14,6 +15,11 @@ class ResellerDomainPolicy
 
     public function view(User $user, ResellerDomain $resellerDomain): bool
     {
+        $brand = request()->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($brand !== null && $resellerDomain->brand_id !== $brand->id) {
+            return false;
+        }
+
         return $resellerDomain->userCan($user, 'view');
     }
 
@@ -24,6 +30,11 @@ class ResellerDomainPolicy
 
     public function update(User $user, ResellerDomain $resellerDomain): bool
     {
+        $brand = request()->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($brand !== null && $resellerDomain->brand_id !== $brand->id) {
+            return false;
+        }
+
         return $resellerDomain->isOwnedBy($user)
             || $resellerDomain->hasSharedAccess($user, 'contact')
             || $resellerDomain->hasSharedAccess($user, 'whois')

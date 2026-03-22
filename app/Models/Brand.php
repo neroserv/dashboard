@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, BrandExtension> $brandExtensions
+ */
 class Brand extends Model
 {
     /**
@@ -58,6 +61,36 @@ class Brand extends Model
     public function partners(): HasMany
     {
         return $this->hasMany(Partner::class);
+    }
+
+    /**
+     * @return HasMany<BrandExtension>
+     */
+    public function brandExtensions(): HasMany
+    {
+        return $this->hasMany(BrandExtension::class);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function installedExtensionKeys(): array
+    {
+        return BrandExtension::query()
+            ->where('brand_id', $this->id)
+            ->whereNotNull('installed_at')
+            ->pluck('extension')
+            ->values()
+            ->all();
+    }
+
+    public function hasInstalledExtension(string $extension): bool
+    {
+        return BrandExtension::query()
+            ->where('brand_id', $this->id)
+            ->where('extension', $extension)
+            ->whereNotNull('installed_at')
+            ->exists();
     }
 
     /**
@@ -148,6 +181,20 @@ class Brand extends Model
         }
         if (isset($features['balance_period_months']) && is_numeric($features['balance_period_months'])) {
             $defaults['balance_period_months'] = max(1, min(24, (int) $features['balance_period_months']));
+        }
+
+        $installed = array_flip($this->installedExtensionKeys());
+        if (isset($installed[BrandExtension::EXTENSION_TEAMSPEAK])) {
+            $defaults['teamspeak'] = true;
+        }
+        if (isset($installed[BrandExtension::EXTENSION_PTERODACTYL])) {
+            $defaults['gaming'] = true;
+        }
+        if (isset($installed[BrandExtension::EXTENSION_PLESK])) {
+            $defaults['webspace'] = true;
+        }
+        if (isset($installed[BrandExtension::EXTENSION_SKRIME])) {
+            $defaults['domains_shop'] = true;
         }
 
         return $defaults;

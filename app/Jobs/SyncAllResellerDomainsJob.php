@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Services\DomainPricingService;
 use App\Services\SkrimeApiService;
@@ -18,12 +19,23 @@ class SyncAllResellerDomainsJob implements ShouldQueue
 
     public int $timeout = 300;
 
+    public function __construct(
+        public int $brandId,
+    ) {}
+
     public function handle(SkrimeApiService $skrime, DomainPricingService $pricing): void
     {
+        $brand = Brand::query()->findOrFail($this->brandId);
+        $skrime = $skrime->forBrand($brand);
+        $pricing = $pricing->forBrand($brand);
+
         try {
             $products = $skrime->getProducts('domain');
         } catch (\Throwable $e) {
-            Log::error('SyncAllResellerDomainsJob: getProducts failed', ['error' => $e->getMessage()]);
+            Log::error('SyncAllResellerDomainsJob: getProducts failed', [
+                'brand_id' => $this->brandId,
+                'error' => $e->getMessage(),
+            ]);
 
             throw $e;
         }
@@ -46,8 +58,15 @@ class SyncAllResellerDomainsJob implements ShouldQueue
             $autoRenew = (bool) ($data['autoRenew'] ?? false);
             $tld = substr(strrchr($domainName, '.'), 1) ?: null;
 
-            $existing = ResellerDomain::query()->where('domain', $domainName)->first()
-                ?? ($skrimeId ? ResellerDomain::query()->where('skrime_id', $skrimeId)->first() : null);
+            $existing = ResellerDomain::query()
+                ->where('brand_id', $brand->id)
+                ->where(function ($q) use ($domainName, $skrimeId) {
+                    $q->where('domain', $domainName);
+                    if ($skrimeId) {
+                        $q->orWhere('skrime_id', $skrimeId);
+                    }
+                })
+                ->first();
 
             if ($existing) {
                 $existing->update([
@@ -69,6 +88,7 @@ class SyncAllResellerDomainsJob implements ShouldQueue
                     }
                 }
                 ResellerDomain::create([
+                    'brand_id' => $brand->id,
                     'domain' => $domainName,
                     'user_id' => null,
                     'skrime_id' => $skrimeId,
@@ -85,6 +105,7 @@ class SyncAllResellerDomainsJob implements ShouldQueue
         }
 
         Log::info('SyncAllResellerDomainsJob: completed', [
+            'brand_id' => $this->brandId,
             'total' => count($products),
             'created' => $created,
             'updated' => $updated,

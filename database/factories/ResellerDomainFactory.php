@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,6 +24,12 @@ class ResellerDomainFactory extends Factory
         $name = fake()->unique()->domainWord();
 
         return [
+            'brand_id' => Brand::query()->value('id') ?? Brand::query()->create([
+                'key' => 'factory-'.fake()->unique()->slug(2),
+                'name' => 'Factory Brand',
+                'domains' => ['localhost.test'],
+                'is_default' => ! Brand::query()->exists(),
+            ])->id,
             'domain' => $name.'.'.fake()->randomElement(['de', 'com', 'net']),
             'user_id' => null,
             'skrime_id' => null,

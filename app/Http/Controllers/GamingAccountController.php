@@ -307,8 +307,9 @@ class GamingAccountController extends Controller
                 ->with('error', 'Dieser Server hat keine Subdomain. Eigene Domain ist nur bei Servern mit Subdomain möglich.');
         }
 
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $resellerDomains = $request->user()
-            ->resellerDomains()
+            ->resellerDomainsForBrand($currentBrand)
             ->orderBy('domain')
             ->get()
             ->map(fn (ResellerDomain $d) => ['uuid' => $d->uuid, 'domain' => $d->domain]);
@@ -410,7 +411,7 @@ class GamingAccountController extends Controller
         $port = $nodeAndPort['port'];
         $srvData = '0 5 '.$port.' '.$target.'.';
 
-        $skrime = app(SkrimeApiService::class);
+        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
         try {
             $existingRecords = $skrime->getDns($resellerDomain->domain);
             $records = array_map(fn ($r) => [

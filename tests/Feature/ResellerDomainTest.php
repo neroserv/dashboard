@@ -1,9 +1,18 @@
 <?php
 
+use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use App\Services\SkrimeApiService;
 use Illuminate\Support\Facades\Cache;
+
+beforeEach(function () {
+    Brand::query()->create([
+        'key' => 'reseller-domain-test',
+        'name' => 'Reseller Domain Test',
+        'is_default' => true,
+    ]);
+});
 
 test('admin can access domains index', function () {
     $admin = User::factory()->create(['is_admin' => true]);
@@ -24,7 +33,9 @@ test('non-admin cannot access admin domains index', function () {
 });
 
 test('authenticated user can access my domains', function () {
-    $user = User::factory()->create();
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+    $user = User::factory()->create(['brand_id' => $brand->id]);
     $this->actingAs($user);
 
     $response = $this->get(route('domains.index'));
@@ -48,17 +59,25 @@ test('reseller domain profit margin is calculated correctly', function () {
 });
 
 test('customer can view own domain manage page', function () {
-    $user = User::factory()->create();
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+    $user = User::factory()->create(['brand_id' => $brand->id]);
     $domain = ResellerDomain::factory()->create([
+        'brand_id' => $brand->id,
         'user_id' => $user->id,
         'domain' => 'example.de',
         'tld' => 'de',
     ]);
 
     $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
         $mock->shouldReceive('getNameserver')->once()->with('example.de')->andReturn(['nameserver' => ['ns1.example.com', 'ns2.example.com']]);
     });
-    Cache::put('skrime_pricelist', [['tld' => 'de', 'renew' => '10', 'create' => '10', 'transfer' => '10', 'restore' => '10', 'offer' => false, 'offerTypes' => []]], 3600);
+    Cache::put(
+        'skrime_pricelist:'.$domain->brand_id,
+        [['tld' => 'de', 'renew' => '10', 'create' => '10', 'transfer' => '10', 'restore' => '10', 'offer' => false, 'offerTypes' => []]],
+        3600
+    );
 
     $this->actingAs($user);
     $response = $this->get(route('domains.manage.show', $domain));
@@ -68,9 +87,12 @@ test('customer can view own domain manage page', function () {
 });
 
 test('customer cannot view another users domain manage page', function () {
-    $owner = User::factory()->create();
-    $other = User::factory()->create();
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+    $owner = User::factory()->create(['brand_id' => $brand->id]);
+    $other = User::factory()->create(['brand_id' => $brand->id]);
     $domain = ResellerDomain::factory()->create([
+        'brand_id' => $brand->id,
         'user_id' => $owner->id,
         'domain' => 'example.de',
     ]);

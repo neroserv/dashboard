@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignResellerDomainCustomerRequest;
 use App\Http\Requests\Admin\UpdateResellerDomainNameserverRequest;
 use App\Jobs\SyncAllResellerDomainsJob;
+use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use App\Services\DomainPricingService;
@@ -18,8 +19,18 @@ use Inertia\Response;
 
 class ResellerDomainController extends Controller
 {
+    protected function currentBrand(Request $request): ?Brand
+    {
+        return $request->attributes->get('current_brand') ?? Brand::getDefault();
+    }
+
     public function import(Request $request, SkrimeApiService $skrime): RedirectResponse
     {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.domains.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
         $request->validate([
             'domain' => ['required_without:product_id', 'nullable', 'string', 'max:253'],
             'product_id' => ['required_without:domain', 'nullable', 'string', 'max:36'],
@@ -28,6 +39,9 @@ class ResellerDomainController extends Controller
         $domain = $request->input('domain');
         $productId = $request->input('product_id');
         $userId = $request->input('user_id');
+
+        $skrime = $skrime->forBrand($brand);
+        $pricing = app(DomainPricingService::class)->forBrand($brand);
 
         try {
             $data = $skrime->getProduct($productId, $domain);
@@ -40,7 +54,7 @@ class ResellerDomainController extends Controller
         if (! $domainName) {
             return redirect()->route('admin.domains.index')->with('error', 'Domain konnte nicht ermittelt werden.');
         }
-        if (ResellerDomain::where('domain', $domainName)->exists()) {
+        if (ResellerDomain::query()->where('brand_id', $brand->id)->where('domain', $domainName)->exists()) {
             return redirect()->route('admin.domains.index')->with('error', 'Domain '.$domainName.' ist bereits in der Liste.');
         }
 
@@ -49,13 +63,14 @@ class ResellerDomainController extends Controller
         $purchasePrice = null;
         $salePrice = null;
         if ($tld) {
-            $pricing = app(DomainPricingService::class)->getPricingForTld($tld, 'create');
-            if ($pricing['purchase_price'] > 0) {
-                $purchasePrice = $pricing['purchase_price'];
-                $salePrice = $pricing['sale_price'];
+            $pricingInfo = $pricing->getPricingForTld($tld, 'create');
+            if ($pricingInfo['purchase_price'] > 0) {
+                $purchasePrice = $pricingInfo['purchase_price'];
+                $salePrice = $pricingInfo['sale_price'];
             }
         }
         ResellerDomain::create([
+            'brand_id' => $brand->id,
             'domain' => $domainName,
             'user_id' => $userId ?: null,
             'skrime_id' => $data['id'] ?? null,
@@ -71,9 +86,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.index')->with('success', 'Domain '.$domainName.' wurde importiert.');
     }
 
-    public function syncFromSkrime(): RedirectResponse
+    public function syncFromSkrime(Request $request): RedirectResponse
     {
-        SyncAllResellerDomainsJob::dispatch();
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.domains.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        SyncAllResellerDomainsJob::dispatch($brand->id);
 
         return redirect()->route('admin.domains.index')->with(
             'success',
@@ -83,7 +103,14 @@ class ResellerDomainController extends Controller
 
     public function index(Request $request, DomainPricingService $pricing): Response
     {
-        $query = ResellerDomain::query()->with('user:id,name,email');
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            abort(404, 'Keine Marke zugeordnet.');
+        }
+
+        $pricing = $pricing->forBrand($brand);
+
+        $query = ResellerDomain::query()->where('brand_id', $brand->id)->with('user:id,name,email');
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
@@ -117,8 +144,8 @@ class ResellerDomainController extends Controller
             ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email]);
 
         $stats = [
-            'total' => ResellerDomain::query()->count(),
-            'without_skrime' => ResellerDomain::query()->whereNull('skrime_id')->count(),
+            'total' => ResellerDomain::query()->where('brand_id', $brand->id)->count(),
+            'without_skrime' => ResellerDomain::query()->where('brand_id', $brand->id)->whereNull('skrime_id')->count(),
         ];
 
         return Inertia::render('admin/domains/Index', [
@@ -137,10 +164,17 @@ class ResellerDomainController extends Controller
     public function show(ResellerDomain $reseller_domain, DomainPricingService $pricing): Response|RedirectResponse
     {
         $reseller_domain->load('user:id,name,email');
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+
+        $pricing = $pricing->forBrand($brand);
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
 
         $nameservers = [];
         try {
-            $result = app(SkrimeApiService::class)->getNameserver($reseller_domain->domain);
+            $result = $skrime->getNameserver($reseller_domain->domain);
             $nameservers = $result['nameserver'] ?? [];
         } catch (\Throwable) {
             // ignore
@@ -177,8 +211,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.show', $reseller_domain)->with('success', 'Kunde zugewiesen.');
     }
 
-    public function renew(ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function renew(ResellerDomain $reseller_domain): RedirectResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         if (! $reseller_domain->skrime_id) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'Domain hat keine Skrime-ID.');
         }
@@ -195,8 +235,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.show', $reseller_domain)->with('success', 'Domain verlängert.');
     }
 
-    public function setAutoRenew(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function setAutoRenew(Request $request, ResellerDomain $reseller_domain): RedirectResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         $request->validate(['auto_renew' => ['required', 'boolean']]);
         $enabled = (bool) $request->input('auto_renew');
 
@@ -214,8 +260,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.show', $reseller_domain)->with('success', $enabled ? 'Auto-Verlängerung aktiviert.' : 'Auto-Verlängerung deaktiviert.');
     }
 
-    public function authcode(ResellerDomain $reseller_domain, SkrimeApiService $skrime): JsonResponse
+    public function authcode(ResellerDomain $reseller_domain): JsonResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            return response()->json(['error' => 'Ungültige Domain.'], 404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         try {
             $code = $skrime->getAuthcode($reseller_domain->domain);
 
@@ -232,8 +284,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.show', $reseller_domain)->with('success', 'Domain als gekündigt markiert.');
     }
 
-    public function updateNameserver(UpdateResellerDomainNameserverRequest $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function updateNameserver(UpdateResellerDomainNameserverRequest $request, ResellerDomain $reseller_domain): RedirectResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         try {
             $skrime->setNameserver($reseller_domain->domain, $request->validated('nameservers'));
         } catch (\Throwable $e) {
@@ -243,8 +301,14 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.show', $reseller_domain)->with('success', 'Nameserver aktualisiert.');
     }
 
-    public function dns(ResellerDomain $reseller_domain, SkrimeApiService $skrime): Response|RedirectResponse
+    public function dns(ResellerDomain $reseller_domain): Response|RedirectResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         try {
             $records = $skrime->getDns($reseller_domain->domain);
         } catch (\Throwable $e) {
@@ -257,8 +321,14 @@ class ResellerDomainController extends Controller
         ]);
     }
 
-    public function updateDns(Request $request, ResellerDomain $reseller_domain, SkrimeApiService $skrime): RedirectResponse
+    public function updateDns(Request $request, ResellerDomain $reseller_domain): RedirectResponse
     {
+        $brand = $reseller_domain->brand;
+        if ($brand === null) {
+            abort(404);
+        }
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+
         $request->validate([
             'records' => ['required', 'array'],
             'records.*.name' => ['required', 'string', 'max:255'],

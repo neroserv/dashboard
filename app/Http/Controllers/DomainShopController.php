@@ -34,8 +34,10 @@ class DomainShopController extends Controller
     public function index(Request $request): InertiaResponse
     {
         $user = $request->user();
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $domains = ResellerDomain::query()
             ->viewableBy($user)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->latest('created_at')
             ->get()
             ->map(fn (ResellerDomain $d) => array_merge($d->only(['uuid', 'domain', 'status', 'expires_at', 'auto_renew']), [
@@ -57,6 +59,13 @@ class DomainShopController extends Controller
 
     public function checkAvailability(CheckDomainAvailabilityRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): JsonResponse
     {
+        $brand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($brand === null) {
+            return response()->json(['results' => [], 'message' => 'Brand required'], 422);
+        }
+        $skrime = $skrime->forBrand($brand);
+        $pricing = $pricing->forBrand($brand);
+
         $baseName = strtolower(trim($request->input('domain')));
         $tlds = $request->input('tlds', ['de', 'com', 'net', 'io']);
         $results = [];
@@ -132,7 +141,12 @@ class DomainShopController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
-        if (ResellerDomain::where('domain', $data['domain'])->exists()) {
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($currentBrand === null) {
+            return redirect()->route('domains.search')->with('error', 'Marke konnte nicht ermittelt werden.');
+        }
+
+        if (ResellerDomain::query()->where('brand_id', $currentBrand->id)->where('domain', $data['domain'])->exists()) {
             return redirect()->route('domains.search')->with('error', 'Diese Domain ist bereits registriert.');
         }
 
@@ -156,9 +170,9 @@ class DomainShopController extends Controller
             }
         }
 
-        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
-        $brandFeatures = $currentBrand?->getFeaturesArray() ?? [];
+        $brandFeatures = $currentBrand->getFeaturesArray();
         $paymentMethod = $data['payment_method'] ?? 'mollie';
+        $skrimeForBrand = $skrime->forBrand($currentBrand);
 
         if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
             try {
@@ -170,19 +184,18 @@ class DomainShopController extends Controller
                     ->with('error', $e->getMessage());
             }
 
-            if (! config('skrime.api_key') || ! config('skrime.base_url')) {
+            if (! $skrimeForBrand->isConfigured()) {
                 Log::warning('Domain checkout balance: Skrime API nicht konfiguriert.');
 
                 return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte kontaktieren Sie uns.');
             }
 
             $domain = $data['domain'];
-            $nameservers = config('skrime.default_nameservers', []);
             $isTransfer = ! empty($data['transfer']);
             $authCode = $isTransfer ? trim((string) ($data['auth_code'] ?? '')) : null;
 
             try {
-                $orderData = $skrime->orderDomain($domain, $contact, $nameservers, $authCode);
+                $orderData = $skrimeForBrand->orderDomain($domain, $contact, [], $authCode);
             } catch (\Throwable $e) {
                 Log::error('Domain checkout balance: Skrime orderDomain fehlgeschlagen.', [
                     'domain' => $domain,
@@ -196,6 +209,7 @@ class DomainShopController extends Controller
             $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
             $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
             ResellerDomain::create([
+                'brand_id' => $currentBrand->id,
                 'domain' => $data['domain'],
                 'user_id' => $user->id,
                 'skrime_id' => $skrimeId,
@@ -224,6 +238,7 @@ class DomainShopController extends Controller
 
         $token = Str::random(32);
         $request->session()->put('domain_checkout_'.$token, [
+            'brand_id' => $currentBrand->id,
             'domain' => $data['domain'],
             'tld' => $data['tld'] ?? null,
             'sale_price' => $salePrice,
@@ -321,23 +336,28 @@ class DomainShopController extends Controller
             return redirect()->route('domains.index')->with('error', 'Checkout-Daten abgelaufen oder ungültig.');
         }
 
-        if (! config('skrime.api_key') || ! config('skrime.base_url')) {
+        $brand = isset($payload['brand_id']) ? Brand::query()->find((int) $payload['brand_id']) : null;
+        $brand ??= $request->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($brand === null) {
+            return redirect()->route('domains.index')->with('error', 'Marke konnte nicht ermittelt werden.');
+        }
+
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        if (! $skrime->isConfigured()) {
             Log::warning('Domain checkout: Skrime API nicht konfiguriert (SKRIME_API_TOKEN / SKRIME_API_URL in .env).');
 
             return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte SKRIME_API_TOKEN und SKRIME_API_URL in .env setzen.');
         }
 
-        $skrime = app(SkrimeApiService::class);
         $domain = $payload['domain'];
-        $nameservers = config('skrime.default_nameservers', []);
         $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers), 'transfer' => ! empty($payload['transfer'])]);
+        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
 
         try {
             $orderData = $skrime->orderDomain(
                 $domain,
                 $payload['contact'],
-                $nameservers,
+                [],
                 $authCode
             );
             Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
@@ -355,6 +375,7 @@ class DomainShopController extends Controller
         $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
         $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
         ResellerDomain::create([
+            'brand_id' => $brand->id,
             'domain' => $payload['domain'],
             'user_id' => $user->id,
             'skrime_id' => $skrimeId,
@@ -391,23 +412,28 @@ class DomainShopController extends Controller
             return redirect()->route('domains.index')->with('error', 'Checkout-Daten ungültig.');
         }
 
-        if (! config('skrime.api_key') || ! config('skrime.base_url')) {
+        $brand = isset($payload['brand_id']) ? Brand::query()->find((int) $payload['brand_id']) : null;
+        $brand ??= $request->attributes->get('current_brand') ?? Brand::getDefault();
+        if ($brand === null) {
+            return redirect()->route('domains.index')->with('error', 'Marke konnte nicht ermittelt werden.');
+        }
+
+        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        if (! $skrime->isConfigured()) {
             Log::warning('Domain checkout: Skrime API nicht konfiguriert (SKRIME_API_TOKEN / SKRIME_API_URL in .env).');
 
             return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte SKRIME_API_TOKEN und SKRIME_API_URL in .env setzen.');
         }
 
         $domain = $payload['domain'];
-        $nameservers = config('skrime.default_nameservers', []);
         $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'nameservers_count' => count($nameservers), 'transfer' => ! empty($payload['transfer'])]);
+        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
 
         try {
-            $skrime = app(SkrimeApiService::class);
             $orderData = $skrime->orderDomain(
                 $domain,
                 $payload['contact'],
-                $nameservers,
+                [],
                 $authCode
             );
             Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
@@ -425,6 +451,7 @@ class DomainShopController extends Controller
         $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
         $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
         ResellerDomain::create([
+            'brand_id' => $brand->id,
             'domain' => $payload['domain'],
             'user_id' => $user->id,
             'skrime_id' => $skrimeId,

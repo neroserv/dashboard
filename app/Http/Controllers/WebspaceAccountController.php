@@ -181,8 +181,9 @@ class WebspaceAccountController extends Controller
                 ->with('error', 'Für diesen Hosting-Server ist keine Bind-Vorlage hinterlegt. Bitte Support kontaktieren.');
         }
 
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $resellerDomains = $request->user()
-            ->resellerDomains()
+            ->resellerDomainsForBrand($currentBrand)
             ->orderBy('domain')
             ->get()
             ->map(fn (ResellerDomain $d) => ['uuid' => $d->uuid, 'domain' => $d->domain]);
@@ -211,9 +212,11 @@ class WebspaceAccountController extends Controller
             'reseller_domain_uuid' => ['required', 'string', 'exists:reseller_domains,uuid'],
         ]);
 
+        $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $resellerDomain = ResellerDomain::query()
             ->where('uuid', $request->validated('reseller_domain_uuid'))
             ->where('user_id', $request->user()->id)
+            ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->firstOrFail();
 
         $webspaceAccount->load('hostingServer');
@@ -239,7 +242,7 @@ class WebspaceAccountController extends Controller
                 ->with('error', 'In der Vorlage wurden keine DNS-Einträge erkannt.');
         }
 
-        $skrime = app(SkrimeApiService::class);
+        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
         try {
             $existing = $skrime->getDns($domain);
             $existingByKey = [];

@@ -2,19 +2,50 @@
 
 namespace App\Services;
 
+use App\Models\Brand;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class SkrimeApiService
 {
+    protected ?Brand $brand = null;
+
+    public function __construct(
+        protected BrandExtensionService $brandExtensionService,
+    ) {}
+
+    public function forBrand(Brand $brand): static
+    {
+        $clone = clone $this;
+        $clone->brand = $brand;
+
+        return $clone;
+    }
+
+    /**
+     * Whether API URL and token are set (after brand extension / .env merge).
+     */
+    public function isConfigured(): bool
+    {
+        $c = $this->brandExtensionService->skrimeConfigForBrand($this->brand);
+
+        $url = trim((string) ($c['base_url'] ?? ''));
+        $key = $c['api_key'] ?? null;
+
+        return $url !== '' && $key !== null && trim((string) $key) !== '';
+    }
+
     protected function client(): PendingRequest
     {
-        return Http::withToken(config('skrime.api_key'))
+        $c = $this->brandExtensionService->skrimeConfigForBrand($this->brand);
+        $token = (string) ($c['api_key'] ?? '');
+
+        return Http::withToken($token)
             ->acceptJson()
             ->contentType('application/json')
-            ->timeout(config('skrime.timeout', 30))
-            ->baseUrl(rtrim(config('skrime.base_url'), '/'));
+            ->timeout((int) ($c['timeout'] ?? 30))
+            ->baseUrl(rtrim((string) ($c['base_url'] ?? ''), '/'));
     }
 
     /**
@@ -77,10 +108,11 @@ class SkrimeApiService
         array $nameservers = [],
         ?string $authCode = null
     ): array {
+        $c = $this->brandExtensionService->skrimeConfigForBrand($this->brand);
         $payload = [
             'domain' => $domain,
             'contact' => $contact,
-            'nameserver' => $nameservers ?: config('skrime.default_nameservers'),
+            'nameserver' => $nameservers ?: ($c['default_nameservers'] ?? []),
             'tos' => true,
             'cancellation' => true,
         ];

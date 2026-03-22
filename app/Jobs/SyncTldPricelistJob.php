@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Brand;
 use App\Services\SkrimeApiService;
 use App\Services\TldPricelistSyncService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,17 +17,27 @@ class SyncTldPricelistJob implements ShouldQueue
 
     public int $timeout = 300;
 
+    public function __construct(
+        public int $brandId,
+    ) {}
+
     public function handle(SkrimeApiService $skrime, TldPricelistSyncService $sync): void
     {
+        $brand = Brand::query()->findOrFail($this->brandId);
+        $skrime = $skrime->forBrand($brand);
+
         try {
             $list = $skrime->getPricelist();
         } catch (\Throwable $e) {
-            Log::error('SyncTldPricelistJob: getPricelist failed', ['error' => $e->getMessage()]);
+            Log::error('SyncTldPricelistJob: getPricelist failed', [
+                'brand_id' => $this->brandId,
+                'error' => $e->getMessage(),
+            ]);
 
             throw $e;
         }
 
-        $count = $sync->applyPricelist($list);
-        Log::info('SyncTldPricelistJob: completed', ['count' => $count]);
+        $count = $sync->applyPricelist($list, $brand);
+        Log::info('SyncTldPricelistJob: completed', ['brand_id' => $this->brandId, 'count' => $count]);
     }
 }

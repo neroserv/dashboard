@@ -299,10 +299,13 @@ function buildAdminMenuItems(
     hp('admin.customers') ||
     hp('admin.groups') ||
     hp('admin.permissions') ||
-    hp('admin.update')
+    hp('admin.update') ||
+    hp('admin.brand-extensions')
   ) {
     const system: MenuItemType[] = []
     system.push({ slug: 'admin-api', label: 'API', url: '/admin/api', icon: 'settings-2' })
+    if (hp('admin.brand-extensions'))
+      system.push({ slug: 'admin-brand-extensions', label: 'Erweiterungen', url: '/admin/brand-extensions', icon: 'puzzle' })
     if (hp('admin.settings')) system.push({ slug: 'admin-settings', label: 'Einstellungen', url: '/admin/settings', icon: 'settings-2' })
     if (hp('admin.jobs-monitor')) system.push({ slug: 'admin-jobs', label: 'Jobs-Monitor', url: '/admin/jobs-monitor', icon: 'settings-2' })
     if (hp('admin.cron-statistics')) system.push({ slug: 'admin-cron', label: 'Cron / Worker-Statistik', url: '/admin/cron-statistics', icon: 'settings-2' })

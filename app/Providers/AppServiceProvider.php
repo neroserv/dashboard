@@ -4,9 +4,15 @@ namespace App\Providers;
 
 use App\Listeners\LogUserEmailToPostfach;
 use App\Listeners\SendLoginNotification;
+use App\Models\Brand;
+use App\Models\Invoice;
+use App\Models\InvoiceLineItem;
+use App\Models\ResellerDomain;
 use App\Models\Setting;
 use App\Notifications\Channels\DiscordChannel;
 use App\Notifications\Channels\TransactionalMailChannel;
+use App\Observers\InvoiceLineItemObserver;
+use App\Observers\InvoiceObserver;
 use App\Services\DiscordApiService;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
@@ -19,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -41,8 +48,25 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Invoice::observe(InvoiceObserver::class);
+        InvoiceLineItem::observe(InvoiceLineItemObserver::class);
+
         $this->configureDefaults();
         $this->configureApiRateLimiting();
+        $this->configureRouteModelBinding();
+    }
+
+    protected function configureRouteModelBinding(): void
+    {
+        Route::bind('reseller_domain', function (string $value) {
+            $brand = request()->attributes->get('current_brand') ?? Brand::getDefault();
+            $query = ResellerDomain::query()->where('uuid', $value);
+            if ($brand !== null) {
+                $query->where('brand_id', $brand->id);
+            }
+
+            return $query->firstOrFail();
+        });
     }
 
     protected function configureApiRateLimiting(): void

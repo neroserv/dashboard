@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateTldPricelistBulkRequest;
 use App\Jobs\SyncTldPricelistJob;
+use App\Models\Brand;
 use App\Models\TldPricelist;
 use App\Services\DomainPricingService;
 use Illuminate\Http\RedirectResponse;
@@ -14,9 +15,21 @@ use Inertia\Response;
 
 class TldPricelistController extends Controller
 {
+    protected function currentBrand(Request $request): ?Brand
+    {
+        return $request->attributes->get('current_brand') ?? Brand::getDefault();
+    }
+
     public function index(Request $request, DomainPricingService $pricing): Response
     {
-        $query = TldPricelist::query()->orderBy('tld');
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            abort(404, 'Keine Marke zugeordnet.');
+        }
+
+        $pricing = $pricing->forBrand($brand);
+
+        $query = TldPricelist::query()->where('brand_id', $brand->id)->orderBy('tld');
 
         if ($request->filled('search')) {
             $search = strtolower(ltrim($request->string('search')->trim()->toString(), '.'));
@@ -60,9 +73,14 @@ class TldPricelistController extends Controller
         ]);
     }
 
-    public function sync(): RedirectResponse
+    public function sync(Request $request): RedirectResponse
     {
-        SyncTldPricelistJob::dispatch();
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.domains.tld-pricelist.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        SyncTldPricelistJob::dispatch($brand->id);
 
         return redirect()->route('admin.domains.tld-pricelist.index')->with(
             'success',
@@ -72,6 +90,11 @@ class TldPricelistController extends Controller
 
     public function bulk(UpdateTldPricelistBulkRequest $request): RedirectResponse
     {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.domains.tld-pricelist.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
         $tlds = $request->validated('tlds', []);
         $marginType = $request->validated('margin_type');
         $marginValue = (float) $request->validated('margin_value');
@@ -80,7 +103,7 @@ class TldPricelistController extends Controller
         $marginRenewValue = ($marginRenewRaw !== '' && $marginRenewRaw !== null) ? (float) $marginRenewRaw : null;
         $marginTransferValue = ($marginTransferRaw !== '' && $marginTransferRaw !== null) ? (float) $marginTransferRaw : null;
 
-        $query = TldPricelist::query();
+        $query = TldPricelist::query()->where('brand_id', $brand->id);
         if (! empty($tlds)) {
             $query->whereIn('tld', array_map('strtolower', $tlds));
         }

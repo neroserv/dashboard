@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(PermissionSeeder::class);
         $this->call(BrandSeeder::class);
+        $this->call(BrandExtensionSeeder::class);
         $this->call(TicketEmailTemplateSeeder::class);
         $this->call(TicketMessageTemplateSeeder::class);
     }
