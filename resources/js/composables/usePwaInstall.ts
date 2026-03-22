@@ -1,5 +1,18 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 
+/** True on iPhone, iPod, and iPad (including iPadOS reporting as MacIntel + touch). */
+export function isIosLikeDevice(): boolean {
+    if (typeof navigator === 'undefined') {
+        return false;
+    }
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/i.test(ua)) {
+        return true;
+    }
+
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
 /** Chromium fires this before showing the install mini-infobar; calling preventDefault allows a custom install button. */
 export interface BeforeInstallPromptEvent extends Event {
     prompt: () => Promise<void>;
@@ -53,8 +66,15 @@ export function usePwaInstall() {
         }
     });
 
+    const isIosLike = computed(() => isIosLikeDevice());
+
     const canUseInstallPrompt = computed(
-        () => deferredPrompt.value !== null && !isStandalone.value && typeof window !== 'undefined' && 'serviceWorker' in navigator,
+        () =>
+            !isIosLike.value &&
+            deferredPrompt.value !== null &&
+            !isStandalone.value &&
+            typeof window !== 'undefined' &&
+            'serviceWorker' in navigator,
     );
 
     async function promptInstall(): Promise<void> {
@@ -76,6 +96,7 @@ export function usePwaInstall() {
     return {
         isStandalone,
         installBusy,
+        isIosLike,
         canUseInstallPrompt,
         promptInstall,
         refreshStandalone,

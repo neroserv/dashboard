@@ -33,6 +33,20 @@
               In diesem Browser sind Service Worker nicht verfügbar – eine Installation als PWA ist nicht möglich.
             </div>
             <template v-else>
+              <div v-if="isIosLike" class="alert alert-info small mb-3 mb-md-4" role="status">
+                <p class="mb-2">
+                  <strong>iPhone / iPad:</strong> Safari bietet keinen „App installieren“-Button auf der Seite – das ist normal.
+                  Die Verknüpfung legen Sie über das Teilen-Menü an.
+                </p>
+                <ol class="mb-2 ps-3">
+                  <li>Seite in <strong>Safari</strong> öffnen (nicht Chrome/Firefox auf dem Gerät – dort fehlt „Zum Home-Bildschirm“ oft).</li>
+                  <li>Unten die <strong>Teilen-Taste</strong> <span class="text-nowrap">(□↑)</span> antippen.</li>
+                  <li>In der Liste nach unten scrollen und <em>Zum Home-Bildschirm</em> wählen (ggf. unter „Weitere Aktionen“).</li>
+                </ol>
+                <p class="mb-0 text-muted">
+                  Wenn der Eintrag fehlt: Teilen-Liste ganz nach unten ziehen, oder unter „Aktionen bearbeiten“ aktivieren.
+                </p>
+              </div>
               <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
                 <BButton
                   v-if="canUseInstallPrompt"
@@ -49,15 +63,13 @@
                   <span v-else>App installieren</span>
                 </BButton>
               </div>
-              <p v-if="!canUseInstallPrompt && serviceWorkerSupported" class="text-muted small mb-2 mb-md-3">
+              <p
+                v-if="!isIosLike && !canUseInstallPrompt && serviceWorkerSupported"
+                class="text-muted small mb-2 mb-md-3"
+              >
                 <strong>Chrome / Edge / Android:</strong> Nutzen Sie das Install-Symbol in der Adressleiste oder das Menü (⋮) →
                 <em>App installieren</em> bzw. <em>Als App installieren</em>. Der Button erscheint, sobald der Browser die App
                 als installierbar einstuft (einmal die Seite neu laden kann helfen).
-              </p>
-              <p class="text-muted small mb-0">
-                <strong>iPhone / iPad (Safari):</strong> Teilen-Taste
-                <span class="text-nowrap">(□↑)</span>
-                → <em>Zum Home-Bildschirm</em>. Anschließend die App von dort öffnen.
               </p>
             </template>
           </template>
@@ -219,7 +231,7 @@ const props = defineProps<{
 const page = usePage();
 const flash = computed(() => page.props.flash as { success?: string; error?: string });
 
-const { isStandalone, installBusy, canUseInstallPrompt, promptInstall } = usePwaInstall();
+const { isStandalone, installBusy, isIosLike, canUseInstallPrompt, promptInstall } = usePwaInstall();
 
 const serviceWorkerSupported = typeof window !== 'undefined' && 'serviceWorker' in navigator;
 

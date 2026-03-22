@@ -36,6 +36,20 @@ test('inertia shares app icon url when set on brand', function () {
     );
 });
 
+test('html includes apple-mobile-web-app-title from default brand', function () {
+    Brand::create([
+        'key' => 'pwa-title-brand',
+        'name' => 'Praxis PWA Title',
+        'domains' => null,
+        'is_default' => true,
+    ]);
+
+    $this->get(route('login'))
+        ->assertOk()
+        ->assertSee('name="apple-mobile-web-app-title"', false)
+        ->assertSee('content="Praxis PWA Title"', false);
+});
+
 test('brand persists auth_card_bg_url', function () {
     $brand = Brand::create([
         'key' => 'auth-bg-brand',
