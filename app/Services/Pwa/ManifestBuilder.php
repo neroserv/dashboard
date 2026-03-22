@@ -4,6 +4,7 @@ namespace App\Services\Pwa;
 
 use App\Models\Brand;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 final class ManifestBuilder
 {
@@ -40,7 +41,8 @@ final class ManifestBuilder
             ],
         ];
 
-        $startUrl = url('/');
+        // Stable start URL; trailing slash avoids scope/start_url mismatches in Chromium.
+        $startUrl = Str::finish(url('/'), '/');
 
         return [
             'id' => $startUrl,
@@ -48,7 +50,8 @@ final class ManifestBuilder
             'short_name' => $shortName,
             'description' => is_array($brand?->seo) ? (string) ($brand->seo['meta_description'] ?? '') : '',
             'start_url' => $startUrl,
-            'scope' => $startUrl,
+            // Path-relative scope = entire origin (not a single document URL; that breaks installability).
+            'scope' => '/',
             'display' => 'standalone',
             'background_color' => $backgroundColor,
             'theme_color' => $themeColor,
