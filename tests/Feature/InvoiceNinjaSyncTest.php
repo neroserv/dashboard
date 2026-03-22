@@ -161,3 +161,71 @@ test('skips sync when only pdf_path is updated', function () {
 
     Http::assertSentCount(2);
 });
+
+test('uses the only brand with invoice ninja when the user belongs to a different brand without the extension', function () {
+    $brandWithoutNinja = Brand::query()->create([
+        'key' => 'brand-no-nj-'.uniqid('', true),
+        'name' => 'Brand ohne Ninja',
+        'is_default' => true,
+    ]);
+
+    $brandWithNinja = Brand::query()->create([
+        'key' => 'brand-with-nj-'.uniqid('', true),
+        'name' => 'Brand mit Ninja',
+        'is_default' => false,
+    ]);
+
+    BrandExtension::query()->create([
+        'brand_id' => $brandWithNinja->id,
+        'extension' => BrandExtension::EXTENSION_INVOICE_NINJA,
+        'installed_at' => now(),
+        'settings' => [
+            'base_url' => 'https://ninja-fallback.test',
+            'api_token' => 'token-b',
+        ],
+    ]);
+
+    Http::fake([
+        'https://ninja-fallback.test/api/v1/clients' => Http::response(['data' => ['id' => 'cl_fb']], 200),
+        'https://ninja-fallback.test/api/v1/invoices' => Http::response(['data' => ['id' => 'inv_fb']], 200),
+    ]);
+    Http::preventStrayRequests();
+
+    $user = User::factory()->create([
+        'brand_id' => $brandWithoutNinja->id,
+        'name' => 'Kunde A',
+        'email' => 'kunde-a@example.test',
+        'street' => 'Weg 1',
+        'street_number' => '1',
+        'postal_code' => '12345',
+        'city' => 'Ort',
+        'state' => 'ST',
+        'country' => 'DE',
+        'phone' => '+490000',
+    ]);
+
+    $invoice = Invoice::create([
+        'user_id' => $user->id,
+        'number' => 'INV-FB-001',
+        'type' => 'manual',
+        'amount' => 12,
+        'tax' => 0,
+        'status' => 'draft',
+        'invoice_date' => now(),
+    ]);
+
+    InvoiceLineItem::create([
+        'invoice_id' => $invoice->id,
+        'position' => 1,
+        'description' => 'Pos',
+        'quantity' => 1,
+        'unit' => 'Stück',
+        'unit_price' => 12,
+        'amount' => 12,
+    ]);
+
+    $invoice->refresh();
+
+    expect($invoice->metadata['invoice_ninja_invoice_id'] ?? null)->toBe('inv_fb');
+    Http::assertSentCount(2);
+});

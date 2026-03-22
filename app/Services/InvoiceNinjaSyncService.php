@@ -27,31 +27,13 @@ class InvoiceNinjaSyncService
             return;
         }
 
-        $brand = $user->brand ?? Brand::getDefault();
+        $brand = $this->resolveBrandForInvoiceNinjaSync($user);
         if ($brand === null) {
-            $this->logSkip('no_brand_resolved', [
+            $this->logSkip('invoice_ninja_extension_not_installed', [
                 'invoice_id' => $invoice->id,
                 'user_id' => $user->id,
                 'user_brand_id' => $user->brand_id,
-            ]);
-
-            return;
-        }
-
-        if (! $this->brandExtensionService->isInstalled($brand, BrandExtension::EXTENSION_INVOICE_NINJA)) {
-            $this->logSkip('invoice_ninja_extension_not_installed', [
-                'invoice_id' => $invoice->id,
-                'brand_id' => $brand->id,
-            ]);
-
-            return;
-        }
-
-        if ($this->brandExtensionService->invoiceNinjaConfigForBrand($brand) === null) {
-            $this->logSkip('invoice_ninja_not_configured', [
-                'invoice_id' => $invoice->id,
-                'brand_id' => $brand->id,
-                'hint' => 'Set base_url and api_token in brand extension settings.',
+                'hint' => 'No brand has Invoice Ninja installed with base_url and api_token, or multiple brands are configured and none could be chosen unambiguously.',
             ]);
 
             return;
@@ -304,6 +286,56 @@ class InvoiceNinjaSyncService
         $meta['invoice_ninja_synced_at'] = now()->toIso8601String();
 
         $invoice->forceFill(['metadata' => $meta])->saveQuietly();
+    }
+
+    /**
+     * Prefer the customer's brand (or app default), then fall back when that brand has no Invoice Ninja integration.
+     *
+     * If exactly one brand in the system has Invoice Ninja installed and configured, use it (covers admins on
+     * brand A while IN is only set up on brand B). If several brands have IN, prefer default brand, then user's brand.
+     */
+    protected function resolveBrandForInvoiceNinjaSync(User $user): ?Brand
+    {
+        $preferred = $user->brand ?? Brand::getDefault();
+
+        if ($preferred !== null && $this->invoiceNinjaReady($preferred)) {
+            return $preferred;
+        }
+
+        $readyBrands = [];
+        foreach (Brand::query()->orderBy('id')->get() as $candidate) {
+            if ($this->invoiceNinjaReady($candidate)) {
+                $readyBrands[] = $candidate;
+            }
+        }
+
+        if ($readyBrands === []) {
+            return null;
+        }
+
+        if (count($readyBrands) === 1) {
+            return $readyBrands[0];
+        }
+
+        $default = Brand::getDefault();
+        foreach ($readyBrands as $candidate) {
+            if ($default !== null && $candidate->id === $default->id) {
+                return $candidate;
+            }
+        }
+
+        Log::warning('Invoice Ninja: multiple brands have Invoice Ninja configured; using lowest brand id', [
+            'ready_brand_ids' => array_map(fn (Brand $b) => $b->id, $readyBrands),
+            'user_brand_id' => $user->brand_id,
+        ]);
+
+        return $readyBrands[0];
+    }
+
+    protected function invoiceNinjaReady(Brand $brand): bool
+    {
+        return $this->brandExtensionService->isInstalled($brand, BrandExtension::EXTENSION_INVOICE_NINJA)
+            && $this->brandExtensionService->invoiceNinjaConfigForBrand($brand) !== null;
     }
 
     /**
