@@ -120,10 +120,11 @@
 
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
 import { BButton, BCard, BCardBody, BCardHeader, BCol, BForm, BFormCheckbox, BFormInput, BFormRadio, BFormSelect, BRow } from 'bootstrap-vue-next'
-import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import { computed } from 'vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import { formatWebspaceQuotaNumber } from '@/lib/webspaceQuotaDisplay'
 
 type HostingPlan = {
   id: number
@@ -194,7 +195,7 @@ const planOptions = computed(() => [
   { value: '' as number | '', text: 'Bitte wählen' },
   ...props.hostingPlans.map((p) => ({
     value: p.id,
-    text: `${p.name} – ${p.price} €/Monat (${p.disk_gb} GB / ${p.traffic_gb} GB Traffic)`,
+    text: `${p.name} – ${p.price} €/Monat (${formatWebspaceQuotaNumber(p.disk_gb)} GB / ${formatWebspaceQuotaNumber(p.traffic_gb)} GB Traffic)`,
   })),
 ])
 

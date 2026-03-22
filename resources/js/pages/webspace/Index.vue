@@ -31,13 +31,15 @@
               </div>
               <h5 class="mb-0">{{ plan.name }}</h5>
             </div>
-            <p class="text-muted small mb-3">{{ plan.disk_gb }} GB NVMe · {{ plan.traffic_gb }} GB Traffic/Monat</p>
+            <p class="text-muted small mb-3">
+              {{ q(plan.disk_gb) }} GB NVMe · {{ q(plan.traffic_gb) }} GB Traffic/Monat
+            </p>
             <ul class="list-unstyled small text-muted mb-3">
-              <li>{{ plan.disk_gb }} GB NVMe Webspace</li>
-              <li>{{ plan.traffic_gb }} GB Traffic im Monat</li>
-              <li>{{ plan.domains }} Domain / {{ plan.subdomains }} Subdomains</li>
-              <li>{{ plan.mailboxes }} Mailpostfächer</li>
-              <li>{{ plan.databases }} Datenbanken</li>
+              <li>{{ q(plan.disk_gb) }} GB NVMe Webspace</li>
+              <li>{{ q(plan.traffic_gb) }} GB Traffic im Monat</li>
+              <li>{{ q(plan.domains) }} Domain / {{ q(plan.subdomains) }} Subdomains</li>
+              <li>{{ q(plan.mailboxes) }} Mailpostfächer</li>
+              <li>{{ q(plan.databases) }} Datenbanken</li>
             </ul>
             <p class="mb-3">
               <span class="fs-4 fw-semibold">{{ plan.price }} €</span>
@@ -64,11 +66,12 @@
 
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
-import { computed } from 'vue'
 import { BCol, BCard, BCardBody, BFormSelect, BRow } from 'bootstrap-vue-next'
-import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import { computed } from 'vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import Icon from '@/components/wrappers/Icon.vue'
+import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import { formatWebspaceQuotaNumber } from '@/lib/webspaceQuotaDisplay'
 
 type HostingPlan = {
   id: number
@@ -94,6 +97,8 @@ const props = defineProps<{
 const panelSelectOptions = computed(() =>
   props.available_webspace_panels.map((p) => ({ value: p.value, text: p.label })),
 )
+
+const q = formatWebspaceQuotaNumber
 
 function onPanelChange(v: string | number | null): void {
   if (v === null || v === undefined || v === '') {
