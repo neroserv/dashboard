@@ -28,6 +28,8 @@ test('manifest reflects brand resolved from host', function () {
         ->assertHeader('Content-Type', 'application/manifest+json')
         ->assertJsonPath('name', 'Alpha PWA Brand')
         ->assertJsonPath('scope', '/')
+        ->assertJsonPath('start_url', 'http://alpha-pwa.test/')
+        ->assertJsonPath('id', 'http://alpha-pwa.test/')
         ->assertJsonStructure(['id', 'name', 'short_name', 'start_url', 'icons']);
 
     $this->get('http://beta-pwa.test/manifest.json')
@@ -50,5 +52,7 @@ test('manifest icon src prefers app_icon_url over logo', function () {
     $response = $this->get('http://manifest-appicon.test/manifest.json');
     $response->assertOk();
     $src = $response->json('icons.0.src');
-    expect($src)->toBeString()->toContain('pwa-square');
+    expect($src)->toBeString()
+        ->toContain('pwa-square')
+        ->toContain('manifest-appicon.test');
 });

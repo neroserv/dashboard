@@ -4,7 +4,6 @@ namespace App\Services\Pwa;
 
 use App\Models\Brand;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 final class ManifestBuilder
 {
@@ -15,7 +14,12 @@ final class ManifestBuilder
     {
         $name = $brand?->name ?? config('app.name', 'PVA');
         $shortName = $this->shortName($brand, $name);
-        $iconUrl = BrandMediaUrl::appIconAbsolute($brand) ?? url('/favicon.svg');
+        $iconUrl = BrandMediaUrl::appIconAbsolute($brand, $request)
+            ?? BrandMediaUrl::absoluteUrlForPwa('/favicon.svg', $request)
+            ?? url('/favicon.svg');
+
+        $origin = rtrim($request->getSchemeAndHttpHost(), '/');
+        $startUrl = str($origin.'/')->finish('/');
 
         $themeColor = '#2563eb';
         $backgroundColor = '#ffffff';
@@ -40,9 +44,6 @@ final class ManifestBuilder
                 'purpose' => 'any',
             ],
         ];
-
-        // Stable start URL; trailing slash avoids scope/start_url mismatches in Chromium.
-        $startUrl = Str::finish(url('/'), '/');
 
         return [
             'id' => $startUrl,

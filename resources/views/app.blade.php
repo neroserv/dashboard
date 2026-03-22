@@ -15,7 +15,9 @@
 
         @php
             $pwaBrand = request()->attributes->get('current_brand') ?? \App\Models\Brand::getDefault();
-            $pwaTouchIcon = \App\Services\Pwa\BrandMediaUrl::appIconAbsolute($pwaBrand) ?? asset('favicon.svg');
+            $pwaTouchIcon = \App\Services\Pwa\BrandMediaUrl::appIconAbsolute($pwaBrand, request())
+                ?? \App\Services\Pwa\BrandMediaUrl::absoluteUrlForPwa('/favicon.svg', request())
+                ?? asset('favicon.svg');
             $pwaThemeColor = '#2563eb';
             if ($pwaBrand !== null && is_array($pwaBrand->theme_colors) && ! empty($pwaBrand->theme_colors['primary']) && is_string($pwaBrand->theme_colors['primary'])) {
                 $pwaThemeColor = $pwaBrand->theme_colors['primary'];
