@@ -11,7 +11,7 @@
     </div>
 
     <BCard no-body class="mb-4 position-relative overflow-hidden">
-      <BCardHeader>
+      <BCardHeader style="padding-top: var(--theme-card-spacer-y); padding-left: var(--theme-card-spacer-x);">
         <h5 class="mb-0">Verfügbarkeit prüfen</h5>
         <p class="text-muted small mb-0">
           Geben Sie einen Namen ein (z.&nbsp;B. <span class="font-monospace">beispiel</span>) oder inklusive Endung
@@ -83,19 +83,13 @@
               </p>
             </div>
             <div class="col-12 mt-3">
-              <a
-                class="btn btn-success w-100 d-inline-flex align-items-center justify-content-center gap-2"
-                :href="skrimeOrderUrl(highlightCard.domain)"
-                target="_blank"
-                rel="noopener noreferrer"
+              <BButton
+                variant="success"
+                class="w-100 d-inline-flex align-items-center justify-content-center gap-2"
+                @click="goToCheckout(highlightCard)"
               >
                 <Icon icon="rocket" class="flex-shrink-0" />
-                Bestellen (Skrime)
-              </a>
-            </div>
-            <div class="col-12 mt-2">
-              <BButton variant="outline-primary" class="w-100" @click="goToCheckout(highlightCard)">
-                Im Panel zur Kasse
+                Jetzt bestellen
               </BButton>
             </div>
           </div>
@@ -104,7 +98,7 @@
     </AnimatePresence>
 
     <BCard v-if="listResults.length > 0" no-body>
-      <BCardHeader>
+      <BCardHeader style="padding-top: var(--theme-card-spacer-y); padding-left: var(--theme-card-spacer-x);">
         <h5 class="mb-0">Alle Ergebnisse</h5>
         <p class="text-muted small mb-0">Verfügbarkeit und Preise</p>
       </BCardHeader>
@@ -302,10 +296,6 @@ const listResults = computed(() => {
 
 function formatEuro(n: number): string {
   return n.toFixed(2).replace('.', ',')
-}
-
-function skrimeOrderUrl(domain: string): string {
-  return `https://skrime.eu/order/domain/${encodeURIComponent(domain)}`
 }
 
 async function search() {
