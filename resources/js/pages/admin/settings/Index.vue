@@ -60,6 +60,7 @@ type Brand = {
     features: Record<string, boolean | number> | null;
     salutation: string | null;
     seo: Record<string, string> | null;
+    maintenance?: { enabled?: boolean } | null;
 };
 
 type PaginationLink = { url: string | null; label: string; active: boolean };
@@ -102,11 +103,31 @@ type Props = {
     ticketPriorities: { data: TicketPriority[]; links: PaginationLink[] };
     ticketMessageTemplates: TicketMessageTemplate[];
     initialTab: string;
+    maintenanceSettings?: {
+        maintenance_global_enabled: boolean;
+        maintenance_global_message: string;
+        maintenance_global_until: string;
+        maintenance_toggle_cooldown_minutes: string;
+        maintenance_global_toggled_at: string;
+    };
+    maintenancePermissions?: {
+        canView: boolean;
+        canUpdate: boolean;
+    };
 };
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    maintenanceSettings: () => ({
+        maintenance_global_enabled: false,
+        maintenance_global_message: '',
+        maintenance_global_until: '',
+        maintenance_toggle_cooldown_minutes: '0',
+        maintenance_global_toggled_at: '',
+    }),
+    maintenancePermissions: () => ({ canView: false, canUpdate: false }),
+});
 
-const validTabs = ['allgemein', 'sicherheit', 'rechnung', 'mahnung', 'domains', 'mail', 'support', 'vorlagen', 'marken'];
+const validTabs = ['allgemein', 'sicherheit', 'rechnung', 'mahnung', 'domains', 'mail', 'support', 'vorlagen', 'wartung', 'marken'];
 const activeTab = ref(validTabs.includes(props.initialTab) ? props.initialTab : 'allgemein');
 
 const form = useForm({
@@ -134,6 +155,34 @@ const form = useForm({
     support_enabled: props.settings.support_enabled ?? true,
     support_max_open_tickets_per_user: props.settings.support_max_open_tickets_per_user ?? '0',
 });
+
+const maintenanceForm = useForm({
+    maintenance_global_enabled: props.maintenanceSettings.maintenance_global_enabled,
+    maintenance_global_message: props.maintenanceSettings.maintenance_global_message,
+    maintenance_global_until: props.maintenanceSettings.maintenance_global_until,
+    maintenance_toggle_cooldown_minutes: props.maintenanceSettings.maintenance_toggle_cooldown_minutes,
+});
+
+function submitMaintenance() {
+    maintenanceForm
+        .transform((data) => ({
+            ...data,
+            maintenance_global_enabled: Boolean(data.maintenance_global_enabled),
+            maintenance_toggle_cooldown_minutes: Number.parseInt(String(data.maintenance_toggle_cooldown_minutes), 10) || 0,
+        }))
+        .put('/admin/settings/maintenance', { preserveScroll: true });
+}
+
+function formatMaintenanceToggledAt(iso: string): string {
+    if (!iso) {
+        return '';
+    }
+    try {
+        return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+    } catch {
+        return iso;
+    }
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
@@ -256,6 +305,13 @@ function salutationLabel(salutation: string | null): string {
                         <BNavItem :active="activeTab === 'mail'" @click="activeTab = 'mail'">Mail</BNavItem>
                         <BNavItem :active="activeTab === 'support'" @click="activeTab = 'support'">Support</BNavItem>
                         <BNavItem :active="activeTab === 'vorlagen'" @click="activeTab = 'vorlagen'">Vorlagen</BNavItem>
+                        <BNavItem
+                            v-if="maintenancePermissions.canView"
+                            :active="activeTab === 'wartung'"
+                            @click="activeTab = 'wartung'"
+                        >
+                            Wartung
+                        </BNavItem>
                         <BNavItem :active="activeTab === 'marken'" @click="activeTab = 'marken'">Marken</BNavItem>
                     </BNav>
 
@@ -650,6 +706,87 @@ function salutationLabel(salutation: string | null): string {
                         </BCard>
                     </div>
 
+                    <div v-show="activeTab === 'wartung'">
+                        <BCard no-body class="mb-4">
+                            <BCardHeader>
+                                <BCardTitle class="mb-0">Wartungsmodus</BCardTitle>
+                                <p class="text-muted small mb-0 mt-1">
+                                    <strong>Globaler Schalter</strong> gilt für alle Marken (hat Vorrang vor markenspezifischer
+                                    Wartung). Zusätzlich kann pro Marke unter „Marken“ bearbeitet werden (eigene Berechtigung).
+                                    Kunden- und API-Zugriff wird mit 503 blockiert; das Admin-Panel unter
+                                    <code>/admin</code> bleibt erreichbar. Bearbeitbar mit „Wartungsmodus“- oder
+                                    „Einstellungen bearbeiten“-Recht.
+                                </p>
+                            </BCardHeader>
+                            <BCardBody>
+                                <BForm @submit.prevent="submitMaintenance">
+                                    <fieldset :disabled="!maintenancePermissions.canUpdate">
+                                        <BFormGroup>
+                                            <BFormCheckbox
+                                                id="maintenance_global_enabled"
+                                                v-model="maintenanceForm.maintenance_global_enabled"
+                                                :aria-invalid="!!maintenanceForm.errors.maintenance_global_enabled"
+                                            >
+                                                Globaler Wartungsmodus aktiv
+                                            </BFormCheckbox>
+                                            <InputError :message="maintenanceForm.errors.maintenance_global_enabled" />
+                                        </BFormGroup>
+                                        <BFormGroup label="Hinweistext (optional)" label-for="maintenance_global_message">
+                                            <BFormTextarea
+                                                id="maintenance_global_message"
+                                                v-model="maintenanceForm.maintenance_global_message"
+                                                rows="3"
+                                                placeholder="Kurze Information für Besucher"
+                                                :aria-invalid="!!maintenanceForm.errors.maintenance_global_message"
+                                            />
+                                            <InputError :message="maintenanceForm.errors.maintenance_global_message" />
+                                        </BFormGroup>
+                                        <BFormGroup label="Geplantes Ende (optional)" label-for="maintenance_global_until">
+                                            <BFormInput
+                                                id="maintenance_global_until"
+                                                v-model="maintenanceForm.maintenance_global_until"
+                                                type="datetime-local"
+                                                :aria-invalid="!!maintenanceForm.errors.maintenance_global_until"
+                                            />
+                                            <InputError :message="maintenanceForm.errors.maintenance_global_until" />
+                                            <p class="text-muted small mb-0 mt-1">Leer lassen für unbegrenzte Wartung.</p>
+                                        </BFormGroup>
+                                        <BFormGroup label="Cooldown (Minuten)" label-for="maintenance_toggle_cooldown_minutes">
+                                            <BFormInput
+                                                id="maintenance_toggle_cooldown_minutes"
+                                                v-model="maintenanceForm.maintenance_toggle_cooldown_minutes"
+                                                type="number"
+                                                min="0"
+                                                max="10080"
+                                                class="w-auto"
+                                                style="max-width: 8rem"
+                                                :aria-invalid="!!maintenanceForm.errors.maintenance_toggle_cooldown_minutes"
+                                            />
+                                            <InputError :message="maintenanceForm.errors.maintenance_toggle_cooldown_minutes" />
+                                            <p class="text-muted small mb-0 mt-1">
+                                                Mindestabstand zwischen Änderungen am globalen Wartungsschalter oder an
+                                                markenspezifischer Wartung (0 = kein Cooldown).
+                                            </p>
+                                        </BFormGroup>
+                                        <InputError :message="maintenanceForm.errors.maintenance" />
+                                        <p v-if="maintenanceSettings.maintenance_global_toggled_at" class="text-muted small mb-0">
+                                            Letzte Änderung (global): {{ formatMaintenanceToggledAt(maintenanceSettings.maintenance_global_toggled_at) }}
+                                        </p>
+                                    </fieldset>
+                                    <div class="mt-3">
+                                        <BButton
+                                            type="submit"
+                                            variant="primary"
+                                            :disabled="maintenanceForm.processing || !maintenancePermissions.canUpdate"
+                                        >
+                                            Speichern
+                                        </BButton>
+                                    </div>
+                                </BForm>
+                            </BCardBody>
+                        </BCard>
+                    </div>
+
                     <div v-show="activeTab === 'vorlagen'">
                         <BCard no-body class="mb-4">
                             <BCardHeader class="d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -774,6 +911,7 @@ function salutationLabel(salutation: string | null): string {
                                                 <div class="d-flex flex-wrap align-items-center gap-2">
                                                     <span class="h5 mb-0">{{ brand.name }}</span>
                                                     <BBadge v-if="brand.is_default" variant="secondary">Standard</BBadge>
+                                                    <BBadge v-if="brand.maintenance?.enabled" variant="warning">Wartung</BBadge>
                                                 </div>
                                                 <p class="text-muted small mb-1">{{ brand.key }}</p>
                                                 <div v-if="firstDomains(brand.domains).length" class="small text-muted d-flex align-items-center gap-1 flex-wrap">

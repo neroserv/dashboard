@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateBrandRequest;
 use App\Models\Brand;
+use App\Services\MaintenanceService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,47 +19,29 @@ class BrandController extends Controller
         return redirect()->route('admin.settings.index', ['tab' => 'marken']);
     }
 
-    public function edit(Brand $brand): Response
+    public function edit(Request $request, Brand $brand): Response
     {
+        $user = $request->user();
+
         return Inertia::render('admin/brands/Edit', [
             'brand' => $brand,
+            'maintenancePermissions' => [
+                'canView' => $user !== null && (
+                    $user->hasPermission('admin.maintenance')
+                    || $user->hasPermission('admin.maintenance.view')
+                    || $user->hasPermission('admin.maintenance.update')
+                ),
+                'canUpdate' => $user !== null && (
+                    $user->hasPermission('admin.maintenance')
+                    || $user->hasPermission('admin.maintenance.update')
+                ),
+            ],
         ]);
     }
 
-    public function update(Request $request, Brand $brand): RedirectResponse
+    public function update(UpdateBrandRequest $request, Brand $brand, MaintenanceService $maintenanceService): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'domains' => ['nullable', 'array'],
-            'domains.*' => ['string', 'max:255'],
-            'admin_domains' => ['nullable', 'array'],
-            'admin_domains.*' => ['string', 'max:255'],
-            'is_default' => ['boolean'],
-            'logo_url' => ['nullable', 'string', 'max:500'],
-            'logo_collapsed_url' => ['nullable', 'string', 'max:500'],
-            'app_icon_url' => ['nullable', 'string', 'max:500'],
-            'auth_card_bg_url' => ['nullable', 'string', 'max:500'],
-            'theme_colors' => ['nullable', 'array'],
-            'theme_colors.*' => ['nullable', 'string', 'max:50'],
-            'features' => ['nullable', 'array'],
-            'features.prepaid_balance' => ['boolean'],
-            'features.balance_topup' => ['boolean'],
-            'features.balance_period_months' => ['nullable', 'integer', 'min:1', 'max:24'],
-            'salutation' => ['nullable', 'string', 'in:formal,informal'],
-            'mail_header' => ['nullable', 'string', 'max:2000'],
-            'mail_footer' => ['nullable', 'string', 'max:2000'],
-            'seo' => ['nullable', 'array'],
-            'seo.favicon_url' => ['nullable', 'string', 'max:500'],
-            'seo.meta_description' => ['nullable', 'string', 'max:1000'],
-            'seo.meta_robots' => ['nullable', 'string', 'max:100'],
-            'seo.theme_color' => ['nullable', 'string', 'max:50'],
-            'seo.og_type' => ['nullable', 'string', 'max:50'],
-            'seo.og_site_name' => ['nullable', 'string', 'max:255'],
-            'seo.og_title' => ['nullable', 'string', 'max:255'],
-            'seo.og_description' => ['nullable', 'string', 'max:1000'],
-            'seo.og_image' => ['nullable', 'string', 'max:500'],
-            'seo.og_locale' => ['nullable', 'string', 'max:20'],
-        ]);
+        $validated = $request->validated();
 
         if (isset($validated['domains'])) {
             $validated['domains'] = array_values(array_filter(array_map('trim', $validated['domains'])));
@@ -77,6 +62,36 @@ class BrandController extends Controller
 
         if (isset($validated['features'])) {
             $validated['features'] = array_merge($brand->features ?? [], $validated['features']);
+        }
+
+        $canMaint = $request->user()?->hasPermission('admin.maintenance')
+            || $request->user()?->hasPermission('admin.maintenance.update');
+
+        if ($canMaint && isset($validated['maintenance'])) {
+            $prev = $maintenanceService->normalizedBrandMaintenance($brand);
+            $incomingFlat = [
+                'enabled' => (bool) ($validated['maintenance']['enabled'] ?? false),
+                'message' => array_key_exists('message', $validated['maintenance'])
+                    ? ($validated['maintenance']['message'] !== null ? (string) $validated['maintenance']['message'] : null)
+                    : null,
+                'until' => $validated['maintenance']['until'] ?? null,
+            ];
+            $changed = $maintenanceService->brandMaintenanceChanged($prev, $incomingFlat);
+            $toggledAt = $changed
+                ? now()->toIso8601String()
+                : ($prev['toggled_at']?->toIso8601String());
+            $untilStored = ($incomingFlat['until'] !== null && $incomingFlat['until'] !== '')
+                ? CarbonImmutable::parse((string) $incomingFlat['until'])->toIso8601String()
+                : null;
+            $msg = $incomingFlat['message'];
+            $validated['maintenance'] = [
+                'enabled' => $incomingFlat['enabled'],
+                'message' => ($msg !== null && trim($msg) === '') ? null : $msg,
+                'until' => $untilStored,
+                'toggled_at' => $toggledAt,
+            ];
+        } else {
+            unset($validated['maintenance']);
         }
 
         $brand->update($validated);

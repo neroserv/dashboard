@@ -388,6 +388,7 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('api/docs', [ApiOverviewController::class, 'docs'])->name('api.docs');
     Route::get('settings', [SystemSettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
+    Route::put('settings/maintenance', [SystemSettingsController::class, 'updateMaintenance'])->name('settings.maintenance.update');
     Route::get('update', [PanelUpdateController::class, 'index'])->name('update.index');
     Route::post('update/run', [PanelUpdateController::class, 'run'])->name('update.run');
     Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
@@ -482,3 +483,9 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
 });
 
 require __DIR__.'/settings.php';
+
+// Ohne Fallback wirft der Router NotFoundHttpException bevor die web-Gruppe läuft (keine Session / kein HandleInertiaRequests).
+// So bekommen Browser-Besuche und die Vue-App konsistent die Inertia-Fehlerseite mit Shared Props.
+Route::fallback(function () {
+    abort(404);
+});

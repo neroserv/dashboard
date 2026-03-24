@@ -81,14 +81,36 @@
 </template>
 
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import { BBadge, BButton, BCard, BCardBody, BFormInput, BSpinner } from 'bootstrap-vue-next'
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 
-defineProps<{ csrf_token?: string }>()
+type SearchPageProps = {
+  csrf_token?: string
+}
+
+const page = usePage<SearchPageProps>()
+
+/**
+ * Prefer the token from the current Inertia page (DomainShopController::search passes it).
+ * The <meta name="csrf-token"> is not updated on client-side navigations, which causes 419 on fetch POST.
+ */
+function resolveCsrfToken(): string {
+  const fromProps = page.props.csrf_token
+  if (typeof fromProps === 'string' && fromProps.length > 0) {
+    return fromProps
+  }
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  if (match) {
+    return decodeURIComponent(match[1])
+  }
+  const meta = document.querySelector('meta[name="csrf-token"]')
+
+  return meta?.getAttribute('content') ?? ''
+}
 
 type Result = {
   domain: string
@@ -114,10 +136,11 @@ async function search() {
   try {
     const res = await fetch('/domains/check-availability', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+        'X-CSRF-TOKEN': resolveCsrfToken(),
         'X-Requested-With': 'XMLHttpRequest',
       },
       body: JSON.stringify({

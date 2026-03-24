@@ -102,3 +102,18 @@ test('customer cannot view another users domain manage page', function () {
 
     $response->assertStatus(403);
 });
+
+test('customer domain search page exposes csrf_token for availability fetch', function () {
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+    $user = User::factory()->create(['brand_id' => $brand->id]);
+    $this->actingAs($user);
+
+    $response = $this->get(route('domains.search'));
+
+    $response->assertStatus(200);
+    $response->assertInertia(fn ($page) => $page
+        ->component('domains/Search')
+        ->has('csrf_token')
+        ->where('csrf_token', fn ($t) => is_string($t) && strlen($t) > 0));
+});

@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateMaintenanceSettingsRequest;
 use App\Models\AdminActivityLog;
 use App\Models\Brand;
 use App\Models\Setting;
 use App\Models\TicketCategory;
 use App\Models\TicketMessageTemplate;
 use App\Models\TicketPriority;
+use App\Services\MaintenanceService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -61,6 +64,8 @@ class SystemSettingsController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'body', 'sort_order']);
 
+        $user = $request->user();
+
         return Inertia::render('admin/settings/Index', [
             'settings' => $settings,
             'brands' => Brand::query()->orderBy('key')->get(),
@@ -68,7 +73,99 @@ class SystemSettingsController extends Controller
             'ticketPriorities' => $ticketPriorities,
             'ticketMessageTemplates' => $ticketMessageTemplates,
             'initialTab' => $request->query('tab', 'allgemein'),
+            'maintenanceSettings' => [
+                'maintenance_global_enabled' => (bool) filter_var(Setting::get('maintenance_global_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
+                'maintenance_global_message' => (string) (Setting::get('maintenance_global_message') ?? ''),
+                'maintenance_global_until' => $this->formatMaintenanceUntilForInput(Setting::get('maintenance_global_until')),
+                'maintenance_toggle_cooldown_minutes' => (string) (Setting::get('maintenance_toggle_cooldown_minutes') ?? '0'),
+                'maintenance_global_toggled_at' => (string) (Setting::get('maintenance_global_toggled_at') ?? ''),
+            ],
+            'maintenancePermissions' => [
+                'canView' => $user !== null && (
+                    $user->hasPermission('admin.maintenance')
+                    || $user->hasPermission('admin.maintenance.view')
+                    || $user->hasPermission('admin.maintenance.update')
+                    || $user->hasPermission('admin.settings')
+                    || $user->hasPermission('admin.settings.view')
+                    || $user->hasPermission('admin.settings.update')
+                ),
+                'canUpdate' => $user !== null && (
+                    $user->hasPermission('admin.maintenance')
+                    || $user->hasPermission('admin.maintenance.update')
+                    || $user->hasPermission('admin.settings')
+                    || $user->hasPermission('admin.settings.update')
+                ),
+            ],
         ]);
+    }
+
+    public function updateMaintenance(UpdateMaintenanceSettingsRequest $request, MaintenanceService $maintenanceService): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        $previous = [
+            'enabled' => filter_var(Setting::get('maintenance_global_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
+            'message' => Setting::get('maintenance_global_message', ''),
+            'until' => Setting::get('maintenance_global_until', ''),
+        ];
+
+        $incoming = [
+            'enabled' => $validated['maintenance_global_enabled'],
+            'message' => $validated['maintenance_global_message'] ?? '',
+            'until' => isset($validated['maintenance_global_until']) && $validated['maintenance_global_until'] !== null
+                ? CarbonImmutable::parse($validated['maintenance_global_until'])->toIso8601String()
+                : '',
+        ];
+
+        $old = [
+            'maintenance_global_enabled' => Setting::get('maintenance_global_enabled'),
+            'maintenance_global_message' => Setting::get('maintenance_global_message'),
+            'maintenance_global_until' => Setting::get('maintenance_global_until'),
+            'maintenance_toggle_cooldown_minutes' => Setting::get('maintenance_toggle_cooldown_minutes'),
+            'maintenance_global_toggled_at' => Setting::get('maintenance_global_toggled_at'),
+        ];
+
+        Setting::set('maintenance_global_enabled', $incoming['enabled'] ? '1' : '0');
+        Setting::set('maintenance_global_message', $incoming['message'] ?? '');
+        Setting::set('maintenance_global_until', $incoming['until'] ?? '');
+        Setting::set('maintenance_toggle_cooldown_minutes', (string) $validated['maintenance_toggle_cooldown_minutes']);
+
+        if ($maintenanceService->globalMaintenanceChanged($previous, [
+            'enabled' => $incoming['enabled'],
+            'message' => $incoming['message'],
+            'until' => $incoming['until'],
+        ])) {
+            Setting::set('maintenance_global_toggled_at', now()->toIso8601String());
+        }
+
+        $maintenanceService->forgetGlobalActiveCache();
+
+        $new = [
+            'maintenance_global_enabled' => Setting::get('maintenance_global_enabled'),
+            'maintenance_global_message' => Setting::get('maintenance_global_message'),
+            'maintenance_global_until' => Setting::get('maintenance_global_until'),
+            'maintenance_toggle_cooldown_minutes' => Setting::get('maintenance_toggle_cooldown_minutes'),
+            'maintenance_global_toggled_at' => Setting::get('maintenance_global_toggled_at'),
+        ];
+
+        AdminActivityLog::log($request->user()->id, 'maintenance_settings_updated', 'system', 0, $old, $new);
+
+        return redirect()->route('admin.settings.index', ['tab' => 'wartung'])->with('success', 'Wartungseinstellungen gespeichert.');
+    }
+
+    protected function formatMaintenanceUntilForInput(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        if (! is_string($value)) {
+            return '';
+        }
+        try {
+            return CarbonImmutable::parse($value)->format('Y-m-d\TH:i');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     public function update(Request $request): RedirectResponse

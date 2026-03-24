@@ -31,6 +31,7 @@ class Brand extends Model
         'mail_header',
         'mail_footer',
         'invoice_company',
+        'maintenance',
     ];
 
     /**
@@ -46,6 +47,7 @@ class Brand extends Model
             'theme_colors' => 'array',
             'features' => 'array',
             'invoice_company' => 'array',
+            'maintenance' => 'array',
         ];
     }
 

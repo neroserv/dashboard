@@ -22,6 +22,13 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
+type BrandMaintenance = {
+    enabled?: boolean;
+    message?: string | null;
+    until?: string | null;
+    toggled_at?: string | null;
+};
+
 type Brand = {
     id: number;
     key: string;
@@ -39,6 +46,7 @@ type Brand = {
     salutation: string | null;
     mail_header: string | null;
     mail_footer: string | null;
+    maintenance?: BrandMaintenance | null;
 };
 
 const defaultSeo: Record<string, string> = {
@@ -56,9 +64,43 @@ const defaultSeo: Record<string, string> = {
 
 type Props = {
     brand: Brand;
+    maintenancePermissions?: {
+        canView: boolean;
+        canUpdate: boolean;
+    };
 };
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    maintenancePermissions: () => ({ canView: false, canUpdate: false }),
+});
+
+function maintenanceUntilForInput(m: BrandMaintenance | null | undefined): string {
+    const raw = m?.until;
+    if (!raw || typeof raw !== 'string') {
+        return '';
+    }
+    try {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) {
+            return '';
+        }
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+        return '';
+    }
+}
+
+function formatBrandMaintenanceToggledAt(iso: string | null | undefined): string {
+    if (!iso) {
+        return '';
+    }
+    try {
+        return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+    } catch {
+        return iso;
+    }
+}
 
 const THEME_COLOR_KEYS: { key: string; label: string }[] = [
     { key: 'primary', label: 'Primär' },
@@ -102,6 +144,9 @@ const form = useForm({
     salutation: props.brand.salutation ?? 'formal',
     mail_header: props.brand.mail_header ?? '',
     mail_footer: props.brand.mail_footer ?? '',
+    maintenance_enabled: props.brand.maintenance?.enabled ?? false,
+    maintenance_message: props.brand.maintenance?.message ?? '',
+    maintenance_until: maintenanceUntilForInput(props.brand.maintenance),
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -131,6 +176,11 @@ const submit = () => {
         salutation: data.salutation,
         mail_header: data.mail_header,
         mail_footer: data.mail_footer,
+        maintenance: {
+            enabled: data.maintenance_enabled,
+            message: data.maintenance_message || null,
+            until: data.maintenance_until || null,
+        },
     })).put(`/admin/brands/${props.brand.id}`);
 };
 
@@ -285,6 +335,49 @@ const salutationOptions = [
                                     placeholder="#000000"
                                 />
                             </div>
+                        </BCardBody>
+                    </BCard>
+                </BCol>
+
+                <BCol v-if="maintenancePermissions.canView" cols="12" class="mb-4">
+                    <BCard no-body>
+                        <BCardHeader>
+                            <BCardTitle class="mb-0">Wartungsmodus (Marke)</BCardTitle>
+                            <p class="text-muted small mb-0 mt-1">
+                                Gilt nur, wenn kein globaler Wartungsmodus aktiv ist. Cooldown nutzt die Minuten aus den
+                                Systemeinstellungen → Tab „Wartung“.
+                            </p>
+                        </BCardHeader>
+                        <BCardBody>
+                            <fieldset :disabled="!maintenancePermissions.canUpdate">
+                                <BFormGroup>
+                                    <BFormCheckbox id="brand_maintenance_enabled" v-model="form.maintenance_enabled">
+                                        Wartungsmodus für diese Marke aktiv
+                                    </BFormCheckbox>
+                                </BFormGroup>
+                                <BFormGroup label="Hinweistext (optional)" label-for="brand_maintenance_message">
+                                    <BFormTextarea
+                                        id="brand_maintenance_message"
+                                        v-model="form.maintenance_message"
+                                        rows="2"
+                                        :aria-invalid="!!form.errors['maintenance.message']"
+                                    />
+                                    <InputError :message="form.errors['maintenance.message']" />
+                                </BFormGroup>
+                                <BFormGroup label="Geplantes Ende (optional)" label-for="brand_maintenance_until">
+                                    <BFormInput
+                                        id="brand_maintenance_until"
+                                        v-model="form.maintenance_until"
+                                        type="datetime-local"
+                                        :aria-invalid="!!form.errors['maintenance.until']"
+                                    />
+                                    <InputError :message="form.errors['maintenance.until']" />
+                                </BFormGroup>
+                                <InputError :message="form.errors.maintenance" />
+                                <p v-if="brand.maintenance?.toggled_at" class="text-muted small mb-0">
+                                    Letzte Änderung (Marke): {{ formatBrandMaintenanceToggledAt(brand.maintenance.toggled_at) }}
+                                </p>
+                            </fieldset>
                         </BCardBody>
                     </BCard>
                 </BCol>
