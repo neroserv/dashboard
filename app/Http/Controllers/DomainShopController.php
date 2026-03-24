@@ -76,6 +76,7 @@ class DomainShopController extends Controller
             try {
                 $check = $skrime->checkAvailability($domain);
                 $createInfo = $pricing->getPricingForTld($tld, 'create');
+                $renewInfo = $pricing->getPricingForTld($tld, 'renew');
                 $transferInfo = $pricing->getPricingForTld($tld, 'transfer');
                 $results[] = [
                     'domain' => $domain,
@@ -83,6 +84,7 @@ class DomainShopController extends Controller
                     'premium' => $check['premium'],
                     'sale_price' => $createInfo['sale_price'],
                     'purchase_price' => $createInfo['purchase_price'],
+                    'renew_sale_price' => $renewInfo['sale_price'],
                     'transfer_sale_price' => $transferInfo['sale_price'],
                 ];
             } catch (\Throwable) {
@@ -92,6 +94,7 @@ class DomainShopController extends Controller
                     'premium' => false,
                     'sale_price' => 0,
                     'purchase_price' => 0,
+                    'renew_sale_price' => 0,
                     'transfer_sale_price' => 0,
                     'error' => true,
                 ];

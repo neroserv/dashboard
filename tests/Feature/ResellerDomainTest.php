@@ -117,3 +117,29 @@ test('customer domain search page exposes csrf_token for availability fetch', fu
         ->has('csrf_token')
         ->where('csrf_token', fn ($t) => is_string($t) && strlen($t) > 0));
 });
+
+test('domain check availability includes renew sale price', function () {
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+    $user = User::factory()->create(['brand_id' => $brand->id]);
+    Cache::put(
+        'skrime_pricelist:'.$brand->id,
+        [
+            ['tld' => 'de', 'renew' => '15', 'create' => '10', 'transfer' => '10', 'restore' => '10', 'offer' => false, 'offerTypes' => []],
+        ],
+        3600
+    );
+    $this->mock(SkrimeApiService::class, function ($mock) {
+        $mock->shouldReceive('forBrand')->andReturnSelf();
+        $mock->shouldReceive('checkAvailability')->andReturn(['available' => true, 'premium' => false]);
+    });
+    $this->actingAs($user);
+
+    $response = $this->postJson(route('domains.check-availability'), [
+        'domain' => 'test',
+        'tlds' => ['de'],
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('results.0.renew_sale_price', fn ($v) => is_numeric($v));
+});

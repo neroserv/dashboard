@@ -10,11 +10,13 @@
       </p>
     </div>
 
-    <BCard no-body class="mb-4">
+    <BCard no-body class="mb-4 position-relative overflow-hidden">
       <BCardHeader>
         <h5 class="mb-0">Verfügbarkeit prüfen</h5>
         <p class="text-muted small mb-0">
-          Geben Sie den gewünschten Namen ein (ohne Endung). Es werden .de, .com, .net und .io geprüft.
+          Geben Sie einen Namen ein (z.&nbsp;B. <span class="font-monospace">beispiel</span>) oder inklusive Endung
+          (z.&nbsp;B. <span class="font-monospace">beispiel.dev</span>). Die angegebene Endung wird immer mitgeprüft.
+          Ohne Endung werden zusätzlich .de, .com, .net und .io geprüft.
         </p>
       </BCardHeader>
       <BCardBody>
@@ -24,9 +26,14 @@
             <BFormInput
               id="domain"
               v-model="domainInput"
-              placeholder="meine-domain"
+              placeholder="beispiel oder beispiel.de"
+              autocomplete="off"
+              :state="inputState"
               @keyup.enter="search"
             />
+            <div v-if="parseMessage" class="invalid-feedback d-block">
+              {{ parseMessage }}
+            </div>
           </div>
           <BButton :disabled="!canSearch || loading" @click="search">
             <BSpinner v-if="loading" small class="me-2" />
@@ -34,18 +41,77 @@
             Prüfen
           </BButton>
         </div>
+
+        <motion.div
+          v-if="loading"
+          class="mt-4 rounded-3 border border-secondary border-opacity-25 bg-body-secondary bg-opacity-25 p-4"
+          :initial="{ opacity: 0.6 }"
+          :animate="{ opacity: [0.6, 1, 0.6] }"
+          :transition="{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }"
+        >
+          <div class="d-flex align-items-center gap-3">
+            <BSpinner variant="primary" />
+            <div>
+              <div class="fw-medium">Verfügbarkeit wird geprüft …</div>
+              <div class="text-muted small">
+                {{ loadingHint }}
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </BCardBody>
     </BCard>
 
-    <BCard v-if="results.length > 0" no-body>
+    <AnimatePresence>
+      <motion.div
+        v-if="highlightCard"
+        key="highlight"
+        :initial="{ opacity: 0, y: 16, scale: 0.98 }"
+        :animate="{ opacity: 1, y: 0, scale: 1 }"
+        :transition="{ type: 'spring', stiffness: 380, damping: 28 }"
+        class="mb-4"
+      >
+        <BCard class="border-success shadow-sm">
+          <div class="row card-body p-4">
+            <div class="col-md-12 col-sm-10">
+              <h3 class="alert-heading mb-2">
+                Die Domain <b id="domain-highlight">{{ highlightCard.domain }}</b> ist noch verfügbar
+              </h3>
+              <p class="mb-0 text-muted">
+                Registrierung: {{ formatEuro(highlightCard.sale_price) }} € • Verlängerung:
+                {{ formatEuro(highlightCard.renew_sale_price ?? 0) }} €
+              </p>
+            </div>
+            <div class="col-12 mt-3">
+              <a
+                class="btn btn-success w-100 d-inline-flex align-items-center justify-content-center gap-2"
+                :href="skrimeOrderUrl(highlightCard.domain)"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon icon="rocket" class="flex-shrink-0" />
+                Bestellen (Skrime)
+              </a>
+            </div>
+            <div class="col-12 mt-2">
+              <BButton variant="outline-primary" class="w-100" @click="goToCheckout(highlightCard)">
+                Im Panel zur Kasse
+              </BButton>
+            </div>
+          </div>
+        </BCard>
+      </motion.div>
+    </AnimatePresence>
+
+    <BCard v-if="listResults.length > 0" no-body>
       <BCardHeader>
-        <h5 class="mb-0">Ergebnisse</h5>
+        <h5 class="mb-0">Alle Ergebnisse</h5>
         <p class="text-muted small mb-0">Verfügbarkeit und Preise</p>
       </BCardHeader>
       <BCardBody>
-        <div class="d-flex flex-column gap-2">
+        <TransitionGroup name="domain-result" tag="div" class="d-flex flex-column gap-0">
           <div
-            v-for="r in results"
+            v-for="r in listResults"
             :key="r.domain"
             class="d-flex flex-wrap align-items-center justify-content-between gap-3 py-2 border-bottom border-secondary border-opacity-25 last-border-0"
           >
@@ -74,7 +140,7 @@
               </template>
             </div>
           </div>
-        </div>
+        </TransitionGroup>
       </BCardBody>
     </BCard>
   </DefaultLayout>
@@ -82,11 +148,19 @@
 
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
+import {
+  BBadge,
+  BButton,
+  BCard,
+  BCardBody,
+  BFormInput,
+  BSpinner,
+} from 'bootstrap-vue-next'
+import { AnimatePresence, motion } from 'motion-v'
 import { ref, computed } from 'vue'
-import { BBadge, BButton, BCard, BCardBody, BFormInput, BSpinner } from 'bootstrap-vue-next'
+import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 
 type SearchPageProps = {
   csrf_token?: string
@@ -94,10 +168,6 @@ type SearchPageProps = {
 
 const page = usePage<SearchPageProps>()
 
-/**
- * Prefer the token from the current Inertia page (DomainShopController::search passes it).
- * The <meta name="csrf-token"> is not updated on client-side navigations, which causes 419 on fetch POST.
- */
 function resolveCsrfToken(): string {
   const fromProps = page.props.csrf_token
   if (typeof fromProps === 'string' && fromProps.length > 0) {
@@ -118,6 +188,7 @@ type Result = {
   premium: boolean
   sale_price: number
   purchase_price: number
+  renew_sale_price?: number
   transfer_sale_price?: number
   error?: boolean
 }
@@ -125,12 +196,129 @@ type Result = {
 const domainInput = ref('')
 const loading = ref(false)
 const results = ref<Result[]>([])
+const parseMessage = ref('')
+const lastExplicitTld = ref<string | null>(null)
+const lastParsedBase = ref<string | null>(null)
+
 const defaultTlds = ['de', 'com', 'net', 'io']
+
+/** Single DNS label (Laravel CheckDomainAvailabilityRequest domain field). */
+const labelRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/i
+const tldRegex = /^[a-z]{2,}$/i
 
 const canSearch = computed(() => domainInput.value.trim().length >= 2)
 
+const inputState = computed<boolean | undefined>(() => {
+  if (!parseMessage.value) {
+    return undefined
+  }
+
+  return false
+})
+
+const loadingHint = computed(() => {
+  const p = parseDomainInput(domainInput.value)
+  if (p.ok && p.explicitTld) {
+    return `Prüfe zuerst .${p.explicitTld}, danach die übrigen Endungen …`
+  }
+
+  return 'Prüfe .de, .com, .net und .io …'
+})
+
+function parseDomainInput(raw: string):
+  | { ok: true; base: string; explicitTld: string | null }
+  | { ok: false; message: string } {
+  const s = raw.trim().toLowerCase()
+  if (s.length < 2) {
+    return { ok: false, message: 'Bitte mindestens zwei Zeichen eingeben.' }
+  }
+
+  if (!s.includes('.')) {
+    if (!labelRegex.test(s)) {
+      return {
+        ok: false,
+        message: 'Nur Buchstaben, Zahlen und Bindestrich im Namen (ohne Punkt).',
+      }
+    }
+
+    return { ok: true, base: s, explicitTld: null }
+  }
+
+  const parts = s.split('.').filter((p) => p.length > 0)
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return {
+      ok: false,
+      message: 'Bitte nur einen Namen mit einer Endung (z. B. beispiel.de), keine zusätzlichen Punkte.',
+    }
+  }
+
+  const [base, tld] = parts
+  if (!labelRegex.test(base)) {
+    return {
+      ok: false,
+      message: 'Ungültiger Domainname vor der Endung.',
+    }
+  }
+  if (!tldRegex.test(tld)) {
+    return { ok: false, message: 'Ungültige Endung (nur Buchstaben, mind. 2 Zeichen).' }
+  }
+
+  return { ok: true, base, explicitTld: tld }
+}
+
+function buildTldList(explicit: string | null): string[] {
+  if (!explicit) {
+    return [...defaultTlds]
+  }
+  const rest = defaultTlds.filter((t) => t !== explicit)
+
+  return [explicit, ...rest]
+}
+
+const highlightCard = computed<Result | null>(() => {
+  const tld = lastExplicitTld.value
+  const base = lastParsedBase.value
+  if (!tld || !base || results.value.length === 0) {
+    return null
+  }
+  const want = `${base}.${tld}`.toLowerCase()
+  const found = results.value.find((r) => r.domain.toLowerCase() === want)
+  if (!found || found.error || !found.available) {
+    return null
+  }
+
+  return found
+})
+
+/** Avoid duplicating the highlighted domain in the list below. */
+const listResults = computed(() => {
+  const h = highlightCard.value
+  if (!h) {
+    return results.value
+  }
+
+  return results.value.filter((r) => r.domain.toLowerCase() !== h.domain.toLowerCase())
+})
+
+function formatEuro(n: number): string {
+  return n.toFixed(2).replace('.', ',')
+}
+
+function skrimeOrderUrl(domain: string): string {
+  return `https://skrime.eu/order/domain/${encodeURIComponent(domain)}`
+}
+
 async function search() {
-  if (!canSearch.value) return
+  parseMessage.value = ''
+  const parsed = parseDomainInput(domainInput.value)
+  if (!parsed.ok) {
+    parseMessage.value = parsed.message
+
+    return
+  }
+
+  lastExplicitTld.value = parsed.explicitTld
+  lastParsedBase.value = parsed.base
   loading.value = true
   results.value = []
   try {
@@ -144,8 +332,8 @@ async function search() {
         'X-Requested-With': 'XMLHttpRequest',
       },
       body: JSON.stringify({
-        domain: domainInput.value.trim().toLowerCase().replace(/\.(de|com|net|io)$/, ''),
-        tlds: defaultTlds,
+        domain: parsed.base,
+        tlds: buildTldList(parsed.explicitTld),
       }),
     })
     const data = await res.json()
@@ -174,5 +362,17 @@ function goToTransferCheckout(r: Result) {
 <style scoped>
 .last-border-0:last-child {
   border-bottom: 0 !important;
+}
+
+.domain-result-move,
+.domain-result-enter-active,
+.domain-result-leave-active {
+  transition: all 0.2s ease;
+}
+
+.domain-result-enter-from,
+.domain-result-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>
