@@ -97,6 +97,57 @@
       </motion.div>
     </AnimatePresence>
 
+    <AnimatePresence>
+      <motion.div
+        v-if="highlightTransferBanner"
+        key="highlight-transfer"
+        :initial="{ opacity: 0, y: 16, scale: 0.98 }"
+        :animate="{ opacity: 1, y: 0, scale: 1 }"
+        :transition="{ type: 'spring', stiffness: 380, damping: 28 }"
+        class="mb-4"
+      >
+        <BCard class="border-warning shadow-sm">
+          <div class="row card-body p-4">
+            <div class="col-12">
+              <div class="d-flex flex-wrap align-items-start gap-3">
+                <div
+                  class="rounded-3 bg-warning bg-opacity-10 p-3 text-warning d-flex align-items-center justify-content-center flex-shrink-0"
+                >
+                  <Icon icon="transfer" class="fs-2" />
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                  <h3 class="alert-heading mb-2 h5">
+                    Die Domain <b id="domain-transfer-highlight">{{ highlightTransferBanner.domain }}</b> ist bereits
+                    registriert
+                  </h3>
+                  <p class="text-muted mb-2 mb-md-3">
+                    <template v-if="(highlightTransferBanner.transfer_sale_price ?? 0) > 0">
+                      Sie können die Domain zu uns umziehen (Transfer). Geschätzter Transferpreis:
+                      <strong>{{ formatEuro(highlightTransferBanner.transfer_sale_price ?? 0) }} €</strong>
+                      <span class="text-muted"> (inkl. Verlängerung je nach TLD)</span>
+                    </template>
+                    <template v-else>
+                      Für diese Endung liegt kein Transferpreis vor – unser Support prüft die Umzugsmöglichkeit gern für
+                      Sie.
+                    </template>
+                  </p>
+                  <BButton
+                    v-if="(highlightTransferBanner.transfer_sale_price ?? 0) > 0"
+                    variant="warning"
+                    class="w-100 d-inline-flex align-items-center justify-content-center gap-2"
+                    @click="goToTransferCheckout(highlightTransferBanner)"
+                  >
+                    <Icon icon="arrow-right" class="flex-shrink-0" />
+                    Zum Transfer
+                  </BButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </BCard>
+      </motion.div>
+    </AnimatePresence>
+
     <BCard v-if="listResults.length > 0" no-body>
       <BCardHeader style="padding-top: var(--theme-card-spacer-y); padding-left: var(--theme-card-spacer-x);">
         <h5 class="mb-0">Alle Ergebnisse</h5>
@@ -269,14 +320,19 @@ function buildTldList(explicit: string | null): string[] {
   return [explicit, ...rest]
 }
 
-const highlightCard = computed<Result | null>(() => {
+const explicitHighlightResult = computed<Result | null>(() => {
   const tld = lastExplicitTld.value
   const base = lastParsedBase.value
   if (!tld || !base || results.value.length === 0) {
     return null
   }
   const want = `${base}.${tld}`.toLowerCase()
-  const found = results.value.find((r) => r.domain.toLowerCase() === want)
+
+  return results.value.find((r) => r.domain.toLowerCase() === want) ?? null
+})
+
+const highlightCard = computed<Result | null>(() => {
+  const found = explicitHighlightResult.value
   if (!found || found.error || !found.available) {
     return null
   }
@@ -284,14 +340,32 @@ const highlightCard = computed<Result | null>(() => {
   return found
 })
 
-/** Avoid duplicating the highlighted domain in the list below. */
+/** Banner when the explicitly searched domain (name.tld) is taken – offer transfer. */
+const highlightTransferBanner = computed<Result | null>(() => {
+  const found = explicitHighlightResult.value
+  if (!found || found.error || found.available) {
+    return null
+  }
+
+  return found
+})
+
+/** Avoid duplicating highlighted domains (available or transfer banner) in the list below. */
 const listResults = computed(() => {
+  const skip = new Set<string>()
   const h = highlightCard.value
-  if (!h) {
+  const t = highlightTransferBanner.value
+  if (h) {
+    skip.add(h.domain.toLowerCase())
+  }
+  if (t) {
+    skip.add(t.domain.toLowerCase())
+  }
+  if (skip.size === 0) {
     return results.value
   }
 
-  return results.value.filter((r) => r.domain.toLowerCase() !== h.domain.toLowerCase())
+  return results.value.filter((r) => !skip.has(r.domain.toLowerCase()))
 })
 
 function formatEuro(n: number): string {
