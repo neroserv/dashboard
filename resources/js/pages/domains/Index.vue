@@ -33,7 +33,7 @@
         <Link :href="`/domains/${d.uuid}`" class="text-decoration-none text-body d-block h-100">
           <BCard no-body class="h-100 hover-shadow">
             <BCardBody>
-              <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
                 <div class="d-flex align-items-center gap-2 min-w-0">
                   <div class="rounded bg-primary bg-opacity-10 p-2 flex-shrink-0">
                     <Icon icon="world" class="text-primary" />
@@ -41,6 +41,9 @@
                   <div class="min-w-0">
                     <h6 class="mb-0 font-monospace text-truncate">{{ d.domain }}</h6>
                     <small class="text-muted">{{ d.auto_renew ? 'Auto-Verlängerung: Ja' : 'Auto-Verlängerung: Nein' }}</small>
+                    <div v-if="d.is_sandbox" class="mt-1">
+                      <BBadge variant="warning" class="text-dark">Sandbox</BBadge>
+                    </div>
                   </div>
                 </div>
                 <Icon icon="chevron-right" class="text-muted flex-shrink-0" />
@@ -51,6 +54,10 @@
                   {{ displayStatus(d.status) }}
                 </BBadge>
               </div>
+              <p v-if="d.show_rr_pending_validation_notice" class="small text-warning-emphasis mb-0 mt-2">
+                <Icon icon="mail" class="me-1 flex-shrink-0" />
+                Bitte E-Mail von Realtime Register zur Bestätigung der Registrierung prüfen.
+              </p>
               <div class="d-flex align-items-center gap-1 small text-muted mt-1">
                 <Icon icon="calendar" />
                 Ablauf: {{ d.expires_at ?? '–' }}
@@ -72,6 +79,7 @@ import { BBadge, BCard, BCardBody } from 'bootstrap-vue-next'
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
+import { customerDomainStatusBadgeVariant, customerDomainStatusLabel } from '@/lib/domainCustomerStatus'
 
 type Domain = {
   uuid: string
@@ -79,24 +87,19 @@ type Domain = {
   status: string
   expires_at: string | null
   auto_renew: boolean
+  registrar?: string
+  is_sandbox?: boolean
   is_shared_with_me?: boolean
+  show_rr_pending_validation_notice?: boolean
 }
 
 defineProps<{ domains: Domain[] }>()
 
-function statusVariant(status: string): 'success' | 'secondary' | 'danger' {
-  const s = status?.toLowerCase() ?? ''
-  if (s === 'active' || s === 'aktiv') return 'success'
-  if (s === 'expired' || s === 'abgelaufen' || s === 'cancelled') return 'danger'
-  return 'secondary'
+function statusVariant(status: string): 'success' | 'secondary' | 'danger' | 'warning' {
+  return customerDomainStatusBadgeVariant(status)
 }
 
 function displayStatus(status: string): string {
-  const s = status?.toLowerCase() ?? ''
-  if (s === 'active' || s === 'aktiv') return 'Aktiv'
-  if (s === 'expired' || s === 'abgelaufen') return 'Abgelaufen'
-  if (s === 'cancelled') return 'Gekündigt'
-  if (s === 'pending') return 'Ausstehend'
-  return status || '–'
+  return customerDomainStatusLabel(status)
 }
 </script>

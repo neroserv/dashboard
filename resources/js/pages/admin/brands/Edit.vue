@@ -1,6 +1,7 @@
 <!-- Admin: Marke bearbeiten -->
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import {
     BRow,
     BCol,
@@ -9,6 +10,7 @@ import {
     BCardTitle,
     BCardBody,
     BCardFooter,
+    BAlert,
     BForm,
     BFormGroup,
     BFormInput,
@@ -20,6 +22,7 @@ import {
 import InputError from '@/components/InputError.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
+import brands from '@/routes/admin/brands';
 import type { BreadcrumbItem } from '@/types';
 
 type BrandMaintenance = {
@@ -42,7 +45,7 @@ type Brand = {
     auth_card_bg_url: string | null;
     seo: Record<string, string> | null;
     theme_colors: Record<string, string> | null;
-    features: Record<string, boolean | number> | null;
+    features: Record<string, boolean | number | string> | null;
     salutation: string | null;
     mail_header: string | null;
     mail_footer: string | null;
@@ -64,6 +67,7 @@ const defaultSeo: Record<string, string> = {
 
 type Props = {
     brand: Brand;
+    domain_sale_routing_mismatch_count?: number;
     maintenancePermissions?: {
         canView: boolean;
         canUpdate: boolean;
@@ -71,8 +75,21 @@ type Props = {
 };
 
 const props = withDefaults(defineProps<Props>(), {
+    domain_sale_routing_mismatch_count: 0,
     maintenancePermissions: () => ({ canView: false, canUpdate: false }),
 });
+
+const syncingDomainSaleRouting = ref(false);
+
+function syncDomainSaleRoutingToBrandDefault(): void {
+    syncingDomainSaleRouting.value = true;
+    router.post(brands.syncDomainSaleRouting.url({ brand: props.brand.id }), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            syncingDomainSaleRouting.value = false;
+        },
+    });
+}
 
 function maintenanceUntilForInput(m: BrandMaintenance | null | undefined): string {
     const raw = m?.until;
@@ -141,6 +158,7 @@ const form = useForm({
     feature_prepaid_balance: props.brand.features?.prepaid_balance ?? false,
     feature_balance_topup: props.brand.features?.balance_topup ?? false,
     feature_balance_period_months: props.brand.features?.balance_period_months ?? 1,
+    feature_domain_sales_registrar: (props.brand.features?.domain_sales_registrar as string | undefined) ?? 'skrime',
     salutation: props.brand.salutation ?? 'formal',
     mail_header: props.brand.mail_header ?? '',
     mail_footer: props.brand.mail_footer ?? '',
@@ -172,6 +190,7 @@ const submit = () => {
             prepaid_balance: data.feature_prepaid_balance,
             balance_topup: data.feature_balance_topup,
             balance_period_months: Math.max(1, Math.min(24, Number(data.feature_balance_period_months) || 1)),
+            domain_sales_registrar: data.feature_domain_sales_registrar,
         },
         salutation: data.salutation,
         mail_header: data.mail_header,
@@ -413,6 +432,64 @@ const salutationOptions = [
                                     style="max-width: 5rem"
                                 />
                                 <p class="text-muted small mb-0 mt-1">1–24 Monate, z. B. 1 für monatlich</p>
+                            </BFormGroup>
+                        </BCardBody>
+                    </BCard>
+                </BCol>
+
+                <BCol lg="6" class="mb-4">
+                    <BCard no-body>
+                        <BCardHeader>
+                            <BCardTitle class="mb-0">Domain-Verkauf</BCardTitle>
+                            <p class="text-muted small mb-0 mt-1">
+                                Default für „Verkauf über“ bei neuen/fehlenden TLD-Routing-Zuordnungen.
+                            </p>
+                        </BCardHeader>
+                        <BCardBody>
+                            <BAlert
+                                variant="info"
+                                show
+                                class="small"
+                            >
+                                Aktuell genutzt: {{
+                                    form.feature_domain_sales_registrar === 'realtimeregister'
+                                        ? 'Realtime Register'
+                                        : 'Skrime'
+                                }}
+                            </BAlert>
+                            <BAlert
+                                v-if="domain_sale_routing_mismatch_count > 0"
+                                variant="warning"
+                                show
+                                class="small"
+                            >
+                                <strong>Abweichende TLD-Zuordnungen:</strong>
+                                {{ domain_sale_routing_mismatch_count }}
+                                gespeicherte Einträge in „tld_sale_routing“ entsprechen nicht diesem Default. Der
+                                Domain-Checkout nutzt pro TLD weiterhin den dort hinterlegten Registrar (z.&nbsp;B. Skrime)
+                                – unabhängig von der Anzeige oben.
+                                <div class="mt-2">
+                                    <BButton
+                                        type="button"
+                                        variant="warning"
+                                        size="sm"
+                                        :disabled="syncingDomainSaleRouting"
+                                        @click="syncDomainSaleRoutingToBrandDefault"
+                                    >
+                                        Alle TLD-Zuordnungen auf diesen Default setzen
+                                    </BButton>
+                                </div>
+                            </BAlert>
+                            <BFormGroup label="Verkauf über (Default)" label-for="feature_domain_sales_registrar">
+                                <BFormSelect
+                                    id="feature_domain_sales_registrar"
+                                    v-model="form.feature_domain_sales_registrar"
+                                    :options="[
+                                        { value: 'skrime', text: 'Skrime' },
+                                        { value: 'realtimeregister', text: 'Realtime Register' }
+                                    ]"
+                                />
+                                <InputError :message="form.errors['features.domain_sales_registrar']" />
                             </BFormGroup>
                         </BCardBody>
                     </BCard>

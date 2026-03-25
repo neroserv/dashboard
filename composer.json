@@ -26,6 +26,7 @@
         "openai-php/laravel": "^0.18.0",
         "planetteamspeak/ts3-php-framework": "*",
         "plesk/api-php-lib": "^2.2",
+        "realtimeregister/realtimeregister-php": "*",
         "romanzipp/laravel-queue-monitor": "*",
         "sentry/sentry-laravel": "*",
         "socialiteproviders/discord": "*",

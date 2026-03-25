@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Api\CheckDomainAvailabilityRequest;
 use App\Models\Brand;
 use App\Models\TldPricelist;
+use App\Models\TldSaleRouting;
 use App\Services\DomainPricingService;
+use App\Services\RealtimeRegisterApiService;
 use App\Services\SkrimeApiService;
+use App\Support\DomainRegistrar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -41,25 +44,31 @@ class DomainController extends ApiV1Controller
             $cases[] = "WHEN '".addslashes($tld)."' THEN ".($i + 1);
         }
         $orderCase = 'CASE tld '.implode(' ', $cases).' ELSE '.(count(self::PRIORITY_TLDS) + 1).' END';
-        $query = TldPricelist::query()
+        $query = TldSaleRouting::query()
             ->where('brand_id', $brand->id)
             ->orderByRaw("{$orderCase} ASC")
             ->orderBy('tld');
 
         $paginator = $query->paginate(self::TLDs_PER_PAGE)->withQueryString();
 
-        $data = $paginator->through(function ($row) use ($pricing) {
-            $createPrice = (float) $row->create_price;
+        $data = $paginator->through(function (TldSaleRouting $route) use ($pricing, $brand) {
+            $row = TldPricelist::query()
+                ->where('brand_id', $brand->id)
+                ->where('tld', $route->tld)
+                ->where('price_source', $route->sale_registrar)
+                ->first();
+
+            $createPrice = $row ? (float) $row->create_price : 0.0;
             $salePrice = $createPrice > 0
-                ? $pricing->calculateSalePrice($createPrice, $row->tld)
-                : $pricing->getSalePrice($row->tld, 'create');
+                ? $pricing->calculateSalePrice($createPrice, $route->tld)
+                : $pricing->getSalePrice($route->tld, 'create');
 
             return [
-                'tld' => $row->tld,
-                'create_price' => round((float) $row->create_price, 2),
-                'renew_price' => round((float) $row->renew_price, 2),
-                'transfer_price' => round((float) $row->transfer_price, 2),
-                'restore_price' => round((float) $row->restore_price, 2),
+                'tld' => $route->tld,
+                'create_price' => round($row ? (float) $row->create_price : 0, 2),
+                'renew_price' => round($row ? (float) $row->renew_price : 0, 2),
+                'transfer_price' => round($row ? (float) ($row->transfer_price ?? 0) : 0, 2),
+                'restore_price' => round($row ? (float) ($row->restore_price ?? 0) : 0, 2),
                 'sale_price' => round($salePrice, 2),
             ];
         });
@@ -86,14 +95,19 @@ class DomainController extends ApiV1Controller
     /**
      * Check domain availability: searched domain (if name.tld) first, then .de/.net/.com/.eu/.at/.ch, then other TLDs paginated (5 per page).
      */
-    public function checkAvailability(CheckDomainAvailabilityRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): JsonResponse
-    {
+    public function checkAvailability(
+        CheckDomainAvailabilityRequest $request,
+        SkrimeApiService $skrime,
+        RealtimeRegisterApiService $realtimeRegister,
+        DomainPricingService $pricing,
+    ): JsonResponse {
         $brand = $this->resolveBrand($request);
         if ($brand === null) {
             return response()->json(['message' => 'Brand required'], 422);
         }
 
         $skrime = $skrime->forBrand($brand);
+        $rr = $realtimeRegister->forBrand($brand);
         $pricing = $pricing->forBrand($brand);
 
         $input = strtolower(trim($request->input('domain')));
@@ -105,9 +119,17 @@ class DomainController extends ApiV1Controller
             $searchedTld = substr($input, $pos + 1);
         }
 
-        $checkOne = function (string $domain, string $tld) use ($skrime, $pricing): array {
+        $checkOne = function (string $domain, string $tld) use ($skrime, $rr, $pricing): array {
             try {
-                $check = $skrime->checkAvailability($domain);
+                $registrar = $pricing->saleRegistrarForTld($tld);
+                if ($registrar === DomainRegistrar::REALTIME_REGISTER) {
+                    if (! $rr->isConfigured()) {
+                        throw new \RuntimeException('RR not configured');
+                    }
+                    $check = $rr->checkAvailability($domain);
+                } else {
+                    $check = $skrime->checkAvailability($domain);
+                }
                 $pricingInfo = $pricing->getPricingForTld($tld, 'create');
 
                 return [
@@ -195,11 +217,12 @@ class DomainController extends ApiV1Controller
         }
         $orderCase = 'CASE tld '.implode(' ', $cases).' ELSE '.(count(self::PRIORITY_TLDS) + 1).' END';
 
-        return TldPricelist::query()
+        return TldSaleRouting::query()
             ->where('brand_id', $brand->id)
             ->orderByRaw("{$orderCase} ASC")
             ->orderBy('tld')
             ->pluck('tld')
+            ->unique()
             ->values()
             ->all();
     }

@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\SyncBrandDomainSaleRoutingRequest;
 use App\Http\Requests\Admin\UpdateBrandRequest;
 use App\Models\Brand;
 use App\Services\MaintenanceService;
+use App\Services\TldSaleRoutingService;
+use App\Support\DomainRegistrar;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,12 +22,13 @@ class BrandController extends Controller
         return redirect()->route('admin.settings.index', ['tab' => 'marken']);
     }
 
-    public function edit(Request $request, Brand $brand): Response
+    public function edit(Request $request, Brand $brand, TldSaleRoutingService $tldSaleRouting): Response
     {
         $user = $request->user();
 
         return Inertia::render('admin/brands/Edit', [
             'brand' => $brand,
+            'domain_sale_routing_mismatch_count' => $tldSaleRouting->countRoutingRowsMismatchedWithBrandDefault($brand),
             'maintenancePermissions' => [
                 'canView' => $user !== null && (
                     $user->hasPermission('admin.maintenance')
@@ -39,7 +43,7 @@ class BrandController extends Controller
         ]);
     }
 
-    public function update(UpdateBrandRequest $request, Brand $brand, MaintenanceService $maintenanceService): RedirectResponse
+    public function update(UpdateBrandRequest $request, Brand $brand, MaintenanceService $maintenanceService, TldSaleRoutingService $tldSaleRouting): RedirectResponse
     {
         $validated = $request->validated();
 
@@ -60,8 +64,26 @@ class BrandController extends Controller
             $validated['features']['balance_period_months'] = max(1, min(24, (int) $validated['features']['balance_period_months']));
         }
 
+        $previousDomainSalesRegistrar = $brand->getFeaturesArray()['domain_sales_registrar'] ?? DomainRegistrar::SKRIME;
+
         if (isset($validated['features'])) {
             $validated['features'] = array_merge($brand->features ?? [], $validated['features']);
+        }
+
+        $newDomainSalesRegistrar = $previousDomainSalesRegistrar;
+        if (isset($validated['features']['domain_sales_registrar'])) {
+            $candidate = (string) $validated['features']['domain_sales_registrar'];
+            if (DomainRegistrar::isValid($candidate)) {
+                $newDomainSalesRegistrar = $candidate;
+            }
+        }
+
+        if ($previousDomainSalesRegistrar !== $newDomainSalesRegistrar) {
+            $tldSaleRouting->migrateRoutingRowsForBrandRegistrarChange(
+                $brand,
+                $previousDomainSalesRegistrar,
+                $newDomainSalesRegistrar
+            );
         }
 
         $canMaint = $request->user()?->hasPermission('admin.maintenance')
@@ -97,5 +119,19 @@ class BrandController extends Controller
         $brand->update($validated);
 
         return redirect()->route('admin.settings.index', ['tab' => 'marken'])->with('success', 'Marke gespeichert.');
+    }
+
+    public function syncDomainSaleRouting(SyncBrandDomainSaleRoutingRequest $request, Brand $brand, TldSaleRoutingService $tldSaleRouting): RedirectResponse
+    {
+        $updated = $tldSaleRouting->applyBrandDefaultToAllTldRouting($brand);
+
+        return redirect()
+            ->route('admin.brands.edit', $brand)
+            ->with(
+                'success',
+                $updated > 0
+                    ? "TLD-Verkauf: {$updated} gespeicherte Zuordnung(en) an den Marken-Default angeglichen."
+                    : 'Keine TLD-Zeilen zum Anpassen (Checkout nutzt ohnehin den Marken-Default, sofern keine abweichenden Einträge existieren).'
+            );
     }
 }

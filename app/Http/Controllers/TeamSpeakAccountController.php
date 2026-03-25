@@ -12,7 +12,6 @@ use App\Models\TeamSpeakSnapshot;
 use App\Services\BalancePaymentService;
 use App\Services\ControlPanels\TeamSpeakClient;
 use App\Services\MollieCustomerService;
-use App\Services\SkrimeApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -306,7 +305,7 @@ class TeamSpeakAccountController extends Controller
                 'type' => 'SRV',
                 'data' => $srvData,
             ];
-            $skrime->setDns($resellerDomain->domain, $records);
+            $registrar->setDns($records);
         } catch (\Throwable $e) {
             return redirect()->route('teamspeak-accounts.connect-domain.show', $teamSpeakServerAccount)
                 ->with('error', 'DNS konnte nicht gesetzt werden: '.$e->getMessage());

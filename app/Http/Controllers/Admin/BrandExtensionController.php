@@ -10,11 +10,15 @@ use App\Http\Requests\Admin\UpdateCloudflareBrandExtensionRequest;
 use App\Http\Requests\Admin\UpdateDiscordBrandExtensionRequest;
 use App\Http\Requests\Admin\UpdateInvoiceNinjaBrandExtensionRequest;
 use App\Http\Requests\Admin\UpdatePterodactylProductFlagsRequest;
+use App\Http\Requests\Admin\UpdateRealtimeRegisterBrandExtensionRequest;
 use App\Http\Requests\Admin\UpdateSkrimeBrandExtensionRequest;
 use App\Models\Brand;
 use App\Models\BrandExtension;
+use App\Models\ResellerDomain;
 use App\Services\BrandExtensionService;
 use App\Services\Pwa\BrandMediaUrl;
+use App\Services\RealtimeRegisterApiService;
+use App\Support\DomainRegistrar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -79,6 +83,24 @@ class BrandExtensionController extends Controller
                     'margin_type' => (string) ($skrimeConfig['margin_type'] ?? 'fixed'),
                     'margin_value' => (float) ($skrimeConfig['margin_value'] ?? 0),
                     'has_api_token' => ! empty($settings['api_token']) || ! empty(config('skrime.api_key')),
+                ];
+            }
+
+            if ($key === BrandExtension::EXTENSION_REALTIMEREGISTER && $installed) {
+                $rrConfig = $brandExtensionService->realtimeregisterConfigForBrand($brand);
+                $rrApi = app(RealtimeRegisterApiService::class)->forBrand($brand);
+                $item['realtimeregister'] = [
+                    'api_url' => $rrConfig['base_url'] ?? '',
+                    'customer_handle' => (string) ($rrConfig['customer_handle'] ?? ''),
+                    'timeout' => (int) ($rrConfig['timeout'] ?? 30),
+                    'margin_type' => (string) ($rrConfig['margin_type'] ?? 'fixed'),
+                    'margin_value' => (float) ($rrConfig['margin_value'] ?? 0),
+                    'sandbox' => (bool) ($rrConfig['sandbox'] ?? false),
+                    'has_api_key' => ! empty($settings['api_key']) || ! empty(config('realtimeregister.api_key')),
+                    'has_customer_handle' => trim((string) ($rrConfig['customer_handle'] ?? '')) !== '',
+                    'is_configured' => $rrApi->isConfigured(),
+                    'configuration_issues' => $rrApi->configurationIssues(),
+                    'default_nameservers' => array_values($rrConfig['default_nameservers'] ?? []),
                 ];
             }
 
@@ -152,6 +174,7 @@ class BrandExtensionController extends Controller
             BrandExtension::EXTENSION_CHATGPT,
             BrandExtension::EXTENSION_DISCORD,
             BrandExtension::EXTENSION_CLOUDFLARE,
+            BrandExtension::EXTENSION_REALTIMEREGISTER,
         ], true)) {
             $row->settings = [];
         }
@@ -161,6 +184,9 @@ class BrandExtensionController extends Controller
 
         if ($extension === BrandExtension::EXTENSION_SKRIME) {
             Cache::forget('skrime_pricelist:'.$brand->id);
+        }
+        if ($extension === BrandExtension::EXTENSION_REALTIMEREGISTER) {
+            Cache::forget('rr_pricelist:'.$brand->id);
         }
 
         return redirect()->route('admin.brand-extensions.index')->with('success', 'Erweiterung wurde installiert.');
@@ -175,6 +201,35 @@ class BrandExtensionController extends Controller
 
         $extension = $request->validated('extension');
 
+        if ($extension === BrandExtension::EXTENSION_SKRIME) {
+            $hasSkrimeDomains = ResellerDomain::query()
+                ->where('brand_id', $brand->id)
+                ->where(function ($q): void {
+                    $q->where('registrar', DomainRegistrar::SKRIME)
+                        ->orWhereNotNull('skrime_id');
+                })
+                ->exists();
+            if ($hasSkrimeDomains) {
+                return redirect()->route('admin.brand-extensions.index')->with(
+                    'error',
+                    'Skrime kann nicht deaktiviert werden, solange noch Domains über Skrime (oder mit Skrime-ID) verknüpft sind.'
+                );
+            }
+        }
+
+        if ($extension === BrandExtension::EXTENSION_REALTIMEREGISTER) {
+            $hasRr = ResellerDomain::query()
+                ->where('brand_id', $brand->id)
+                ->where('registrar', DomainRegistrar::REALTIME_REGISTER)
+                ->exists();
+            if ($hasRr) {
+                return redirect()->route('admin.brand-extensions.index')->with(
+                    'error',
+                    'Realtime Register kann nicht deaktiviert werden, solange noch Domains über diesen Registrar laufen.'
+                );
+            }
+        }
+
         BrandExtension::query()
             ->where('brand_id', $brand->id)
             ->where('extension', $extension)
@@ -182,6 +237,9 @@ class BrandExtensionController extends Controller
 
         if ($extension === BrandExtension::EXTENSION_SKRIME) {
             Cache::forget('skrime_pricelist:'.$brand->id);
+        }
+        if ($extension === BrandExtension::EXTENSION_REALTIMEREGISTER) {
+            Cache::forget('rr_pricelist:'.$brand->id);
         }
 
         return redirect()->route('admin.brand-extensions.index')->with('success', 'Erweiterung wurde deinstalliert.');
@@ -238,6 +296,76 @@ class BrandExtensionController extends Controller
         Cache::forget('skrime_pricelist:'.$brand->id);
 
         return redirect()->route('admin.brand-extensions.index')->with('success', 'Skrime-Einstellungen gespeichert.');
+    }
+
+    public function updateRealtimeRegister(UpdateRealtimeRegisterBrandExtensionRequest $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        $row = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_REALTIMEREGISTER)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($row === null) {
+            return redirect()->route('admin.brand-extensions.index')->with('error', 'Realtime Register ist nicht installiert.');
+        }
+
+        $data = $request->validated();
+        $settings = is_array($row->settings) ? $row->settings : [];
+
+        if (array_key_exists('api_url', $data) && $data['api_url'] !== null) {
+            $trimmed = trim((string) $data['api_url']);
+            if ($trimmed === '') {
+                unset($settings['api_url']);
+            } else {
+                $settings['api_url'] = $trimmed;
+            }
+        }
+
+        if ($request->filled('api_key')) {
+            $settings['api_key'] = (string) $data['api_key'];
+        }
+
+        if (array_key_exists('customer_handle', $data) && $data['customer_handle'] !== null) {
+            $trimmed = trim((string) $data['customer_handle']);
+            if ($trimmed === '') {
+                unset($settings['customer_handle']);
+            } else {
+                $settings['customer_handle'] = $trimmed;
+            }
+        }
+
+        if (isset($data['timeout'])) {
+            $settings['timeout'] = max(1, min(300, (int) $data['timeout']));
+        }
+
+        if (isset($data['margin_type'])) {
+            $settings['margin_type'] = $data['margin_type'];
+        }
+
+        if (isset($data['margin_value'])) {
+            $settings['margin_value'] = (float) $data['margin_value'];
+        }
+
+        if (isset($data['sandbox'])) {
+            $settings['sandbox'] = (bool) $data['sandbox'];
+        }
+
+        if (isset($data['default_nameservers']) && is_array($data['default_nameservers'])) {
+            $settings['default_nameservers'] = array_values(array_filter(array_map('trim', $data['default_nameservers'])));
+        }
+
+        $row->settings = $settings;
+        $row->save();
+
+        Cache::forget('rr_pricelist:'.$brand->id);
+
+        return redirect()->route('admin.brand-extensions.index')->with('success', 'Realtime-Register-Einstellungen gespeichert.');
     }
 
     public function updateInvoiceNinja(UpdateInvoiceNinjaBrandExtensionRequest $request): RedirectResponse
@@ -401,6 +529,7 @@ class BrandExtensionController extends Controller
             BrandExtension::EXTENSION_PLESK => 'Plesk',
             BrandExtension::EXTENSION_PTERODACTYL => 'Pterodactyl',
             BrandExtension::EXTENSION_SKRIME => 'Skrime',
+            BrandExtension::EXTENSION_REALTIMEREGISTER => 'Realtime Register',
             BrandExtension::EXTENSION_TEAMSPEAK => 'TeamSpeak',
             default => $key,
         };
@@ -416,7 +545,8 @@ class BrandExtensionController extends Controller
             BrandExtension::EXTENSION_KEYHELP => 'KeyHelp-Webspace: Hosting-Server und -Pläne mit KeyHelp-Panel (REST-API).',
             BrandExtension::EXTENSION_PLESK => 'Plesk-Webspace: Hosting-Server und -Pläne mit Plesk-Panel.',
             BrandExtension::EXTENSION_PTERODACTYL => 'Gameserver: Hosting mit Pterodactyl-Panel.',
-            BrandExtension::EXTENSION_SKRIME => 'Domain-Shop, TLD-Preise und Reseller-Domains pro Marke.',
+            BrandExtension::EXTENSION_SKRIME => 'Domain-Shop, TLD-Preise und Reseller-Domains pro Marke (Skrime).',
+            BrandExtension::EXTENSION_REALTIMEREGISTER => 'Zusätzliche Domains über Realtime Register (API, Sandbox, Kunden-Handle).',
             BrandExtension::EXTENSION_TEAMSPEAK => 'TeamSpeak-Server: Hosting und Kundenbereich.',
             default => '',
         };
@@ -433,6 +563,7 @@ class BrandExtensionController extends Controller
             BrandExtension::EXTENSION_PLESK => '/images/extensions/plesk.png',
             BrandExtension::EXTENSION_PTERODACTYL => '/images/extensions/pterodactyl.png',
             BrandExtension::EXTENSION_SKRIME => '/images/extensions/skrime.png',
+            BrandExtension::EXTENSION_REALTIMEREGISTER => '/images/extensions/realtimeregister.png',
             BrandExtension::EXTENSION_TEAMSPEAK => '/images/extensions/teamspeak.png',
             default => '/images/extensions/skrime.png',
         };

@@ -2,8 +2,12 @@
 
 use App\Models\Brand;
 use App\Models\BrandExtension;
+use App\Models\ResellerDomain;
 use App\Models\User;
+use App\Services\RealtimeRegisterApiService;
 use App\Services\SkrimeApiService;
+use App\Services\TldPricelistSyncService;
+use App\Support\DomainRegistrar;
 use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
@@ -125,10 +129,139 @@ test('sync tld pricelist job uses skrime for brand', function () {
 
     (new \App\Jobs\SyncTldPricelistJob($brand->id))->handle(
         app(SkrimeApiService::class),
-        app(\App\Services\TldPricelistSyncService::class)
+        app(RealtimeRegisterApiService::class),
+        app(TldPricelistSyncService::class),
     );
 
-    $row = \App\Models\TldPricelist::query()->where('brand_id', $brand->id)->where('tld', 'de')->first();
+    $row = \App\Models\TldPricelist::query()
+        ->where('brand_id', $brand->id)
+        ->where('tld', 'de')
+        ->where('price_source', DomainRegistrar::SKRIME)
+        ->first();
     expect($row)->not->toBeNull();
     expect((float) $row->create_price)->toBe(1.0);
+});
+
+test('admin can update realtimeregister extension settings', function () {
+    $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+    $admin = User::factory()->create(['is_admin' => true]);
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_REALTIMEREGISTER,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->put(route('admin.brand-extensions.realtimeregister.update'), [
+        'api_url' => 'https://api.rr.example.test/',
+        'api_key' => 'rr-secret',
+        'customer_handle' => 'cust-1',
+        'timeout' => 40,
+        'margin_type' => 'percent',
+        'margin_value' => 5,
+        'sandbox' => true,
+        'default_nameservers' => ['ns1.example.test', 'ns2.example.test'],
+    ])->assertRedirect(route('admin.brand-extensions.index'));
+
+    $row = BrandExtension::query()
+        ->where('brand_id', $brand->id)
+        ->where('extension', BrandExtension::EXTENSION_REALTIMEREGISTER)
+        ->first();
+    expect($row)->not->toBeNull();
+    $settings = $row->settings;
+    expect(is_array($settings))->toBeTrue();
+    expect($settings['api_url'] ?? null)->toBe('https://api.rr.example.test/');
+    expect($settings['api_key'] ?? null)->toBe('rr-secret');
+    expect($settings['customer_handle'] ?? null)->toBe('cust-1');
+    expect((bool) ($settings['sandbox'] ?? false))->toBeTrue();
+    expect($settings['default_nameservers'] ?? [])->toBe(['ns1.example.test', 'ns2.example.test']);
+});
+
+test('skrime extension cannot be uninstalled while skrime domains exist', function () {
+    $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+    $admin = User::factory()->create(['is_admin' => true]);
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_SKRIME,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
+
+    ResellerDomain::factory()->create([
+        'brand_id' => $brand->id,
+        'registrar' => DomainRegistrar::SKRIME,
+    ]);
+
+    $this->actingAs($admin);
+    $this->from(route('admin.brand-extensions.index'))->post(route('admin.brand-extensions.uninstall'), [
+        'extension' => BrandExtension::EXTENSION_SKRIME,
+    ])->assertRedirect(route('admin.brand-extensions.index'))
+        ->assertSessionHas('error');
+
+    expect(BrandExtension::query()
+        ->where('brand_id', $brand->id)
+        ->where('extension', BrandExtension::EXTENSION_SKRIME)
+        ->whereNotNull('installed_at')
+        ->exists())->toBeTrue();
+});
+
+test('realtimeregister extension cannot be uninstalled while rr domains exist', function () {
+    $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+    $admin = User::factory()->create(['is_admin' => true]);
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_REALTIMEREGISTER,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
+
+    ResellerDomain::factory()->create([
+        'brand_id' => $brand->id,
+        'registrar' => DomainRegistrar::REALTIME_REGISTER,
+    ]);
+
+    $this->actingAs($admin);
+    $this->from(route('admin.brand-extensions.index'))->post(route('admin.brand-extensions.uninstall'), [
+        'extension' => BrandExtension::EXTENSION_REALTIMEREGISTER,
+    ])->assertRedirect(route('admin.brand-extensions.index'))
+        ->assertSessionHas('error');
+
+    expect(BrandExtension::query()
+        ->where('brand_id', $brand->id)
+        ->where('extension', BrandExtension::EXTENSION_REALTIMEREGISTER)
+        ->whereNotNull('installed_at')
+        ->exists())->toBeTrue();
+});
+
+test('realtimeregister isConfigured is true when api key and customer handle come from env only', function () {
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_REALTIMEREGISTER,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
+
+    config([
+        'realtimeregister.api_key' => 'env-api-key',
+        'realtimeregister.customer_handle' => 'env-customer',
+        'realtimeregister.base_url' => 'https://api.yoursrs.com/',
+    ]);
+
+    $svc = app(RealtimeRegisterApiService::class)->forBrand($brand);
+    expect($svc->isConfigured())->toBeTrue();
+    expect($svc->configurationIssues())->toBe([]);
 });

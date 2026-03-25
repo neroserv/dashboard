@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdateDomainWhoisRequest;
 use App\Models\ResellerDomain;
 use App\Services\DomainPricingService;
-use App\Services\SkrimeApiService;
+use App\Services\ResellerDomainRegistrarAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,9 +14,9 @@ use Inertia\Response as InertiaResponse;
 
 class DomainManageController extends Controller
 {
-    protected function skrimeFor(ResellerDomain $domain): SkrimeApiService
+    protected function registrarAdapter(ResellerDomain $domain): ResellerDomainRegistrarAdapter
     {
-        return app(SkrimeApiService::class)->forBrand($domain->brand);
+        return ResellerDomainRegistrarAdapter::forDomain($domain);
     }
 
     protected function pricingFor(ResellerDomain $domain): DomainPricingService
@@ -30,7 +30,7 @@ class DomainManageController extends Controller
 
         $nameservers = [];
         try {
-            $result = $this->skrimeFor($reseller_domain)->getNameserver($reseller_domain->domain);
+            $result = $this->registrarAdapter($reseller_domain)->getNameserver();
             $nameservers = $result['nameserver'] ?? [];
         } catch (\Throwable) {
             // ignore
@@ -47,8 +47,11 @@ class DomainManageController extends Controller
             'status' => $reseller_domain->status,
             'expires_at' => $reseller_domain->expires_at?->format('d.m.Y'),
             'auto_renew' => $reseller_domain->auto_renew,
+            'registrar' => $reseller_domain->registrar,
+            'is_sandbox' => (bool) $reseller_domain->is_sandbox,
             'nameservers' => $nameservers,
             'renew_price' => $renewPrice,
+            'show_rr_pending_validation_notice' => $reseller_domain->isRealtimeRegisterPendingValidation(),
         ];
 
         $easyDnsPresets = collect(config('domain-easy-dns.presets', []))
@@ -103,7 +106,7 @@ class DomainManageController extends Controller
         $this->authorize('view', $reseller_domain);
 
         try {
-            $code = $this->skrimeFor($reseller_domain)->getAuthcode($reseller_domain->domain);
+            $code = $this->registrarAdapter($reseller_domain)->getAuthcode();
 
             return response()->json(['authcode' => $code]);
         } catch (\Throwable $e) {
@@ -116,7 +119,7 @@ class DomainManageController extends Controller
         ResellerDomain $reseller_domain,
     ): RedirectResponse {
         try {
-            $this->skrimeFor($reseller_domain)->setNameserver($reseller_domain->domain, $request->validated('nameservers'));
+            $this->registrarAdapter($reseller_domain)->setNameserver($request->validated('nameservers'));
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Nameserver konnten nicht gesetzt werden: '.$e->getMessage());
@@ -131,7 +134,7 @@ class DomainManageController extends Controller
         $this->authorize('view', $reseller_domain);
 
         try {
-            $records = $this->skrimeFor($reseller_domain)->getDns($reseller_domain->domain);
+            $records = $this->registrarAdapter($reseller_domain)->getDns();
 
             return response()->json(['records' => $records]);
         } catch (\Throwable $e) {
@@ -157,7 +160,7 @@ class DomainManageController extends Controller
         ], $request->input('records', []));
 
         try {
-            $this->skrimeFor($reseller_domain)->setDns($reseller_domain->domain, $records);
+            $this->registrarAdapter($reseller_domain)->setDns($records);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'DNS-Zone konnte nicht gespeichert werden: '.$e->getMessage());
@@ -172,7 +175,7 @@ class DomainManageController extends Controller
         $this->authorize('view', $reseller_domain);
 
         try {
-            $data = $this->skrimeFor($reseller_domain)->getDnssec($reseller_domain->domain);
+            $data = $this->registrarAdapter($reseller_domain)->getDnssec();
 
             return response()->json($data);
         } catch (\Throwable $e) {
@@ -191,7 +194,7 @@ class DomainManageController extends Controller
         ]);
 
         try {
-            $this->skrimeFor($reseller_domain)->setDnssec($reseller_domain->domain, [
+            $this->registrarAdapter($reseller_domain)->setDnssec([
                 'flags' => (int) $request->input('flags'),
                 'algorithm' => (int) $request->input('algorithm'),
                 'publicKey' => $request->input('publicKey'),
@@ -210,7 +213,7 @@ class DomainManageController extends Controller
         $this->authorize('update', $reseller_domain);
 
         try {
-            $this->skrimeFor($reseller_domain)->deleteDnssec($reseller_domain->domain);
+            $this->registrarAdapter($reseller_domain)->deleteDnssec();
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'DNSSEC konnte nicht deaktiviert werden: '.$e->getMessage());
@@ -224,13 +227,14 @@ class DomainManageController extends Controller
     {
         $this->authorize('update', $reseller_domain);
 
-        if (! $reseller_domain->skrime_id) {
+        $adapter = $this->registrarAdapter($reseller_domain);
+        if (! $adapter->canRenewWithSkrimeIdCheck()) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Domain hat keine Skrime-ID.');
         }
 
         try {
-            $data = $this->skrimeFor($reseller_domain)->renewProduct(domain: $reseller_domain->domain);
+            $data = $adapter->renewProduct();
             $reseller_domain->update([
                 'expires_at' => isset($data['expireAt']) ? \Carbon\Carbon::parse($data['expireAt']) : null,
             ]);
@@ -250,13 +254,14 @@ class DomainManageController extends Controller
         $request->validate(['auto_renew' => ['required', 'boolean']]);
         $enabled = (bool) $request->input('auto_renew');
 
-        if (! $reseller_domain->skrime_id) {
+        $adapter = $this->registrarAdapter($reseller_domain);
+        if (! $adapter->canRenewWithSkrimeIdCheck()) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Domain hat keine Skrime-ID.');
         }
 
         try {
-            $this->skrimeFor($reseller_domain)->setAutoRenew($enabled, domain: $reseller_domain->domain);
+            $adapter->setAutoRenew($enabled);
             $reseller_domain->update(['auto_renew' => $enabled]);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
@@ -272,7 +277,7 @@ class DomainManageController extends Controller
         $this->authorize('view', $reseller_domain);
 
         try {
-            $data = $this->skrimeFor($reseller_domain)->getContact($reseller_domain->domain);
+            $data = $this->registrarAdapter($reseller_domain)->getContact();
 
             return response()->json($data);
         } catch (\Throwable $e) {
@@ -302,7 +307,7 @@ class DomainManageController extends Controller
         }
 
         try {
-            $this->skrimeFor($reseller_domain)->setContact($reseller_domain->domain, $normalized);
+            $this->registrarAdapter($reseller_domain)->setContact($normalized);
         } catch (\Throwable $e) {
             return redirect()->route('domains.manage.show', $reseller_domain)
                 ->with('error', 'Kontaktdaten konnten nicht gespeichert werden: '.$e->getMessage());
@@ -319,7 +324,7 @@ class DomainManageController extends Controller
         $privacy = $request->validated('privacy');
 
         try {
-            $data = $this->skrimeFor($reseller_domain)->updateWhoisPrivacy($reseller_domain->domain, $privacy);
+            $data = $this->registrarAdapter($reseller_domain)->updateWhoisPrivacy($privacy);
 
             return response()->json([
                 'response' => 'Successfully updated whois settings',

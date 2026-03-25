@@ -394,10 +394,12 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
     Route::get('brands/{brand}/edit', [BrandController::class, 'edit'])->name('brands.edit');
     Route::put('brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
+    Route::post('brands/{brand}/sync-domain-sale-routing', [BrandController::class, 'syncDomainSaleRouting'])->name('brands.sync-domain-sale-routing');
     Route::get('brand-extensions', [BrandExtensionController::class, 'index'])->name('brand-extensions.index');
     Route::post('brand-extensions/install', [BrandExtensionController::class, 'install'])->name('brand-extensions.install');
     Route::post('brand-extensions/uninstall', [BrandExtensionController::class, 'uninstall'])->name('brand-extensions.uninstall');
     Route::put('brand-extensions/skrime', [BrandExtensionController::class, 'updateSkrime'])->name('brand-extensions.skrime.update');
+    Route::put('brand-extensions/realtimeregister', [BrandExtensionController::class, 'updateRealtimeRegister'])->name('brand-extensions.realtimeregister.update');
     Route::put('brand-extensions/invoice-ninja', [BrandExtensionController::class, 'updateInvoiceNinja'])->name('brand-extensions.invoice-ninja.update');
     Route::put('brand-extensions/chatgpt', [BrandExtensionController::class, 'updateChatgpt'])->name('brand-extensions.chatgpt.update');
     Route::put('brand-extensions/discord', [BrandExtensionController::class, 'updateDiscord'])->name('brand-extensions.discord.update');
@@ -442,10 +444,13 @@ Route::middleware(['admin.domain', 'auth', 'verified', 'admin'])->prefix('admin'
     Route::get('teamspeak-accounts/{team_speak_server_account}', [AdminTeamSpeakAccountController::class, 'show'])->name('teamspeak-accounts.show');
     Route::get('domains', [ResellerDomainController::class, 'index'])->name('domains.index');
     Route::post('domains/sync', [ResellerDomainController::class, 'syncFromSkrime'])->name('domains.sync');
+    Route::post('domains/sync-realtimeregister', [ResellerDomainController::class, 'syncFromRealtimeRegister'])->name('domains.sync-realtimeregister');
     Route::post('domains/import', [ResellerDomainController::class, 'import'])->name('domains.import');
     Route::get('domains/tld-pricelist', [\App\Http\Controllers\Admin\TldPricelistController::class, 'index'])->name('domains.tld-pricelist.index');
     Route::post('domains/tld-pricelist/sync', [\App\Http\Controllers\Admin\TldPricelistController::class, 'sync'])->name('domains.tld-pricelist.sync');
     Route::put('domains/tld-pricelist/bulk', [\App\Http\Controllers\Admin\TldPricelistController::class, 'bulk'])->name('domains.tld-pricelist.bulk');
+    Route::put('domains/tld-pricelist/sale-registrar', [\App\Http\Controllers\Admin\TldPricelistController::class, 'updateSaleRegistrar'])->name('domains.tld-pricelist.sale-registrar');
+    Route::put('domains/tld-pricelist/bulk-sale-registrar', [\App\Http\Controllers\Admin\TldPricelistController::class, 'bulkSaleRegistrar'])->name('domains.tld-pricelist.bulk-sale-registrar');
     Route::get('domains/{reseller_domain}', [ResellerDomainController::class, 'show'])->name('domains.show');
     Route::put('domains/{reseller_domain}/customer', [ResellerDomainController::class, 'updateCustomer'])->name('domains.customer.update');
     Route::post('domains/{reseller_domain}/renew', [ResellerDomainController::class, 'renew'])->name('domains.renew');

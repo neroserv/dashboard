@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\BrandExtensionService;
+use App\Support\DomainRegistrar;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -160,7 +161,7 @@ class Brand extends Model
     }
 
     /**
-     * @return array<string, bool|int>
+     * @return array<string, bool|int|string>
      */
     public function getFeaturesArray(): array
     {
@@ -181,6 +182,7 @@ class Brand extends Model
             'prepaid_balance' => false,
             'balance_topup' => false,
             'balance_period_months' => 1,
+            'domain_sales_registrar' => DomainRegistrar::SKRIME,
         ];
 
         if ($this->hasInstalledExtension(BrandExtension::EXTENSION_PTERODACTYL)) {
@@ -195,6 +197,13 @@ class Brand extends Model
         }
         if (isset($features['balance_period_months']) && is_numeric($features['balance_period_months'])) {
             $defaults['balance_period_months'] = max(1, min(24, (int) $features['balance_period_months']));
+        }
+
+        if (isset($features['domain_sales_registrar'])) {
+            $candidate = (string) $features['domain_sales_registrar'];
+            if (DomainRegistrar::isValid($candidate)) {
+                $defaults['domain_sales_registrar'] = $candidate;
+            }
         }
 
         return $defaults;

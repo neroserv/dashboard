@@ -142,6 +142,83 @@ class BrandExtensionService
     }
 
     /**
+     * Merged Realtime Register settings: extension overrides config/realtimeregister.php and .env.
+     *
+     * @return array{
+     *     base_url: string,
+     *     api_key: ?string,
+     *     timeout: int,
+     *     customer_handle: string,
+     *     default_nameservers: array<int, string>,
+     *     margin_type: string,
+     *     margin_value: float,
+     *     sandbox: bool,
+     *     tlds: array<string, mixed>
+     * }
+     */
+    public function realtimeregisterConfigForBrand(?Brand $brand): array
+    {
+        $base = [
+            'base_url' => (string) config('realtimeregister.base_url'),
+            'api_key' => config('realtimeregister.api_key') ? (string) config('realtimeregister.api_key') : null,
+            'timeout' => (int) config('realtimeregister.timeout', 30),
+            'customer_handle' => trim((string) config('realtimeregister.customer_handle', '')),
+            'default_nameservers' => config('realtimeregister.default_nameservers', []),
+            'margin_type' => (string) config('realtimeregister.margin_type', 'fixed'),
+            'margin_value' => (float) config('realtimeregister.margin_value', 0),
+            'sandbox' => false,
+            'tlds' => [],
+        ];
+
+        if ($brand === null) {
+            return $base;
+        }
+
+        $ext = BrandExtension::query()
+            ->where('brand_id', $brand->id)
+            ->where('extension', BrandExtension::EXTENSION_REALTIMEREGISTER)
+            ->whereNotNull('installed_at')
+            ->first();
+
+        if ($ext === null || ! is_array($ext->settings)) {
+            return $base;
+        }
+
+        $s = $ext->settings;
+        $sandbox = (bool) ($s['sandbox'] ?? false);
+        if ($sandbox) {
+            $base['base_url'] = (string) config('realtimeregister.sandbox_base_url');
+        }
+        if (! empty($s['api_url'])) {
+            $base['base_url'] = (string) $s['api_url'];
+        }
+        if (! empty($s['api_key'])) {
+            $base['api_key'] = (string) $s['api_key'];
+        }
+        if (! empty($s['customer_handle'])) {
+            $base['customer_handle'] = trim((string) $s['customer_handle']);
+        }
+        if (isset($s['timeout']) && is_numeric($s['timeout'])) {
+            $base['timeout'] = max(1, min(300, (int) $s['timeout']));
+        }
+        if (isset($s['default_nameservers']) && is_array($s['default_nameservers'])) {
+            $base['default_nameservers'] = array_values(array_filter(array_map('strval', $s['default_nameservers'])));
+        }
+        if (! empty($s['margin_type']) && in_array($s['margin_type'], ['fixed', 'percent'], true)) {
+            $base['margin_type'] = (string) $s['margin_type'];
+        }
+        if (isset($s['margin_value']) && is_numeric($s['margin_value'])) {
+            $base['margin_value'] = (float) $s['margin_value'];
+        }
+        $base['sandbox'] = $sandbox;
+        if (isset($s['tlds']) && is_array($s['tlds'])) {
+            $base['tlds'] = $s['tlds'];
+        }
+
+        return $base;
+    }
+
+    /**
      * Invoice Ninja settings for a brand when the extension is installed and configured.
      *
      * @return array{base_url: string, api_token: string, timeout: int}|null

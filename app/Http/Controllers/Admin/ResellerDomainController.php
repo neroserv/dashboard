@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignResellerDomainCustomerRequest;
 use App\Http\Requests\Admin\UpdateResellerDomainNameserverRequest;
 use App\Jobs\SyncAllResellerDomainsJob;
+use App\Jobs\SyncRealtimeRegisterDomainsJob;
 use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use App\Services\DomainPricingService;
+use App\Services\ResellerDomainRegistrarAdapter;
 use App\Services\SkrimeApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -71,9 +73,12 @@ class ResellerDomainController extends Controller
         }
         ResellerDomain::create([
             'brand_id' => $brand->id,
+            'registrar' => \App\Support\DomainRegistrar::SKRIME,
+            'is_sandbox' => false,
             'domain' => $domainName,
             'user_id' => $userId ?: null,
             'skrime_id' => $data['id'] ?? null,
+            'realtimeregister_domain_name' => null,
             'status' => $data['state'] ?? 'active',
             'registered_at' => isset($data['createdAt']) ? \Carbon\Carbon::parse($data['createdAt']) : null,
             'expires_at' => $expiresAt,
@@ -98,6 +103,21 @@ class ResellerDomainController extends Controller
         return redirect()->route('admin.domains.index')->with(
             'success',
             'Domain-Sync von Skrime in die Warteschlange gestellt. Seite in 1–2 Minuten neu laden. (Queue-Worker: php artisan queue:work)'
+        );
+    }
+
+    public function syncFromRealtimeRegister(Request $request): RedirectResponse
+    {
+        $brand = $this->currentBrand($request);
+        if ($brand === null) {
+            return redirect()->route('admin.domains.index')->with('error', 'Keine Marke zugeordnet.');
+        }
+
+        SyncRealtimeRegisterDomainsJob::dispatch($brand->id);
+
+        return redirect()->route('admin.domains.index')->with(
+            'success',
+            'Domain-Sync von Realtime Register in die Warteschlange gestellt. Seite in 1–2 Minuten neu laden. (Queue-Worker: php artisan queue:work)'
         );
     }
 
@@ -170,11 +190,11 @@ class ResellerDomainController extends Controller
         }
 
         $pricing = $pricing->forBrand($brand);
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         $nameservers = [];
         try {
-            $result = $skrime->getNameserver($reseller_domain->domain);
+            $result = $adapter->getNameserver();
             $nameservers = $result['nameserver'] ?? [];
         } catch (\Throwable) {
             // ignore
@@ -217,14 +237,14 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             abort(404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
-        if (! $reseller_domain->skrime_id) {
+        if (! $adapter->canRenewWithSkrimeIdCheck()) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'Domain hat keine Skrime-ID.');
         }
 
         try {
-            $data = $skrime->renewProduct(domain: $reseller_domain->domain);
+            $data = $adapter->renewProduct();
             $reseller_domain->update([
                 'expires_at' => isset($data['expireAt']) ? \Carbon\Carbon::parse($data['expireAt']) : null,
             ]);
@@ -241,17 +261,17 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             abort(404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         $request->validate(['auto_renew' => ['required', 'boolean']]);
         $enabled = (bool) $request->input('auto_renew');
 
-        if (! $reseller_domain->skrime_id) {
+        if (! $adapter->canRenewWithSkrimeIdCheck()) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'Domain hat keine Skrime-ID.');
         }
 
         try {
-            $skrime->setAutoRenew($enabled, domain: $reseller_domain->domain);
+            $adapter->setAutoRenew($enabled);
             $reseller_domain->update(['auto_renew' => $enabled]);
         } catch (\Throwable $e) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'Auto-Renew konnte nicht gesetzt werden: '.$e->getMessage());
@@ -266,10 +286,10 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             return response()->json(['error' => 'Ungültige Domain.'], 404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         try {
-            $code = $skrime->getAuthcode($reseller_domain->domain);
+            $code = $adapter->getAuthcode();
 
             return response()->json(['authcode' => $code]);
         } catch (\Throwable $e) {
@@ -290,10 +310,10 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             abort(404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         try {
-            $skrime->setNameserver($reseller_domain->domain, $request->validated('nameservers'));
+            $adapter->setNameserver($request->validated('nameservers'));
         } catch (\Throwable $e) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'Nameserver konnten nicht gesetzt werden: '.$e->getMessage());
         }
@@ -307,10 +327,10 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             abort(404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         try {
-            $records = $skrime->getDns($reseller_domain->domain);
+            $records = $adapter->getDns();
         } catch (\Throwable $e) {
             return redirect()->route('admin.domains.show', $reseller_domain)->with('error', 'DNS-Zone konnte nicht geladen werden: '.$e->getMessage());
         }
@@ -327,7 +347,7 @@ class ResellerDomainController extends Controller
         if ($brand === null) {
             abort(404);
         }
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
+        $adapter = ResellerDomainRegistrarAdapter::forDomain($reseller_domain);
 
         $request->validate([
             'records' => ['required', 'array'],
@@ -343,7 +363,7 @@ class ResellerDomainController extends Controller
         ], $request->input('records', []));
 
         try {
-            $skrime->setDns($reseller_domain->domain, $records);
+            $adapter->setDns($records);
         } catch (\Throwable $e) {
             return redirect()->route('admin.domains.dns', $reseller_domain)->with('error', 'DNS-Zone konnte nicht gespeichert werden: '.$e->getMessage());
         }

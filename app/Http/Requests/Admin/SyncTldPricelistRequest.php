@@ -6,7 +6,7 @@ use App\Support\DomainRegistrar;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateTldPricelistBulkRequest extends FormRequest
+class SyncTldPricelistRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -20,12 +20,6 @@ class UpdateTldPricelistBulkRequest extends FormRequest
     {
         return [
             'price_source' => ['required', 'string', Rule::in(DomainRegistrar::values())],
-            'tlds' => ['sometimes', 'array'],
-            'tlds.*' => ['string', 'max:32'],
-            'margin_type' => ['required', 'string', 'in:fixed,percent'],
-            'margin_value' => ['required', 'numeric', 'min:0'],
-            'margin_renew_value' => ['nullable', 'numeric', 'min:0'],
-            'margin_transfer_value' => ['nullable', 'numeric', 'min:0'],
             'search' => ['nullable', 'string', 'max:255'],
         ];
     }

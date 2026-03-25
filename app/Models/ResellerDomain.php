@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasProductShares;
+use App\Support\DomainRegistrar;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,9 +19,12 @@ class ResellerDomain extends Model
     protected $fillable = [
         'uuid',
         'brand_id',
+        'registrar',
+        'is_sandbox',
         'domain',
         'user_id',
         'skrime_id',
+        'realtimeregister_domain_name',
         'status',
         'registered_at',
         'expires_at',
@@ -37,6 +41,7 @@ class ResellerDomain extends Model
     protected function casts(): array
     {
         return [
+            'is_sandbox' => 'boolean',
             'registered_at' => 'date',
             'expires_at' => 'date',
             'auto_renew' => 'boolean',
@@ -73,6 +78,18 @@ class ResellerDomain extends Model
     public function isOwnedBy(User $user): bool
     {
         return $this->user_id === $user->id;
+    }
+
+    /**
+     * Realtime Register may set the domain to a pending validation state until the registrant confirms via e-mail.
+     */
+    public function isRealtimeRegisterPendingValidation(): bool
+    {
+        if (($this->registrar ?? '') !== DomainRegistrar::REALTIME_REGISTER) {
+            return false;
+        }
+
+        return (bool) preg_match('/pending[\s_-]*validation|pendingvalidation/i', (string) $this->status);
     }
 
     public function getRouteKeyName(): string

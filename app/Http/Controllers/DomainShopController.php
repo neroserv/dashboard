@@ -13,13 +13,15 @@ use App\Models\InvoiceLineItem;
 use App\Models\ResellerDomain;
 use App\Services\BalancePaymentService;
 use App\Services\DiscountCodeService;
+use App\Services\DomainOrderFulfillmentService;
 use App\Services\DomainPricingService;
 use App\Services\InvoicePdfService;
 use App\Services\MollieCustomerService;
+use App\Services\RealtimeRegisterApiService;
 use App\Services\SkrimeApiService;
 use App\Services\SkrimeContactService;
+use App\Support\DomainRegistrar;
 use App\Support\MollieWebhookUrl;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,9 +42,10 @@ class DomainShopController extends Controller
             ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->latest('created_at')
             ->get()
-            ->map(fn (ResellerDomain $d) => array_merge($d->only(['uuid', 'domain', 'status', 'expires_at', 'auto_renew']), [
+            ->map(fn (ResellerDomain $d) => array_merge($d->only(['uuid', 'domain', 'status', 'expires_at', 'auto_renew', 'registrar', 'is_sandbox']), [
                 'expires_at' => $d->expires_at?->format('d.m.Y'),
                 'is_shared_with_me' => ! $d->isOwnedBy($user),
+                'show_rr_pending_validation_notice' => $d->isRealtimeRegisterPendingValidation(),
             ]));
 
         return Inertia::render('domains/Index', [
@@ -57,13 +60,14 @@ class DomainShopController extends Controller
         ]);
     }
 
-    public function checkAvailability(CheckDomainAvailabilityRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): JsonResponse
+    public function checkAvailability(CheckDomainAvailabilityRequest $request, SkrimeApiService $skrime, RealtimeRegisterApiService $realtimeRegister, DomainPricingService $pricing): JsonResponse
     {
         $brand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         if ($brand === null) {
             return response()->json(['results' => [], 'message' => 'Brand required'], 422);
         }
         $skrime = $skrime->forBrand($brand);
+        $rr = $realtimeRegister->forBrand($brand);
         $pricing = $pricing->forBrand($brand);
 
         $baseName = strtolower(trim($request->input('domain')));
@@ -74,7 +78,15 @@ class DomainShopController extends Controller
             $tld = strtolower(ltrim($tld, '.'));
             $domain = $baseName.'.'.$tld;
             try {
-                $check = $skrime->checkAvailability($domain);
+                $registrar = $pricing->saleRegistrarForTld($tld);
+                if ($registrar === DomainRegistrar::REALTIME_REGISTER) {
+                    if (! $rr->isConfigured()) {
+                        throw new \RuntimeException('Realtime Register nicht konfiguriert.');
+                    }
+                    $check = $rr->checkAvailability($domain);
+                } else {
+                    $check = $skrime->checkAvailability($domain);
+                }
                 $createInfo = $pricing->getPricingForTld($tld, 'create');
                 $renewInfo = $pricing->getPricingForTld($tld, 'renew');
                 $transferInfo = $pricing->getPricingForTld($tld, 'transfer');
@@ -139,7 +151,7 @@ class DomainShopController extends Controller
         return Inertia::render('domains/Checkout', $payload);
     }
 
-    public function storeCheckout(DomainCheckoutRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing): RedirectResponse
+    public function storeCheckout(DomainCheckoutRequest $request, SkrimeApiService $skrime, DomainPricingService $pricing, DomainOrderFulfillmentService $orderFulfillment): RedirectResponse
     {
         $user = $request->user();
         $data = $request->validated();
@@ -175,7 +187,7 @@ class DomainShopController extends Controller
 
         $brandFeatures = $currentBrand->getFeaturesArray();
         $paymentMethod = $data['payment_method'] ?? 'mollie';
-        $skrimeForBrand = $skrime->forBrand($currentBrand);
+        $pricingForBrand = $pricing->forBrand($currentBrand);
 
         if ($paymentMethod === 'balance' && ($brandFeatures['prepaid_balance'] ?? false)) {
             try {
@@ -187,44 +199,50 @@ class DomainShopController extends Controller
                     ->with('error', $e->getMessage());
             }
 
-            if (! $skrimeForBrand->isConfigured()) {
+            $tldKey = (string) ($data['tld'] ?? '');
+            if ($tldKey === '') {
+                $d = strtolower($data['domain']);
+                if (str_contains($d, '.')) {
+                    $tldKey = substr($d, (int) strrpos($d, '.') + 1);
+                }
+            }
+            $registrar = $pricingForBrand->saleRegistrarForTld($tldKey);
+            if ($registrar === DomainRegistrar::REALTIME_REGISTER && ! app(RealtimeRegisterApiService::class)->forBrand($currentBrand)->isConfigured()) {
+                Log::warning('Domain checkout balance: Realtime Register nicht konfiguriert.');
+
+                return redirect()->route('domains.index')->with('error', 'Domain-Registrar (Realtime Register) ist nicht konfiguriert. Bitte kontaktieren Sie uns.');
+            }
+            if ($registrar === DomainRegistrar::SKRIME && ! $skrime->forBrand($currentBrand)->isConfigured()) {
                 Log::warning('Domain checkout balance: Skrime API nicht konfiguriert.');
 
                 return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte kontaktieren Sie uns.');
             }
 
-            $domain = $data['domain'];
             $isTransfer = ! empty($data['transfer']);
             $authCode = $isTransfer ? trim((string) ($data['auth_code'] ?? '')) : null;
 
             try {
-                $orderData = $skrimeForBrand->orderDomain($domain, $contact, [], $authCode);
+                $resellerDomain = $orderFulfillment->fulfill(
+                    $currentBrand,
+                    $user,
+                    $data['domain'],
+                    $data['tld'] ?? null,
+                    $contact,
+                    $isTransfer,
+                    $authCode,
+                    (float) ($data['purchase_price'] ?? 0),
+                    $salePrice,
+                );
             } catch (\Throwable $e) {
-                Log::error('Domain checkout balance: Skrime orderDomain fehlgeschlagen.', [
-                    'domain' => $domain,
+                Log::error('Domain checkout balance: Domain-Bestellung fehlgeschlagen.', [
+                    'domain' => $data['domain'],
                     'message' => $e->getMessage(),
                 ]);
 
-                return redirect()->route('domains.index')->with('error', 'Domain-Bestellung bei Skrime fehlgeschlagen: '.$e->getMessage());
+                return redirect()->route('domains.index')->with('error', 'Domain-Bestellung fehlgeschlagen: '.$e->getMessage());
             }
 
-            $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
-            $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
-            $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
-            ResellerDomain::create([
-                'brand_id' => $currentBrand->id,
-                'domain' => $data['domain'],
-                'user_id' => $user->id,
-                'skrime_id' => $skrimeId,
-                'status' => $domainStatus,
-                'registered_at' => now(),
-                'expires_at' => $expiresAt,
-                'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
-                'purchase_price' => (float) ($data['purchase_price'] ?? 0),
-                'sale_price' => $salePrice,
-                'tld' => $data['tld'] ?? null,
-            ]);
-
+            $domainStatus = $resellerDomain->status;
             $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
                 ? 'Domain-Transfer für '.$data['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
                 : 'Domain '.$data['domain'].' wurde registriert.';
@@ -317,7 +335,7 @@ class DomainShopController extends Controller
     /**
      * Dev only: complete domain order without Stripe (simulate payment). Use in local when no webhook.
      */
-    public function devCompleteCheckout(Request $request, InvoicePdfService $pdfService): RedirectResponse
+    public function devCompleteCheckout(Request $request, InvoicePdfService $pdfService, DomainOrderFulfillmentService $orderFulfillment): RedirectResponse
     {
         if (! app()->environment('local')) {
             abort(404);
@@ -345,57 +363,38 @@ class DomainShopController extends Controller
             return redirect()->route('domains.index')->with('error', 'Marke konnte nicht ermittelt werden.');
         }
 
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
-        if (! $skrime->isConfigured()) {
-            Log::warning('Domain checkout: Skrime API nicht konfiguriert (SKRIME_API_TOKEN / SKRIME_API_URL in .env).');
-
-            return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte SKRIME_API_TOKEN und SKRIME_API_URL in .env setzen.');
-        }
-
         $domain = $payload['domain'];
         $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
+        Log::info('Domain checkout: Dev-Abschluss.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
 
         try {
-            $orderData = $skrime->orderDomain(
-                $domain,
+            $resellerDomain = $orderFulfillment->fulfill(
+                $brand,
+                $user,
+                $payload['domain'],
+                $payload['tld'] ?? null,
                 $payload['contact'],
-                [],
-                $authCode
+                (bool) ! empty($payload['transfer']),
+                $authCode,
+                (float) ($payload['purchase_price'] ?? 0),
+                (float) ($payload['sale_price'] ?? 0),
             );
-            Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
         } catch (\Throwable $e) {
-            Log::error('Domain checkout: Skrime orderDomain fehlgeschlagen.', [
+            Log::error('Domain checkout: Dev-Bestellung fehlgeschlagen.', [
                 'domain' => $domain,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('domains.index')->with('error', 'Domain-Bestellung bei Skrime fehlgeschlagen: '.$e->getMessage());
+            return redirect()->route('domains.index')->with('error', 'Domain-Bestellung fehlgeschlagen: '.$e->getMessage());
         }
-
-        $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
-        $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
-        $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
-        ResellerDomain::create([
-            'brand_id' => $brand->id,
-            'domain' => $payload['domain'],
-            'user_id' => $user->id,
-            'skrime_id' => $skrimeId,
-            'status' => $domainStatus,
-            'registered_at' => now(),
-            'expires_at' => $expiresAt,
-            'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
-            'purchase_price' => $payload['purchase_price'] ?? null,
-            'sale_price' => $payload['sale_price'] ?? null,
-            'tld' => $payload['tld'] ?? null,
-        ]);
 
         $invoice = $this->createDomainInvoice($user->id, $payload['domain'], $payload['sale_price'], $pdfService);
         if ($invoice) {
             $invoice->update(['status' => 'paid']);
         }
 
+        $domainStatus = $resellerDomain->status;
         $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
             ? 'Domain-Transfer für '.$payload['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
             : 'Domain '.$payload['domain'].' wurde registriert (Dev: Zahlung simuliert).';
@@ -408,7 +407,7 @@ class DomainShopController extends Controller
      *
      * @param  array<string, mixed>  $payload
      */
-    public function completeOrderWithPayload(Request $request, array $payload, InvoicePdfService $pdfService): RedirectResponse
+    public function completeOrderWithPayload(Request $request, array $payload, InvoicePdfService $pdfService, DomainOrderFulfillmentService $orderFulfillment): RedirectResponse
     {
         $user = $request->user();
         if (! $user || ($payload['user_id'] ?? null) != $user->id) {
@@ -421,57 +420,38 @@ class DomainShopController extends Controller
             return redirect()->route('domains.index')->with('error', 'Marke konnte nicht ermittelt werden.');
         }
 
-        $skrime = app(SkrimeApiService::class)->forBrand($brand);
-        if (! $skrime->isConfigured()) {
-            Log::warning('Domain checkout: Skrime API nicht konfiguriert (SKRIME_API_TOKEN / SKRIME_API_URL in .env).');
-
-            return redirect()->route('domains.index')->with('error', 'Skrime API ist nicht konfiguriert. Bitte SKRIME_API_TOKEN und SKRIME_API_URL in .env setzen.');
-        }
-
         $domain = $payload['domain'];
         $authCode = ! empty($payload['transfer']) ? ($payload['auth_code'] ?? null) : null;
-        Log::info('Domain checkout: rufe Skrime orderDomain auf.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
+        Log::info('Domain checkout: Mollie-Abschluss.', ['domain' => $domain, 'transfer' => ! empty($payload['transfer'])]);
 
         try {
-            $orderData = $skrime->orderDomain(
-                $domain,
+            $resellerDomain = $orderFulfillment->fulfill(
+                $brand,
+                $user,
+                $payload['domain'],
+                $payload['tld'] ?? null,
                 $payload['contact'],
-                [],
-                $authCode
+                (bool) ! empty($payload['transfer']),
+                $authCode,
+                (float) ($payload['purchase_price'] ?? 0),
+                (float) ($payload['sale_price'] ?? 0),
             );
-            Log::info('Domain checkout: Skrime orderDomain erfolgreich.', ['domain' => $domain, 'response_keys' => array_keys($orderData)]);
         } catch (\Throwable $e) {
-            Log::error('Domain checkout: Skrime orderDomain fehlgeschlagen.', [
+            Log::error('Domain checkout: Bestellung nach Zahlung fehlgeschlagen.', [
                 'domain' => $domain,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect()->route('domains.index')->with('error', 'Domain-Bestellung bei Skrime fehlgeschlagen: '.$e->getMessage());
+            return redirect()->route('domains.index')->with('error', 'Domain-Bestellung fehlgeschlagen: '.$e->getMessage());
         }
-
-        $expiresAt = isset($orderData['expireAt']) ? Carbon::parse($orderData['expireAt']) : null;
-        $domainStatus = $orderData['status'] ?? $orderData['state'] ?? 'active';
-        $skrimeId = $orderData['id'] ?? $orderData['processId'] ?? null;
-        ResellerDomain::create([
-            'brand_id' => $brand->id,
-            'domain' => $payload['domain'],
-            'user_id' => $user->id,
-            'skrime_id' => $skrimeId,
-            'status' => $domainStatus,
-            'registered_at' => now(),
-            'expires_at' => $expiresAt,
-            'auto_renew' => (bool) ($orderData['autoRenew'] ?? false),
-            'purchase_price' => $payload['purchase_price'] ?? null,
-            'sale_price' => $payload['sale_price'] ?? null,
-            'tld' => $payload['tld'] ?? null,
-        ]);
 
         $invoice = $this->createDomainInvoice($user->id, $payload['domain'], $payload['sale_price'], $pdfService);
         if ($invoice) {
             $invoice->update(['status' => 'paid']);
         }
 
+        $domainStatus = $resellerDomain->status;
         $successMessage = strtolower((string) $domainStatus) === 'pendingfoa'
             ? 'Domain-Transfer für '.$payload['domain'].' wurde eingeleitet. Bitte bestätigen Sie die E-Mail (FOA) von der Registry.'
             : 'Domain '.$payload['domain'].' wurde registriert.';

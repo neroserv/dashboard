@@ -14,6 +14,8 @@ import {
     BFormInput,
     BFormSelect,
     BFormCheckbox,
+    BFormTextarea,
+    BAlert,
 } from 'bootstrap-vue-next';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import Icon from '@/components/wrappers/Icon.vue';
@@ -50,6 +52,20 @@ type CloudflarePayload = {
     has_api_token: boolean;
 };
 
+type RealtimeRegisterPayload = {
+    api_url: string;
+    customer_handle: string;
+    timeout: number;
+    margin_type: string;
+    margin_value: number;
+    sandbox: boolean;
+    has_api_key: boolean;
+    has_customer_handle: boolean;
+    is_configured: boolean;
+    configuration_issues: string[];
+    default_nameservers: string[];
+};
+
 type ExtensionItem = {
     key: string;
     label: string;
@@ -62,6 +78,7 @@ type ExtensionItem = {
     chatgpt?: ChatgptPayload;
     discord?: DiscordPayload;
     cloudflare?: CloudflarePayload;
+    realtimeregister?: RealtimeRegisterPayload;
 };
 
 type PterodactylProductFlags = {
@@ -85,6 +102,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const openSkrime = ref(false);
+const openRealtimeRegister = ref(false);
 const openInvoiceNinja = ref(false);
 const openChatgpt = ref(false);
 const openDiscord = ref(false);
@@ -121,6 +139,17 @@ const cloudflareForm = useForm({
     zone_id: '',
     api_token: '',
     zone_domain: '',
+});
+
+const realtimeRegisterForm = useForm({
+    api_url: '',
+    api_key: '',
+    customer_handle: '',
+    timeout: 30,
+    margin_type: 'fixed',
+    margin_value: 0,
+    sandbox: false,
+    default_nameservers_text: '',
 });
 
 const pterodactylProductForm = useForm({
@@ -173,6 +202,21 @@ function syncCloudflareFormFromProps(): void {
     cloudflareForm.api_token = '';
 }
 
+function syncRealtimeRegisterFormFromProps(): void {
+    const row = props.brand_extensions.find((e) => e.key === 'realtimeregister' && e.installed && e.realtimeregister);
+    if (!row?.realtimeregister) {
+        return;
+    }
+    realtimeRegisterForm.api_url = row.realtimeregister.api_url;
+    realtimeRegisterForm.customer_handle = row.realtimeregister.customer_handle;
+    realtimeRegisterForm.timeout = row.realtimeregister.timeout;
+    realtimeRegisterForm.margin_type = row.realtimeregister.margin_type;
+    realtimeRegisterForm.margin_value = row.realtimeregister.margin_value;
+    realtimeRegisterForm.sandbox = row.realtimeregister.sandbox;
+    realtimeRegisterForm.api_key = '';
+    realtimeRegisterForm.default_nameservers_text = (row.realtimeregister.default_nameservers ?? []).join('\n');
+}
+
 function syncPterodactylProductFormFromProps(): void {
     pterodactylProductForm.gaming = props.pterodactyl_product_flags.gaming;
     pterodactylProductForm.gameserver_cloud = props.pterodactyl_product_flags.gameserver_cloud;
@@ -186,6 +230,7 @@ watch(
         syncChatgptFormFromProps();
         syncDiscordFormFromProps();
         syncCloudflareFormFromProps();
+        syncRealtimeRegisterFormFromProps();
     },
     { immediate: true, deep: true },
 );
@@ -233,6 +278,24 @@ function submitDiscord(): void {
 
 function submitCloudflare(): void {
     cloudflareForm.put(brandExtensions.cloudflare.update.url(), { preserveScroll: true });
+}
+
+function submitRealtimeRegister(): void {
+    realtimeRegisterForm
+        .transform((data) => ({
+            api_url: data.api_url,
+            api_key: data.api_key,
+            customer_handle: data.customer_handle,
+            timeout: data.timeout,
+            margin_type: data.margin_type,
+            margin_value: data.margin_value,
+            sandbox: data.sandbox,
+            default_nameservers: data.default_nameservers_text
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean),
+        }))
+        .put(brandExtensions.realtimeregister.update.url(), { preserveScroll: true });
 }
 
 function submitPterodactylProducts(): void {
@@ -283,6 +346,15 @@ function submitPterodactylProducts(): void {
                                     <BCardTitle tag="h6" class="mb-1">{{ ext.label }}</BCardTitle>
                                     <span v-if="ext.installed" class="badge bg-success-subtle text-success">Installiert</span>
                                     <span v-else class="badge bg-secondary-subtle text-secondary">Nicht installiert</span>
+                                    <span
+                                        v-if="
+                                            ext.key === 'realtimeregister' &&
+                                            ext.installed &&
+                                            ext.realtimeregister &&
+                                            !ext.realtimeregister.is_configured
+                                        "
+                                        class="badge bg-warning-subtle text-dark ms-1"
+                                    >API-Zugang offen</span>
                                 </div>
                             </BCardHeader>
                             <BCardBody class="pt-0 d-flex flex-column flex-grow-1">
@@ -315,6 +387,15 @@ function submitPterodactylProducts(): void {
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Skrime-Einstellungen
+                                    </BButton>
+                                    <BButton
+                                        v-if="ext.installed && ext.key === 'realtimeregister' && canUpdate"
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        @click="openRealtimeRegister = !openRealtimeRegister"
+                                    >
+                                        <Icon icon="settings" class="me-1" />
+                                        Realtime Register
                                     </BButton>
                                     <BButton
                                         v-if="ext.installed && ext.key === 'invoice_ninja' && canUpdate"
@@ -401,6 +482,100 @@ function submitPterodactylProducts(): void {
                                         class="mt-3 px-4 py-2"
                                         :disabled="skrimeForm.processing"
                                         @click="submitSkrime"
+                                    >
+                                        Speichern
+                                    </BButton>
+                                </div>
+
+                                <div
+                                    v-if="ext.key === 'realtimeregister' && ext.installed"
+                                    v-show="openRealtimeRegister"
+                                    class="mt-3 pt-3 border-top"
+                                >
+                                    <p class="small text-muted mb-2">
+                                        API-Key leer lassen, um den bestehenden Wert zu behalten (oder global
+                                        <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_API_KEY</code> in der .env). Kunden-Handle
+                                        ebenfalls hier oder per
+                                        <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_CUSTOMER_HANDLE</code>. Mit „Sandbox“ wird
+                                        die Sandbox-Base-URL aus der Konfiguration genutzt (sofern keine eigene API-URL gesetzt ist). Registrierte
+                                        Sandbox-Domains sind im Portal gekennzeichnet.
+                                    </p>
+                                    <BAlert
+                                        v-if="ext.realtimeregister && !ext.realtimeregister.is_configured"
+                                        variant="warning"
+                                        show
+                                        class="small"
+                                    >
+                                        <strong>API-Zugang unvollständig</strong> (Pricelist, Domain-Check, Sync u. a.):
+                                        <ul class="mb-0 ps-3 mt-1">
+                                            <li v-for="(issue, idx) in ext.realtimeregister.configuration_issues" :key="idx">
+                                                {{ issue }}
+                                            </li>
+                                        </ul>
+                                    </BAlert>
+                                    <BAlert v-else-if="ext.realtimeregister?.is_configured" variant="success" show class="small py-2">
+                                        Zugangsdaten vollständig für
+                                        <code class="rounded bg-dark bg-opacity-10 px-1">isConfigured()</code>
+                                        / API-Aufrufe.
+                                    </BAlert>
+                                    <BFormGroup label="API-URL (optional, überschreibt Sandbox/Live-URL)" label-for="rr-api-url">
+                                        <BFormInput id="rr-api-url" v-model="realtimeRegisterForm.api_url" type="url" autocomplete="off" />
+                                    </BFormGroup>
+                                    <BFormGroup label="API-Key (Secret, Header ApiKey …)" label-for="rr-api-key">
+                                        <BFormInput
+                                            id="rr-api-key"
+                                            v-model="realtimeRegisterForm.api_key"
+                                            type="password"
+                                            autocomplete="new-password"
+                                            :placeholder="ext.realtimeregister?.has_api_key ? '•••••••• (gesetzt)' : 'Erforderlich für Live/Sandbox'"
+                                        />
+                                    </BFormGroup>
+                                    <BFormGroup label="Kunden-Handle (Realtime Register)" label-for="rr-customer-handle">
+                                        <BFormInput
+                                            id="rr-customer-handle"
+                                            v-model="realtimeRegisterForm.customer_handle"
+                                            autocomplete="off"
+                                            :placeholder="
+                                                ext.realtimeregister?.has_customer_handle
+                                                    ? 'Überschreiben oder leer lassen'
+                                                    : 'z. B. aus dem RR-Portal oder .env REALTIMEREGISTER_CUSTOMER_HANDLE'
+                                            "
+                                        />
+                                    </BFormGroup>
+                                    <BFormGroup label="Timeout (Sek.)" label-for="rr-timeout">
+                                        <BFormInput id="rr-timeout" v-model.number="realtimeRegisterForm.timeout" type="number" min="1" max="300" />
+                                    </BFormGroup>
+                                    <BFormGroup label="Marge-Typ" label-for="rr-margin-type">
+                                        <BFormSelect id="rr-margin-type" v-model="realtimeRegisterForm.margin_type">
+                                            <option value="fixed">Festbetrag (EUR)</option>
+                                            <option value="percent">Prozent</option>
+                                        </BFormSelect>
+                                    </BFormGroup>
+                                    <BFormGroup label="Marge-Wert" label-for="rr-margin-value">
+                                        <BFormInput
+                                            id="rr-margin-value"
+                                            v-model.number="realtimeRegisterForm.margin_value"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </BFormGroup>
+                                    <BFormGroup class="mb-2">
+                                        <BFormCheckbox id="rr-sandbox" v-model="realtimeRegisterForm.sandbox"> Sandbox-API verwenden </BFormCheckbox>
+                                    </BFormGroup>
+                                    <BFormGroup label="Standard-Nameserver (eine Zeile pro Host)" label-for="rr-default-ns">
+                                        <BFormTextarea
+                                            id="rr-default-ns"
+                                            v-model="realtimeRegisterForm.default_nameservers_text"
+                                            rows="4"
+                                            placeholder="ns1.example.com&#10;ns2.example.com"
+                                        />
+                                    </BFormGroup>
+                                    <BButton
+                                        variant="primary"
+                                        class="mt-3 px-4 py-2"
+                                        :disabled="realtimeRegisterForm.processing"
+                                        @click="submitRealtimeRegister"
                                     >
                                         Speichern
                                     </BButton>

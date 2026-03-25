@@ -9,6 +9,7 @@ import {
     BCardHeader,
     BCardTitle,
     BCardBody,
+    BAlert,
     BForm,
     BFormGroup,
     BFormInput,
@@ -20,11 +21,15 @@ import Icon from '@/components/wrappers/Icon.vue';
 import { notify } from '@/composables/useNotify';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
+import tldPricelistRoutes from '@/routes/admin/domains/tld-pricelist';
+import adminDomains from '@/routes/admin/domains';
 import type { BreadcrumbItem } from '@/types';
 
 type TldItem = {
     id: number;
     tld: string;
+    price_source: string;
+    sale_registrar: string;
     create_price: number;
     renew_price: number;
     transfer_price: number;
@@ -48,21 +53,55 @@ type Props = {
     links: PaginationLink[];
     filters: {
         search: string;
+        list: 'skrime' | 'realtimeregister';
     };
+    default_sale_registrar: 'skrime' | 'realtimeregister';
 };
 
 const props = withDefaults(defineProps<Props>(), {
     links: () => [],
-    filters: () => ({ search: '' }),
+    filters: () => ({ search: '', list: 'skrime' }),
 });
 
 const searchInput = ref(props.filters.search);
 
+const activeList = ref<'skrime' | 'realtimeregister'>(
+    props.filters.list === 'realtimeregister' ? 'realtimeregister' : 'skrime',
+);
+
+watch(
+    () => props.filters.list,
+    (v) => {
+        activeList.value = v === 'realtimeregister' ? 'realtimeregister' : 'skrime';
+    },
+    { immediate: true },
+);
+
+const listFilter = (): 'skrime' | 'realtimeregister' => activeList.value;
+
 function applySearch() {
-    router.get('/admin/domains/tld-pricelist', {
-        search: searchInput.value || undefined,
-        page: undefined,
-    }, { preserveState: true });
+    router.get(
+        tldPricelistRoutes.index.url(),
+        {
+            list: listFilter(),
+            search: searchInput.value || undefined,
+            page: undefined,
+        },
+        { preserveState: true },
+    );
+}
+
+function switchList(list: 'skrime' | 'realtimeregister') {
+    activeList.value = list;
+    router.get(
+        tldPricelistRoutes.index.url(),
+        {
+            list,
+            search: searchInput.value || undefined,
+            page: 1,
+        },
+        { preserveState: true },
+    );
 }
 
 function handlePagination(url: string) {
@@ -71,7 +110,7 @@ function handlePagination(url: string) {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
-    { title: 'Domains', href: '/admin/domains' },
+    { title: 'Domains', href: adminDomains.index.url() },
     { title: 'TLD-Preise', href: '#' },
 ];
 
@@ -85,6 +124,8 @@ const bulkForm = useForm({
     margin_renew_value: '' as string,
     margin_transfer_value: '' as string,
     tlds: [] as string[],
+    price_source: 'skrime' as 'skrime' | 'realtimeregister',
+    search: '' as string,
 });
 
 const marginTypeOptions = [
@@ -111,12 +152,51 @@ watch(
 const syncLoading = ref(false);
 const syncPricelist = () => {
     syncLoading.value = true;
-    router.post('/admin/domains/tld-pricelist/sync', {}, {
-        preserveScroll: true,
-        onFinish: () => {
-            syncLoading.value = false;
+    router.post(
+        tldPricelistRoutes.sync.url(),
+        {
+            price_source: listFilter(),
+            search: props.filters.search || undefined,
         },
-    });
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                syncLoading.value = false;
+            },
+        },
+    );
+};
+
+const saleRegistrarBadge = (saleRegistrar: string): { text: string; bg: string } => {
+    if (saleRegistrar === 'realtimeregister') {
+        return { text: 'Realtime Register', bg: '#fd7e14' }; // orange
+    }
+
+    return { text: 'Skrime', bg: '#0d6efd' }; // blue
+};
+
+const saleRoutingLoading = ref(false);
+const setSaleRegistrarToCurrentList = () => {
+    saleRoutingLoading.value = true;
+
+    // If nothing is selected (and no search is given), apply to the whole current price_source list.
+    const selected = Array.from(selectedTlds.value);
+    const tlds = applyMarginToAll.value || selected.length === 0 ? [] : selected;
+
+    router.put(
+        '/admin/domains/tld-pricelist/bulk-sale-registrar',
+        {
+            sale_registrar: listFilter(),
+            tlds,
+            search: props.filters.search || undefined,
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                saleRoutingLoading.value = false;
+            },
+        },
+    );
 };
 
 const toggleAll = (checked: boolean) => {
@@ -134,6 +214,15 @@ watch(
     },
 );
 
+watch(
+    () => [props.filters.list, props.filters.search] as const,
+    () => {
+        bulkForm.price_source = listFilter();
+        bulkForm.search = props.filters.search ?? '';
+    },
+    { immediate: true },
+);
+
 const toggleOne = (tld: string, checked: boolean) => {
     const next = new Set(selectedTlds.value);
     if (checked) next.add(tld);
@@ -144,17 +233,21 @@ const toggleOne = (tld: string, checked: boolean) => {
 const allSelected = () => props.items.length > 0 && selectedTlds.value.size === props.items.length;
 
 const submitBulk = () => {
+    bulkForm.price_source = listFilter();
+    bulkForm.search = props.filters.search ?? '';
     bulkForm.tlds = applyMarginToAll.value ? [] : Array.from(selectedTlds.value);
     if (!applyMarginToAll.value && bulkForm.tlds.length === 0) {
         bulkForm.errors.tlds = 'Bitte mindestens eine TLD auswählen oder „Für alle TLDs“ aktivieren.';
         return;
     }
-    bulkForm.put('/admin/domains/tld-pricelist/bulk', {
+    bulkForm.put(tldPricelistRoutes.bulk.url(), {
         preserveScroll: true,
         onSuccess: () => {
             selectedTlds.value = new Set();
             applyMarginToAll.value = false;
             bulkForm.reset();
+            bulkForm.price_source = listFilter();
+            bulkForm.search = props.filters.search ?? '';
         },
     });
 };
@@ -166,22 +259,74 @@ const submitBulk = () => {
 
         <BRow>
             <BCol>
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                    <div>
-                        <h4 class="mb-1">TLD-Preise</h4>
-                        <p class="text-muted small mb-0">
-                            Einkaufspreise und Marge pro Domain-Endung. Bulk-Import aus Skrime, Massen-Edit der Gewinn-Marge.
-                        </p>
-                    </div>
-                    <BButton
-                        variant="outline-primary"
-                        :disabled="syncLoading"
-                        @click="syncPricelist"
+                <div class="mb-3">
+                    <h4 class="mb-1">TLD-Preise</h4>
+                    <p class="text-muted small mb-0">
+                        Zwei getrennte Listen: Einkauf und Marge pro Registrar. Verkauf im Shop pro TLD über „Verkauf über“.
+                    </p>
+                    <BAlert variant="info" show class="small mb-2">
+                        Aktive Liste: {{
+                            listFilter() === 'skrime'
+                                ? 'Skrime'
+                                : 'Realtime Register'
+                        }}. Default „Verkauf über“ für TLD-Routing: {{
+                            props.default_sale_registrar === 'realtimeregister'
+                                ? 'Realtime Register'
+                                : 'Skrime'
+                        }}.
+                    </BAlert>
+                    <div
+                        class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3"
+                        role="toolbar"
+                        aria-label="Liste und Import"
                     >
-                        <span v-if="syncLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                        <Icon v-else icon="download" class="me-2" />
-                        {{ syncLoading ? 'Importiere…' : 'Pricelist von Skrime importieren' }}
-                    </BButton>
+                        <div class="btn-group" role="group" aria-label="Registrar-Liste">
+                            <button
+                                type="button"
+                                class="btn btn-sm"
+                                :class="listFilter() === 'skrime' ? 'btn-primary' : 'btn-outline-primary'"
+                                @click="switchList('skrime')"
+                            >
+                                Skrime
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-sm"
+                                :class="listFilter() === 'realtimeregister' ? 'btn-primary' : 'btn-outline-primary'"
+                                @click="switchList('realtimeregister')"
+                            >
+                                Realtime Register
+                            </button>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <BButton
+                                variant="outline-secondary"
+                                size="sm"
+                                class="flex-shrink-0"
+                                :disabled="saleRoutingLoading || items.length === 0"
+                                @click="setSaleRegistrarToCurrentList"
+                            >
+                                Verkauf über auf Liste setzen
+                            </BButton>
+                            <BButton
+                                variant="outline-primary"
+                                size="sm"
+                                class="flex-shrink-0"
+                                :disabled="syncLoading"
+                                @click="syncPricelist"
+                            >
+                                <span v-if="syncLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                                <Icon v-else icon="download" class="me-2" />
+                                {{
+                                    syncLoading
+                                        ? 'Importiere…'
+                                        : listFilter() === 'skrime'
+                                          ? 'Pricelist von Skrime importieren'
+                                          : 'Pricelist von Realtime Register importieren'
+                                }}
+                            </BButton>
+                        </div>
+                    </div>
                 </div>
 
                 <BCard no-body class="mb-3">
@@ -256,9 +401,12 @@ const submitBulk = () => {
 
                 <BCard no-body>
                     <BCardHeader>
-                        <BCardTitle class="mb-0">Alle TLDs</BCardTitle>
+                        <BCardTitle class="mb-0">
+                            {{ listFilter() === 'skrime' ? 'Skrime-Preisliste' : 'Realtime-Register-Preisliste' }}
+                        </BCardTitle>
                         <p class="text-muted small mb-0 mt-1">
-                            Einkauf und Verkaufspreise für Create, Renew und Transfer. Margen getrennt pro Aktion.
+                            Nur Zeilen dieser Quelle ({{ listFilter() === 'skrime' ? 'Skrime' : 'Realtime Register' }}). Verkaufspalten
+                            werden aus der Marge dieser Liste berechnet.
                         </p>
                     </BCardHeader>
                     <BCardBody>
@@ -288,6 +436,7 @@ const submitBulk = () => {
                                             />
                                         </th>
                                         <th>TLD</th>
+                                        <th>Verkauf über</th>
                                         <th>Einkauf (Create)</th>
                                         <th>Einkauf (Renew)</th>
                                         <th>Einkauf (Transfer)</th>
@@ -308,6 +457,17 @@ const submitBulk = () => {
                                             />
                                         </td>
                                         <td class="fw-medium">.{{ item.tld }}</td>
+                                        <td style="min-width: 11rem">
+                                            <span
+                                                class="badge rounded-pill"
+                                                :style="{
+                                                    backgroundColor: saleRegistrarBadge(item.sale_registrar).bg,
+                                                    color: 'white',
+                                                }"
+                                            >
+                                                {{ saleRegistrarBadge(item.sale_registrar).text }}
+                                            </span>
+                                        </td>
                                         <td>{{ item.create_price.toFixed(2) }} €</td>
                                         <td>{{ item.renew_price.toFixed(2) }} €</td>
                                         <td>{{ item.transfer_price.toFixed(2) }} €</td>
@@ -316,8 +476,9 @@ const submitBulk = () => {
                                         <td>{{ item.sale_price_transfer.toFixed(2) }} €</td>
                                     </tr>
                                     <tr v-if="items.length === 0">
-                                        <td colspan="8" class="text-center text-muted py-4">
-                                            Keine TLDs. Klicken Sie auf „Pricelist von Skrime importieren“, um alle verfügbaren Endungen zu laden.
+                                        <td colspan="9" class="text-center text-muted py-4">
+                                            Keine TLDs in dieser Liste. Wechseln Sie die Registerkarte oder importieren Sie die Pricelist für
+                                            {{ listFilter() === 'skrime' ? 'Skrime' : 'Realtime Register' }}.
                                         </td>
                                     </tr>
                                 </tbody>

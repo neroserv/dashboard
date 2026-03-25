@@ -11,6 +11,16 @@ class DomainCheckoutRequest extends FormRequest
         return (bool) $this->user();
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->boolean('transfer')) {
+            $raw = $this->input('auth_code');
+            if ($raw === null || $raw === '') {
+                $this->merge(['auth_code' => null]);
+            }
+        }
+    }
+
     /**
      * @return array<string, array<int, mixed>>
      */
@@ -22,7 +32,7 @@ class DomainCheckoutRequest extends FormRequest
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'tld' => ['nullable', 'string', 'max:20'],
             'transfer' => ['sometimes', 'boolean'],
-            'auth_code' => ['required_if:transfer,true', 'string', 'min:1', 'max:255'],
+            'auth_code' => ['required_if:transfer,true', 'nullable', 'string', 'min:1', 'max:255'],
             'use_profile_contact' => ['required', 'boolean'],
             'payment_method' => ['nullable', 'string', 'in:mollie,balance'],
             'discount_code' => ['nullable', 'string', 'max:255'],

@@ -32,7 +32,10 @@
                   Manuelle Verlängerung
                 </BButton>
               </div>
-              <BBadge variant="success" class="shrink-0">Aktiv</BBadge>
+              <div class="d-flex flex-column align-items-end gap-1 shrink-0">
+                <BBadge :variant="domainStatusBadgeVariant">{{ domainStatusLabel }}</BBadge>
+                <BBadge v-if="domain.is_sandbox" variant="warning" class="text-dark">Sandbox</BBadge>
+              </div>
             </div>
             <div class="text-center">
               <div class="mb-2 d-flex justify-content-center">
@@ -67,6 +70,16 @@
         </BCard>
       </aside>
       <div class="col-lg-9">
+        <BAlert
+          v-if="domain.show_rr_pending_validation_notice"
+          variant="warning"
+          show
+          class="mb-3"
+        >
+          <strong>Registrierung wird geprüft.</strong>
+          Realtime Register hat Ihnen eine E-Mail zur Bestätigung geschickt. Bitte folgen Sie den Anweisungen in der Nachricht
+          (z.&nbsp;B. Link klicken). Erst danach ist die Domain vollständig freigeschaltet.
+        </BAlert>
         <BNav tabs class="mb-3 flex-wrap">
           <BNavItem link-class="d-inline-flex align-items-center" :active="activeTab === 'overview'" @click="activeTab = 'overview'">
             <span class="d-inline-flex align-items-center gap-2 text-nowrap lh-1">
@@ -228,16 +241,29 @@ import {
   BSpinner,
   BTable,
   BBadge,
+  BAlert,
 } from 'bootstrap-vue-next'
 import Icon from '@/components/wrappers/Icon.vue'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PageBreadcrumb from '@/components/PageBreadcrumb.vue'
 import ProductSharingCard from '@/components/product-sharing/ProductSharingCard.vue'
 import { countriesSortedByName } from '@/lib/countries'
+import { customerDomainStatusBadgeVariant, customerDomainStatusLabel } from '@/lib/domainCustomerStatus'
 
 const props = withDefaults(
   defineProps<{
-    domain: { uuid: string; domain: string; status: string; expires_at: string | null; auto_renew: boolean; nameservers: string[]; renew_price: number | null }
+    domain: {
+      uuid: string
+      domain: string
+      status: string
+      expires_at: string | null
+      auto_renew: boolean
+      nameservers: string[]
+      renew_price: number | null
+      registrar?: string
+      is_sandbox?: boolean
+      show_rr_pending_validation_notice?: boolean
+    }
     domains_index_url: string
     canManageCollaborators?: boolean
     productShares?: Array<{ id: number; user: { id: number; name: string; email: string } | null; permissions: string[]; update_url: string; destroy_url: string }>
@@ -257,11 +283,14 @@ const props = withDefaults(
 const baseUrl = () => `/domains/${props.domain.uuid}`
 const activeTab = ref('overview')
 
+const domainStatusLabel = computed(() => customerDomainStatusLabel(props.domain.status))
+const domainStatusBadgeVariant = computed(() => customerDomainStatusBadgeVariant(props.domain.status))
+
 const overviewRows = computed(() => [
   { key: 'domain', label: 'Domain', value: props.domain.domain },
   { key: 'authcode', label: 'Authcode', value: '' },
-  { key: 'status', label: 'Registry Status', value: 'OK' },
-  { key: 'dns', label: 'DNS Status', value: 'Aktiv' },
+  { key: 'status', label: 'Registry-Status', value: domainStatusLabel.value },
+  { key: 'dns', label: 'DNS-Status', value: 'Aktiv' },
 ])
 
 const nameserverDialogOpen = ref(false)

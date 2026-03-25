@@ -13,7 +13,7 @@ use App\Services\BindZoneParser;
 use App\Services\ControlPanels\KeyHelpClient;
 use App\Services\ControlPanels\WebspacePanelDispatcher;
 use App\Services\MollieCustomerService;
-use App\Services\SkrimeApiService;
+use App\Services\ResellerDomainRegistrarAdapter;
 use App\Support\MollieWebhookUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -268,9 +268,9 @@ class WebspaceAccountController extends Controller
                 ->with('error', 'In der Vorlage wurden keine DNS-Einträge erkannt.');
         }
 
-        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
+        $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
         try {
-            $existing = $skrime->getDns($domain);
+            $existing = $registrar->getDns();
             $existingByKey = [];
             foreach ($existing as $r) {
                 $key = ($r['name'] ?? '')."\0".($r['type'] ?? '');
@@ -285,7 +285,7 @@ class WebspaceAccountController extends Controller
                 ];
             }
             $merged = array_values($existingByKey);
-            $skrime->setDns($domain, $merged);
+            $registrar->setDns($merged);
         } catch (\Throwable $e) {
             return redirect()->route('webspace-accounts.connect-domain.show', $webspaceAccount)
                 ->with('error', 'DNS konnte nicht gesetzt werden: '.$e->getMessage());

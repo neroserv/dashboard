@@ -20,6 +20,7 @@ import {
 import Icon from '@/components/wrappers/Icon.vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { dashboard } from '@/routes';
+import adminDomains from '@/routes/admin/domains';
 import type { BreadcrumbItem } from '@/types';
 import { notify } from '@/composables/useNotify';
 
@@ -42,6 +43,8 @@ type ResellerDomain = {
     sale_price: string | null;
     profit_margin: number;
     tld: string | null;
+    registrar?: string;
+    is_sandbox?: boolean;
     user?: User;
 };
 
@@ -124,6 +127,17 @@ const syncFromSkrime = () => {
     });
 };
 
+const syncRrLoading = ref(false);
+const syncFromRealtimeRegister = () => {
+    syncRrLoading.value = true;
+    router.post(adminDomains.syncRealtimeregister.url(), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            syncRrLoading.value = false;
+        },
+    });
+};
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
     { title: 'Domains', href: '/admin/domains' },
@@ -139,6 +153,7 @@ const tableItems = computed(() => (props.domains?.data ?? []).filter((d) => d !=
 
 const tableFields = [
     { key: 'domain', label: 'Domain' },
+    { key: 'registrar', label: 'Registrar' },
     { key: 'customer', label: 'Kunde' },
     { key: 'status', label: 'Status' },
     { key: 'expires_at', label: 'Ablaufdatum' },
@@ -176,7 +191,7 @@ function dismissHint() {
                     <div>
                         <h4 class="mb-1">Domains</h4>
                         <p class="text-muted small mb-0">
-                            Reseller-Domains (Skrime) – Übersicht, Kunde zuweisen, Verlängern
+                            Reseller-Domains (Skrime / Realtime Register) – Übersicht, Kunde zuweisen, Verlängern
                         </p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
@@ -188,6 +203,15 @@ function dismissHint() {
                             <span v-if="syncLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
                             <Icon v-else icon="refresh" class="me-2" />
                             {{ syncLoading ? 'Synchronisiere…' : 'Alle Domains von Skrime' }}
+                        </BButton>
+                        <BButton
+                            variant="outline-primary"
+                            :disabled="syncRrLoading"
+                            @click="syncFromRealtimeRegister"
+                        >
+                            <span v-if="syncRrLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                            <Icon v-else icon="refresh" class="me-2" />
+                            {{ syncRrLoading ? 'Synchronisiere…' : 'Alle Domains von Realtime Register' }}
                         </BButton>
                         <BButton variant="outline-primary" @click="importDialogOpen = true">
                             <Icon icon="download" class="me-2" />
@@ -233,7 +257,13 @@ function dismissHint() {
                             empty-text="Keine Domains vorhanden"
                         >
                             <template #cell(domain)="row">
-                                <span class="fw-medium">{{ row.item?.domain }}</span>
+                                <div class="d-flex flex-column align-items-start gap-1">
+                                    <span class="fw-medium">{{ row.item?.domain }}</span>
+                                    <BBadge v-if="row.item?.is_sandbox" variant="warning" class="text-dark">Sandbox</BBadge>
+                                </div>
+                            </template>
+                            <template #cell(registrar)="row">
+                                <span class="text-muted small text-uppercase">{{ row.item?.registrar ?? '–' }}</span>
                             </template>
                             <template #cell(customer)="row">
                                 <template v-if="row.item?.user">

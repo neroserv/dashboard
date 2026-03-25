@@ -4,7 +4,9 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Brand;
 use App\Services\MaintenanceService;
+use App\Support\DomainRegistrar;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class UpdateBrandRequest extends FormRequest
@@ -76,6 +78,7 @@ class UpdateBrandRequest extends FormRequest
             'features.prepaid_balance' => ['boolean'],
             'features.balance_topup' => ['boolean'],
             'features.balance_period_months' => ['nullable', 'integer', 'min:1', 'max:24'],
+            'features.domain_sales_registrar' => ['nullable', 'string', Rule::in(DomainRegistrar::values())],
             'salutation' => ['nullable', 'string', 'in:formal,informal'],
             'mail_header' => ['nullable', 'string', 'max:2000'],
             'mail_footer' => ['nullable', 'string', 'max:2000'],

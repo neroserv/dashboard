@@ -15,6 +15,7 @@ class TldPricelist extends Model
     protected $fillable = [
         'brand_id',
         'tld',
+        'price_source',
         'create_price',
         'renew_price',
         'transfer_price',

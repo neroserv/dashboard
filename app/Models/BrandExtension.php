@@ -23,6 +23,8 @@ class BrandExtension extends Model
 
     public const EXTENSION_SKRIME = 'skrime';
 
+    public const EXTENSION_REALTIMEREGISTER = 'realtimeregister';
+
     public const EXTENSION_TEAMSPEAK = 'teamspeak';
 
     /**
@@ -39,6 +41,7 @@ class BrandExtension extends Model
             self::EXTENSION_PLESK,
             self::EXTENSION_PTERODACTYL,
             self::EXTENSION_SKRIME,
+            self::EXTENSION_REALTIMEREGISTER,
             self::EXTENSION_TEAMSPEAK,
         ];
     }

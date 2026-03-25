@@ -4,6 +4,7 @@ use App\Models\Brand;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use App\Services\SkrimeApiService;
+use App\Support\DomainRegistrar;
 use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
@@ -56,6 +57,32 @@ test('reseller domain profit margin is calculated correctly', function () {
     ]);
 
     expect($domain->profitMargin())->toBe(3.0);
+});
+
+test('reseller domain detects realtime register pending validation status', function () {
+    $pending = ResellerDomain::factory()->make([
+        'registrar' => DomainRegistrar::REALTIME_REGISTER,
+        'status' => 'PENDING_VALIDATION',
+    ]);
+    expect($pending->isRealtimeRegisterPendingValidation())->toBeTrue();
+
+    $pendingSpaced = ResellerDomain::factory()->make([
+        'registrar' => DomainRegistrar::REALTIME_REGISTER,
+        'status' => 'Pending validation',
+    ]);
+    expect($pendingSpaced->isRealtimeRegisterPendingValidation())->toBeTrue();
+
+    $skrime = ResellerDomain::factory()->make([
+        'registrar' => DomainRegistrar::SKRIME,
+        'status' => 'PENDING_VALIDATION',
+    ]);
+    expect($skrime->isRealtimeRegisterPendingValidation())->toBeFalse();
+
+    $active = ResellerDomain::factory()->make([
+        'registrar' => DomainRegistrar::REALTIME_REGISTER,
+        'status' => 'ACTIVE',
+    ]);
+    expect($active->isRealtimeRegisterPendingValidation())->toBeFalse();
 });
 
 test('customer can view own domain manage page', function () {

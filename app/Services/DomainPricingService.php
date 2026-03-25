@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Brand;
 use App\Models\TldPricelist;
+use App\Support\DomainRegistrar;
 use Illuminate\Support\Facades\Cache;
 
 class DomainPricingService
@@ -13,6 +14,8 @@ class DomainPricingService
     public function __construct(
         protected SkrimeApiService $skrimeApi,
         protected BrandExtensionService $brandExtensionService,
+        protected TldSaleRoutingService $saleRouting,
+        protected RealtimeRegisterApiService $realtimeRegisterApi,
     ) {}
 
     public function forBrand(Brand $brand): static
@@ -35,8 +38,18 @@ class DomainPricingService
         return $brand !== null ? $this->skrimeApi->forBrand($brand) : $this->skrimeApi;
     }
 
+    public function saleRegistrarForTld(string $tld): string
+    {
+        $brand = $this->effectiveBrand();
+        if ($brand === null) {
+            return DomainRegistrar::SKRIME;
+        }
+
+        return $this->saleRouting->saleRegistrarFor($brand, $tld);
+    }
+
     /**
-     * Get pricelist from Skrime, cached for 1 hour per brand.
+     * Cached pricelist for the **sale** registrar of this brand (used for API fallbacks).
      *
      * @return array<int, array{tld: string, create: string, renew: string, transfer: string, restore: string, offer: bool, offerTypes: array}>
      */
@@ -44,6 +57,21 @@ class DomainPricingService
     {
         $brand = $this->effectiveBrand();
         $keySuffix = $brand?->id ?? 'global';
+        $registrar = DomainRegistrar::SKRIME;
+        if ($brand !== null) {
+            $raw = (string) ($brand->getFeaturesArray()['domain_sales_registrar'] ?? DomainRegistrar::SKRIME);
+            $registrar = DomainRegistrar::isValid($raw) ? $raw : DomainRegistrar::SKRIME;
+        }
+
+        if ($registrar === DomainRegistrar::REALTIME_REGISTER) {
+            return Cache::remember("rr_pricelist:{$keySuffix}", 3600, function () use ($brand) {
+                if ($brand === null) {
+                    return [];
+                }
+
+                return $this->realtimeRegisterApi->forBrand($brand)->getPricelist();
+            });
+        }
 
         return Cache::remember("skrime_pricelist:{$keySuffix}", 3600, function () {
             return $this->skrimeClient()->getPricelist();
@@ -51,7 +79,7 @@ class DomainPricingService
     }
 
     /**
-     * Get purchase price for a TLD (create, renew, or transfer). Uses tld_pricelist first, then Skrime cache.
+     * Get purchase price for a TLD (create, renew, or transfer). Uses tld_pricelist row for the **sale** registrar, then API cache.
      */
     public function getPurchasePrice(string $tld, string $type = 'create'): float
     {
@@ -68,29 +96,40 @@ class DomainPricingService
                 default => (float) $row->create_price,
             };
 
-            return $price > 0 ? round($price, 2) : $this->getPurchasePriceFromSkrime($tldKey, $type);
+            return $price > 0 ? round($price, 2) : $this->getPurchasePriceFromRegistrarApi($tldKey, $type);
         }
 
-        return $this->getPurchasePriceFromSkrime($tldKey, $type);
+        return $this->getPurchasePriceFromRegistrarApi($tldKey, $type);
     }
 
     protected function tldPricelistRow(string $tldKey): ?TldPricelist
     {
-        $query = TldPricelist::query()->where('tld', $tldKey);
         $brand = $this->effectiveBrand();
-        if ($brand !== null) {
-            $query->where('brand_id', $brand->id);
+        if ($brand === null) {
+            return TldPricelist::query()
+                ->where('tld', $tldKey)
+                ->where('price_source', DomainRegistrar::SKRIME)
+                ->first();
         }
 
-        return $query->first();
+        $sale = $this->saleRouting->saleRegistrarFor($brand, $tldKey);
+
+        return TldPricelist::query()
+            ->where('brand_id', $brand->id)
+            ->where('tld', $tldKey)
+            ->where('price_source', $sale)
+            ->first();
     }
 
-    /**
-     * Get purchase price from Skrime pricelist cache only.
-     */
-    protected function getPurchasePriceFromSkrime(string $tldKey, string $type): float
+    protected function getPurchasePriceFromRegistrarApi(string $tldKey, string $type): float
     {
-        $list = $this->getPricelist();
+        $brand = $this->effectiveBrand();
+        if ($brand === null) {
+            return 0;
+        }
+
+        $sale = $this->saleRouting->saleRegistrarFor($brand, $tldKey);
+        $list = $this->cachedPricelistForRegistrar($brand, $sale);
         $key = match ($type) {
             'renew' => 'renew',
             'transfer' => 'transfer',
@@ -103,6 +142,27 @@ class DomainPricingService
         }
 
         return 0;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function cachedPricelistForRegistrar(Brand $brand, string $registrar): array
+    {
+        if ($registrar === DomainRegistrar::REALTIME_REGISTER) {
+            return Cache::remember('rr_pricelist:'.$brand->id, 3600, function () use ($brand) {
+                $rr = $this->realtimeRegisterApi->forBrand($brand);
+                if (! $rr->isConfigured()) {
+                    return [];
+                }
+
+                return $rr->getPricelist();
+            });
+        }
+
+        return Cache::remember('skrime_pricelist:'.$brand->id, 3600, function () use ($brand) {
+            return $this->skrimeApi->forBrand($brand)->getPricelist();
+        });
     }
 
     /**
@@ -126,7 +186,15 @@ class DomainPricingService
             return round($purchasePrice + $marginValue, 2);
         }
 
-        $c = $this->brandExtensionService->skrimeConfigForBrand($this->effectiveBrand());
+        $brand = $this->effectiveBrand();
+        $saleRegistrar = $tldKey !== '' && $brand !== null
+            ? $this->saleRouting->saleRegistrarFor($brand, $tldKey)
+            : DomainRegistrar::SKRIME;
+
+        $c = $saleRegistrar === DomainRegistrar::REALTIME_REGISTER
+            ? $this->brandExtensionService->realtimeregisterConfigForBrand($brand)
+            : $this->brandExtensionService->skrimeConfigForBrand($brand);
+
         $tlds = $c['tlds'] ?? [];
         $marginType = $tlds[$tldKey]['margin_type'] ?? $c['margin_type'];
         $marginValue = (float) ($tlds[$tldKey]['margin_value'] ?? $c['margin_value']);

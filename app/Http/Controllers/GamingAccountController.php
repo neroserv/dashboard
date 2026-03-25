@@ -17,7 +17,7 @@ use App\Services\CloudflareDnsService;
 use App\Services\ControlPanels\PterodactylClient;
 use App\Services\GameServerQueryService;
 use App\Services\MollieCustomerService;
-use App\Services\SkrimeApiService;
+use App\Services\ResellerDomainRegistrarAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -412,9 +412,9 @@ class GamingAccountController extends Controller
         $port = $nodeAndPort['port'];
         $srvData = '0 5 '.$port.' '.$target.'.';
 
-        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
+        $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
         try {
-            $existingRecords = $skrime->getDns($resellerDomain->domain);
+            $existingRecords = $registrar->getDns();
             $records = array_map(fn ($r) => [
                 'name' => $r['name'],
                 'type' => $r['type'],
@@ -431,7 +431,7 @@ class GamingAccountController extends Controller
                 'type' => 'SRV',
                 'data' => $srvData,
             ];
-            $skrime->setDns($resellerDomain->domain, $records);
+            $registrar->setDns($records);
         } catch (\Throwable $e) {
             return redirect()->route('gaming-accounts.connect-domain.show', $gameServerAccount)
                 ->with('error', 'DNS konnte nicht gesetzt werden: '.$e->getMessage());
