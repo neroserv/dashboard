@@ -1,7 +1,7 @@
 <!-- Admin: Marken-Erweiterungen -->
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
     BRow,
     BCol,
@@ -16,6 +16,7 @@ import {
     BFormCheckbox,
     BFormTextarea,
     BAlert,
+    BModal,
 } from 'bootstrap-vue-next';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import Icon from '@/components/wrappers/Icon.vue';
@@ -28,6 +29,7 @@ type SkrimePayload = {
     timeout: number;
     margin_type: string;
     margin_value: number;
+    default_nameservers: string[];
     has_api_token: boolean;
 };
 
@@ -109,6 +111,12 @@ const openDiscord = ref(false);
 const openCloudflare = ref(false);
 const openPterodactylProducts = ref(false);
 
+const skrimeExt = computed(() => props.brand_extensions.find((e) => e.key === 'skrime') ?? null);
+const realtimeRegisterExt = computed(() => props.brand_extensions.find((e) => e.key === 'realtimeregister') ?? null);
+const invoiceNinjaExt = computed(() => props.brand_extensions.find((e) => e.key === 'invoice_ninja') ?? null);
+const discordExt = computed(() => props.brand_extensions.find((e) => e.key === 'discord') ?? null);
+const cloudflareExt = computed(() => props.brand_extensions.find((e) => e.key === 'cloudflare') ?? null);
+
 const installForm = useForm({ extension: '' });
 const uninstallForm = useForm({ extension: '' });
 
@@ -118,6 +126,7 @@ const skrimeForm = useForm({
     timeout: 30,
     margin_type: 'fixed',
     margin_value: 0,
+    default_nameservers_text: '',
 });
 
 const invoiceNinjaForm = useForm({
@@ -166,6 +175,7 @@ function syncSkrimeFormFromProps(): void {
     skrimeForm.timeout = sk.skrime.timeout;
     skrimeForm.margin_type = sk.skrime.margin_type;
     skrimeForm.margin_value = sk.skrime.margin_value;
+    skrimeForm.default_nameservers_text = (sk.skrime.default_nameservers ?? []).join('\n');
     skrimeForm.api_token = '';
 }
 
@@ -261,7 +271,19 @@ function uninstall(key: string): void {
 }
 
 function submitSkrime(): void {
-    skrimeForm.put(brandExtensions.skrime.update.url(), { preserveScroll: true });
+    skrimeForm
+        .transform((data) => ({
+            api_url: data.api_url,
+            api_token: data.api_token,
+            timeout: data.timeout,
+            margin_type: data.margin_type,
+            margin_value: data.margin_value,
+            default_nameservers: data.default_nameservers_text
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean),
+        }))
+        .put(brandExtensions.skrime.update.url(), { preserveScroll: true });
 }
 
 function submitInvoiceNinja(): void {
@@ -357,9 +379,9 @@ function submitPterodactylProducts(): void {
                                     >API-Zugang offen</span>
                                 </div>
                             </BCardHeader>
-                            <BCardBody class="pt-0 d-flex flex-column flex-grow-1">
+                            <BCardBody class="pt-2 d-flex flex-column flex-grow-1">
                                 <p class="text-muted small mb-0">{{ ext.description }}</p>
-                                <div class="d-flex flex-wrap gap-2 mt-auto pt-3">
+                                <div class="d-flex flex-wrap gap-2 pt-2">
                                     <BButton
                                         v-if="!ext.installed && canUpdate"
                                         variant="primary"
@@ -383,7 +405,7 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'skrime' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openSkrime = !openSkrime"
+                                        @click="openSkrime = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Skrime-Einstellungen
@@ -392,7 +414,7 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'realtimeregister' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openRealtimeRegister = !openRealtimeRegister"
+                                        @click="openRealtimeRegister = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Realtime Register
@@ -401,7 +423,7 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'invoice_ninja' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openInvoiceNinja = !openInvoiceNinja"
+                                        @click="openInvoiceNinja = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Einstellungen
@@ -419,7 +441,7 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'discord' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openDiscord = !openDiscord"
+                                        @click="openDiscord = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Einstellungen
@@ -428,7 +450,7 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'cloudflare' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openCloudflare = !openCloudflare"
+                                        @click="openCloudflare = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Einstellungen
@@ -437,175 +459,10 @@ function submitPterodactylProducts(): void {
                                         v-if="ext.installed && ext.key === 'pterodactyl' && canUpdate"
                                         variant="outline-secondary"
                                         size="sm"
-                                        @click="openPterodactylProducts = !openPterodactylProducts"
+                                        @click="openPterodactylProducts = true"
                                     >
                                         <Icon icon="settings" class="me-1" />
                                         Pterodactyl-Produkte
-                                    </BButton>
-                                </div>
-
-                                <div
-                                    v-if="ext.key === 'skrime' && ext.installed"
-                                    v-show="openSkrime"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">
-                                        API-Token leer lassen, um den bestehenden Wert zu behalten. Fallback: .env /
-                                        globale Konfiguration, wenn nichts gesetzt ist.
-                                    </p>
-                                    <BFormGroup label="API-URL" label-for="skrime-api-url">
-                                        <BFormInput id="skrime-api-url" v-model="skrimeForm.api_url" type="url" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="API-Token" label-for="skrime-api-token">
-                                        <BFormInput
-                                            id="skrime-api-token"
-                                            v-model="skrimeForm.api_token"
-                                            type="password"
-                                            autocomplete="new-password"
-                                            :placeholder="ext.skrime?.has_api_token ? '•••••••• (gesetzt)' : 'Optional'"
-                                        />
-                                    </BFormGroup>
-                                    <BFormGroup label="Timeout (Sek.)" label-for="skrime-timeout">
-                                        <BFormInput id="skrime-timeout" v-model.number="skrimeForm.timeout" type="number" min="1" max="300" />
-                                    </BFormGroup>
-                                    <BFormGroup label="Marge-Typ" label-for="skrime-margin-type">
-                                        <BFormSelect id="skrime-margin-type" v-model="skrimeForm.margin_type">
-                                            <option value="fixed">Festbetrag (EUR)</option>
-                                            <option value="percent">Prozent</option>
-                                        </BFormSelect>
-                                    </BFormGroup>
-                                    <BFormGroup label="Marge-Wert" label-for="skrime-margin-value">
-                                        <BFormInput id="skrime-margin-value" v-model.number="skrimeForm.margin_value" type="number" min="0" step="0.01" />
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="skrimeForm.processing"
-                                        @click="submitSkrime"
-                                    >
-                                        Speichern
-                                    </BButton>
-                                </div>
-
-                                <div
-                                    v-if="ext.key === 'realtimeregister' && ext.installed"
-                                    v-show="openRealtimeRegister"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">
-                                        API-Key leer lassen, um den bestehenden Wert zu behalten (oder global
-                                        <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_API_KEY</code> in der .env). Kunden-Handle
-                                        ebenfalls hier oder per
-                                        <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_CUSTOMER_HANDLE</code>. Mit „Sandbox“ wird
-                                        die Sandbox-Base-URL aus der Konfiguration genutzt (sofern keine eigene API-URL gesetzt ist). Registrierte
-                                        Sandbox-Domains sind im Portal gekennzeichnet.
-                                    </p>
-                                    <BAlert
-                                        v-if="ext.realtimeregister && !ext.realtimeregister.is_configured"
-                                        variant="warning"
-                                        show
-                                        class="small"
-                                    >
-                                        <strong>API-Zugang unvollständig</strong> (Pricelist, Domain-Check, Sync u. a.):
-                                        <ul class="mb-0 ps-3 mt-1">
-                                            <li v-for="(issue, idx) in ext.realtimeregister.configuration_issues" :key="idx">
-                                                {{ issue }}
-                                            </li>
-                                        </ul>
-                                    </BAlert>
-                                    <BAlert v-else-if="ext.realtimeregister?.is_configured" variant="success" show class="small py-2">
-                                        Zugangsdaten vollständig für
-                                        <code class="rounded bg-dark bg-opacity-10 px-1">isConfigured()</code>
-                                        / API-Aufrufe.
-                                    </BAlert>
-                                    <BFormGroup label="API-URL (optional, überschreibt Sandbox/Live-URL)" label-for="rr-api-url">
-                                        <BFormInput id="rr-api-url" v-model="realtimeRegisterForm.api_url" type="url" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="API-Key (Secret, Header ApiKey …)" label-for="rr-api-key">
-                                        <BFormInput
-                                            id="rr-api-key"
-                                            v-model="realtimeRegisterForm.api_key"
-                                            type="password"
-                                            autocomplete="new-password"
-                                            :placeholder="ext.realtimeregister?.has_api_key ? '•••••••• (gesetzt)' : 'Erforderlich für Live/Sandbox'"
-                                        />
-                                    </BFormGroup>
-                                    <BFormGroup label="Kunden-Handle (Realtime Register)" label-for="rr-customer-handle">
-                                        <BFormInput
-                                            id="rr-customer-handle"
-                                            v-model="realtimeRegisterForm.customer_handle"
-                                            autocomplete="off"
-                                            :placeholder="
-                                                ext.realtimeregister?.has_customer_handle
-                                                    ? 'Überschreiben oder leer lassen'
-                                                    : 'z. B. aus dem RR-Portal oder .env REALTIMEREGISTER_CUSTOMER_HANDLE'
-                                            "
-                                        />
-                                    </BFormGroup>
-                                    <BFormGroup label="Timeout (Sek.)" label-for="rr-timeout">
-                                        <BFormInput id="rr-timeout" v-model.number="realtimeRegisterForm.timeout" type="number" min="1" max="300" />
-                                    </BFormGroup>
-                                    <BFormGroup label="Marge-Typ" label-for="rr-margin-type">
-                                        <BFormSelect id="rr-margin-type" v-model="realtimeRegisterForm.margin_type">
-                                            <option value="fixed">Festbetrag (EUR)</option>
-                                            <option value="percent">Prozent</option>
-                                        </BFormSelect>
-                                    </BFormGroup>
-                                    <BFormGroup label="Marge-Wert" label-for="rr-margin-value">
-                                        <BFormInput
-                                            id="rr-margin-value"
-                                            v-model.number="realtimeRegisterForm.margin_value"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                    </BFormGroup>
-                                    <BFormGroup class="mb-2">
-                                        <BFormCheckbox id="rr-sandbox" v-model="realtimeRegisterForm.sandbox"> Sandbox-API verwenden </BFormCheckbox>
-                                    </BFormGroup>
-                                    <BFormGroup label="Standard-Nameserver (eine Zeile pro Host)" label-for="rr-default-ns">
-                                        <BFormTextarea
-                                            id="rr-default-ns"
-                                            v-model="realtimeRegisterForm.default_nameservers_text"
-                                            rows="4"
-                                            placeholder="ns1.example.com&#10;ns2.example.com"
-                                        />
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="realtimeRegisterForm.processing"
-                                        @click="submitRealtimeRegister"
-                                    >
-                                        Speichern
-                                    </BButton>
-                                </div>
-
-                                <div
-                                    v-if="ext.key === 'invoice_ninja' && ext.installed"
-                                    v-show="openInvoiceNinja"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">Nur Speicherung; keine API-Anbindung in dieser Phase.</p>
-                                    <BFormGroup label="Basis-URL" label-for="in-base-url">
-                                        <BFormInput id="in-base-url" v-model="invoiceNinjaForm.base_url" type="url" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="API-Token" label-for="in-api-token">
-                                        <BFormInput
-                                            id="in-api-token"
-                                            v-model="invoiceNinjaForm.api_token"
-                                            type="password"
-                                            autocomplete="new-password"
-                                            :placeholder="ext.invoice_ninja?.has_api_token ? '•••••••• (gesetzt)' : 'Optional'"
-                                        />
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="invoiceNinjaForm.processing"
-                                        @click="submitInvoiceNinja"
-                                    >
-                                        Speichern
                                     </BButton>
                                 </div>
 
@@ -636,98 +493,341 @@ function submitPterodactylProducts(): void {
                                     </BButton>
                                 </div>
 
-                                <div
-                                    v-if="ext.key === 'discord' && ext.installed"
-                                    v-show="openDiscord"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">
-                                        Guild-ID, Kunden-Rollen-ID und Einladungs-URL (OAuth/Bot weiter in .env).
-                                    </p>
-                                    <BFormGroup label="Guild-ID" label-for="discord-guild-id">
-                                        <BFormInput id="discord-guild-id" v-model="discordForm.guild_id" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="Kunden-Rollen-ID" label-for="discord-role-id">
-                                        <BFormInput id="discord-role-id" v-model="discordForm.customer_role_id" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="Einladungs-URL" label-for="discord-invite-url">
-                                        <BFormInput id="discord-invite-url" v-model="discordForm.invite_url" type="url" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="discordForm.processing"
-                                        @click="submitDiscord"
-                                    >
-                                        Speichern
-                                    </BButton>
-                                </div>
-
-                                <div
-                                    v-if="ext.key === 'cloudflare' && ext.installed"
-                                    v-show="openCloudflare"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">
-                                        Zone-ID, API-Token und Zonendomain für SRV-Subdomains. Token leer lassen, um den bestehenden Wert zu
-                                        behalten.
-                                    </p>
-                                    <BFormGroup label="Zone-ID" label-for="cf-zone-id">
-                                        <BFormInput id="cf-zone-id" v-model="cloudflareForm.zone_id" autocomplete="off" />
-                                    </BFormGroup>
-                                    <BFormGroup label="Zonendomain" label-for="cf-zone-domain">
-                                        <BFormInput id="cf-zone-domain" v-model="cloudflareForm.zone_domain" autocomplete="off" placeholder="example.com" />
-                                    </BFormGroup>
-                                    <BFormGroup label="API-Token" label-for="cf-api-token">
-                                        <BFormInput
-                                            id="cf-api-token"
-                                            v-model="cloudflareForm.api_token"
-                                            type="password"
-                                            autocomplete="new-password"
-                                            :placeholder="ext.cloudflare?.has_api_token ? '•••••••• (gesetzt)' : 'Erforderlich'"
-                                        />
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="cloudflareForm.processing"
-                                        @click="submitCloudflare"
-                                    >
-                                        Speichern
-                                    </BButton>
-                                </div>
-
-                                <div
-                                    v-if="ext.key === 'pterodactyl' && ext.installed"
-                                    v-show="openPterodactylProducts"
-                                    class="mt-3 pt-3 border-top"
-                                >
-                                    <p class="small text-muted mb-2">
-                                        Sichtbarkeit im Kundenportal: klassische Game-Server und Gameserver Cloud getrennt schaltbar.
-                                    </p>
-                                    <BFormGroup class="mb-2">
-                                        <BFormCheckbox id="ptero-gaming" v-model="pterodactylProductForm.gaming">
-                                            Gaming (Game-Server / Pterodactyl)
-                                        </BFormCheckbox>
-                                    </BFormGroup>
-                                    <BFormGroup class="mb-2">
-                                        <BFormCheckbox id="ptero-cloud" v-model="pterodactylProductForm.gameserver_cloud">
-                                            Gameserver Cloud
-                                        </BFormCheckbox>
-                                    </BFormGroup>
-                                    <BButton
-                                        variant="primary"
-                                        class="mt-3 px-4 py-2"
-                                        :disabled="pterodactylProductForm.processing"
-                                        @click="submitPterodactylProducts"
-                                    >
-                                        Speichern
-                                    </BButton>
-                                </div>
                             </BCardBody>
                         </BCard>
                     </BCol>
                 </BRow>
+
+                <BModal
+                    v-model="openSkrime"
+                    title="Skrime-Einstellungen"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">
+                            API-Token leer lassen, um den bestehenden Wert zu behalten. Fallback: .env / globale Konfiguration, wenn nichts gesetzt ist.
+                        </p>
+
+                        <BFormGroup label="API-URL" label-for="skrime-api-url">
+                            <BFormInput
+                                id="skrime-api-url"
+                                v-model="skrimeForm.api_url"
+                                type="url"
+                                autocomplete="off"
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="API-Token" label-for="skrime-api-token">
+                            <BFormInput
+                                id="skrime-api-token"
+                                v-model="skrimeForm.api_token"
+                                type="password"
+                                autocomplete="new-password"
+                                :placeholder="skrimeExt?.skrime?.has_api_token ? '•••••••• (gesetzt)' : 'Optional'"
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="Timeout (Sek.)" label-for="skrime-timeout">
+                            <BFormInput
+                                id="skrime-timeout"
+                                v-model.number="skrimeForm.timeout"
+                                type="number"
+                                min="1"
+                                max="300"
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="Marge-Typ" label-for="skrime-margin-type">
+                            <BFormSelect id="skrime-margin-type" v-model="skrimeForm.margin_type">
+                                <option value="fixed">Festbetrag (EUR)</option>
+                                <option value="percent">Prozent</option>
+                            </BFormSelect>
+                        </BFormGroup>
+                        <BFormGroup label="Marge-Wert" label-for="skrime-margin-value">
+                            <BFormInput
+                                id="skrime-margin-value"
+                                v-model.number="skrimeForm.margin_value"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="Standard-Nameserver (eine Zeile pro Host)" label-for="skrime-default-ns">
+                            <BFormTextarea
+                                id="skrime-default-ns"
+                                v-model="skrimeForm.default_nameservers_text"
+                                rows="4"
+                                placeholder="ns1.example.com&#10;ns2.example.com"
+                            />
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="skrimeForm.processing"
+                            @click="submitSkrime"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
+
+                <BModal
+                    v-model="openRealtimeRegister"
+                    title="Realtime Register"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">
+                            API-Key leer lassen, um den bestehenden Wert zu behalten (oder global
+                            <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_API_KEY</code> in der .env). Kunden-Handle
+                            ebenfalls hier oder per
+                            <code class="rounded bg-dark bg-opacity-10 px-1">REALTIMEREGISTER_CUSTOMER_HANDLE</code>. Mit „Sandbox“ wird
+                            die Sandbox-Base-URL aus der Konfiguration genutzt (sofern keine eigene API-URL gesetzt ist). Registrierte
+                            Sandbox-Domains sind im Portal gekennzeichnet.
+                        </p>
+
+                        <BAlert
+                            v-if="realtimeRegisterExt?.realtimeregister && !realtimeRegisterExt.realtimeregister.is_configured"
+                            variant="warning"
+                            show
+                            class="small"
+                        >
+                            <strong>API-Zugang unvollständig</strong> (Pricelist, Domain-Check, Sync u. a.):
+                            <ul class="mb-0 ps-3 mt-1">
+                                <li
+                                    v-for="(issue, idx) in realtimeRegisterExt.realtimeregister.configuration_issues"
+                                    :key="idx"
+                                >
+                                    {{ issue }}
+                                </li>
+                            </ul>
+                        </BAlert>
+                        <BAlert
+                            v-else-if="realtimeRegisterExt?.realtimeregister?.is_configured"
+                            variant="success"
+                            show
+                            class="small py-2"
+                        >
+                            Zugangsdaten vollständig für
+                            <code class="rounded bg-dark bg-opacity-10 px-1">isConfigured()</code>
+                            / API-Aufrufe.
+                        </BAlert>
+
+                        <BFormGroup label="API-URL (optional, überschreibt Sandbox/Live-URL)" label-for="rr-api-url">
+                            <BFormInput id="rr-api-url" v-model="realtimeRegisterForm.api_url" type="url" autocomplete="off" />
+                        </BFormGroup>
+                        <BFormGroup label="API-Key (Secret, Header ApiKey …)" label-for="rr-api-key">
+                            <BFormInput
+                                id="rr-api-key"
+                                v-model="realtimeRegisterForm.api_key"
+                                type="password"
+                                autocomplete="new-password"
+                                :placeholder="
+                                    realtimeRegisterExt?.realtimeregister?.has_api_key
+                                        ? '•••••••• (gesetzt)'
+                                        : 'Erforderlich für Live/Sandbox'
+                                "
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="Kunden-Handle (Realtime Register)" label-for="rr-customer-handle">
+                            <BFormInput
+                                id="rr-customer-handle"
+                                v-model="realtimeRegisterForm.customer_handle"
+                                autocomplete="off"
+                                :placeholder="
+                                    realtimeRegisterExt?.realtimeregister?.has_customer_handle
+                                        ? 'Überschreiben oder leer lassen'
+                                        : 'z. B. aus dem RR-Portal oder .env REALTIMEREGISTER_CUSTOMER_HANDLE'
+                                "
+                            />
+                        </BFormGroup>
+                        <BFormGroup label="Timeout (Sek.)" label-for="rr-timeout">
+                            <BFormInput id="rr-timeout" v-model.number="realtimeRegisterForm.timeout" type="number" min="1" max="300" />
+                        </BFormGroup>
+                        <BFormGroup label="Marge-Typ" label-for="rr-margin-type">
+                            <BFormSelect id="rr-margin-type" v-model="realtimeRegisterForm.margin_type">
+                                <option value="fixed">Festbetrag (EUR)</option>
+                                <option value="percent">Prozent</option>
+                            </BFormSelect>
+                        </BFormGroup>
+                        <BFormGroup label="Marge-Wert" label-for="rr-margin-value">
+                            <BFormInput
+                                id="rr-margin-value"
+                                v-model.number="realtimeRegisterForm.margin_value"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                            />
+                        </BFormGroup>
+                        <BFormGroup class="mb-2">
+                            <BFormCheckbox id="rr-sandbox" v-model="realtimeRegisterForm.sandbox"> Sandbox-API verwenden </BFormCheckbox>
+                        </BFormGroup>
+                        <BFormGroup label="Standard-Nameserver (eine Zeile pro Host)" label-for="rr-default-ns">
+                            <BFormTextarea
+                                id="rr-default-ns"
+                                v-model="realtimeRegisterForm.default_nameservers_text"
+                                rows="4"
+                                placeholder="ns1.example.com&#10;ns2.example.com"
+                            />
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="realtimeRegisterForm.processing"
+                            @click="submitRealtimeRegister"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
+
+                <BModal
+                    v-model="openInvoiceNinja"
+                    title="Invoice Ninja-Einstellungen"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">Nur Speicherung; keine API-Anbindung in dieser Phase.</p>
+
+                        <BFormGroup label="Basis-URL" label-for="in-base-url">
+                            <BFormInput id="in-base-url" v-model="invoiceNinjaForm.base_url" type="url" autocomplete="off" />
+                        </BFormGroup>
+                        <BFormGroup label="API-Token" label-for="in-api-token">
+                            <BFormInput
+                                id="in-api-token"
+                                v-model="invoiceNinjaForm.api_token"
+                                type="password"
+                                autocomplete="new-password"
+                                :placeholder="invoiceNinjaExt?.invoice_ninja?.has_api_token ? '•••••••• (gesetzt)' : 'Optional'"
+                            />
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="invoiceNinjaForm.processing"
+                            @click="submitInvoiceNinja"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
+
+                <BModal
+                    v-model="openDiscord"
+                    title="Discord-Einstellungen"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">Guild-ID, Kunden-Rollen-ID und Einladungs-URL (OAuth/Bot weiter in .env).</p>
+
+                        <BFormGroup label="Guild-ID" label-for="discord-guild-id">
+                            <BFormInput id="discord-guild-id" v-model="discordForm.guild_id" autocomplete="off" />
+                        </BFormGroup>
+                        <BFormGroup label="Kunden-Rollen-ID" label-for="discord-role-id">
+                            <BFormInput id="discord-role-id" v-model="discordForm.customer_role_id" autocomplete="off" />
+                        </BFormGroup>
+                        <BFormGroup label="Einladungs-URL" label-for="discord-invite-url">
+                            <BFormInput id="discord-invite-url" v-model="discordForm.invite_url" type="url" autocomplete="off" />
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="discordForm.processing"
+                            @click="submitDiscord"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
+
+                <BModal
+                    v-model="openCloudflare"
+                    title="Cloudflare-Einstellungen"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">
+                            Zone-ID, API-Token und Zonendomain für SRV-Subdomains. Token leer lassen, um den bestehenden Wert zu
+                            behalten.
+                        </p>
+
+                        <BFormGroup label="Zone-ID" label-for="cf-zone-id">
+                            <BFormInput id="cf-zone-id" v-model="cloudflareForm.zone_id" autocomplete="off" />
+                        </BFormGroup>
+                        <BFormGroup label="Zonendomain" label-for="cf-zone-domain">
+                            <BFormInput id="cf-zone-domain" v-model="cloudflareForm.zone_domain" autocomplete="off" placeholder="example.com" />
+                        </BFormGroup>
+                        <BFormGroup label="API-Token" label-for="cf-api-token">
+                            <BFormInput
+                                id="cf-api-token"
+                                v-model="cloudflareForm.api_token"
+                                type="password"
+                                autocomplete="new-password"
+                                :placeholder="cloudflareExt?.cloudflare?.has_api_token ? '•••••••• (gesetzt)' : 'Erforderlich'"
+                            />
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="cloudflareForm.processing"
+                            @click="submitCloudflare"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
+
+                <BModal
+                    v-model="openPterodactylProducts"
+                    title="Pterodactyl-Produkte"
+                    size="xl"
+                    centered
+                    scrollable
+                    no-footer
+                >
+                    <div class="p-2">
+                        <p class="small text-muted mb-3">
+                            Sichtbarkeit im Kundenportal: klassische Game-Server und Gameserver Cloud getrennt schaltbar.
+                        </p>
+
+                        <BFormGroup class="mb-2">
+                            <BFormCheckbox id="ptero-gaming" v-model="pterodactylProductForm.gaming">
+                                Gaming (Game-Server / Pterodactyl)
+                            </BFormCheckbox>
+                        </BFormGroup>
+                        <BFormGroup class="mb-2">
+                            <BFormCheckbox id="ptero-cloud" v-model="pterodactylProductForm.gameserver_cloud">
+                                Gameserver Cloud
+                            </BFormCheckbox>
+                        </BFormGroup>
+
+                        <BButton
+                            variant="primary"
+                            class="mt-3 px-4 py-2"
+                            :disabled="pterodactylProductForm.processing"
+                            @click="submitPterodactylProducts"
+                        >
+                            Speichern
+                        </BButton>
+                    </div>
+                </BModal>
             </BCol>
         </BRow>
     </AdminLayout>

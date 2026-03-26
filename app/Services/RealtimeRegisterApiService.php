@@ -56,6 +56,11 @@ class RealtimeRegisterApiService
 
     protected function sdk(): RealtimeRegister
     {
+        $this->brandExtensionService->ensureRegistrarProviderInstalledForBrand(
+            $this->brand,
+            \App\Support\DomainRegistrar::REALTIME_REGISTER
+        );
+
         $c = $this->brandExtensionService->realtimeregisterConfigForBrand($this->brand);
         $apiKey = (string) ($c['api_key'] ?? '');
         $baseUrl = rtrim((string) ($c['base_url'] ?? ''), '/').'/';
@@ -228,10 +233,15 @@ class RealtimeRegisterApiService
         $records = $zone->records ?? $zone->defaultRecords;
         $out = [];
         foreach ($records->entities as $rec) {
+            $data = $rec->content;
+            if (in_array((string) $rec->type, ['MX', 'SRV'], true) && $rec->prio !== null) {
+                $data = $rec->prio.' '.$data;
+            }
+
             $out[] = [
                 'name' => $rec->name,
                 'type' => $rec->type,
-                'data' => $rec->content,
+                'data' => $data,
             ];
         }
 
@@ -247,12 +257,7 @@ class RealtimeRegisterApiService
         $zone = $this->sdk()->domains->zone($domain);
         $payload = [];
         foreach ($records as $r) {
-            $payload[] = [
-                'name' => $r['name'],
-                'type' => $r['type'],
-                'content' => $r['data'],
-                'ttl' => $zone->ttl,
-            ];
+            $payload[] = $this->toZonePayloadRecord($domain, $r, $zone->ttl);
         }
         $collection = DomainZoneRecordCollection::fromArray($payload);
         $this->sdk()->domains->zoneUpdate(
@@ -265,7 +270,10 @@ class RealtimeRegisterApiService
             $collection
         );
 
-        return $this->getDns($domain);
+        $saved = $this->getDns($domain);
+        $this->assertRecordsPersisted($domain, $records, $saved);
+
+        return $saved;
     }
 
     /**
@@ -290,6 +298,19 @@ class RealtimeRegisterApiService
         $this->sdk()->domains->update($domain, ns: array_values($nameservers));
 
         return $this->getNameserver($domain);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function defaultNameservers(): array
+    {
+        $config = $this->brandExtensionService->realtimeregisterConfigForBrand($this->brand);
+
+        return array_values(array_filter(
+            array_map(static fn ($ns) => trim((string) $ns), $config['default_nameservers'] ?? []),
+            static fn (string $ns) => $ns !== ''
+        ));
     }
 
     public function getAuthcode(string $domain): string
@@ -491,5 +512,97 @@ class RealtimeRegisterApiService
         }
 
         return $parts[0] ?? '';
+    }
+
+    /**
+     * @param  array{name: string, type: string, data: string}  $record
+     * @return array{name: string, type: string, content: string, ttl: int, prio?: int}
+     */
+    protected function toZonePayloadRecord(string $domain, array $record, int $ttl): array
+    {
+        $type = strtoupper((string) ($record['type'] ?? ''));
+        $name = $this->normalizeZoneRecordName($domain, (string) ($record['name'] ?? ''));
+        $data = trim((string) ($record['data'] ?? ''));
+        $payload = [
+            'name' => $name,
+            'type' => $type,
+            'content' => $data,
+            'ttl' => $ttl,
+        ];
+
+        if (in_array($type, ['MX', 'SRV'], true)) {
+            if (preg_match('/^\s*(\d+)\s+(.+)$/', $data, $matches) === 1) {
+                $payload['prio'] = (int) $matches[1];
+                $payload['content'] = trim((string) $matches[2]);
+            } else {
+                $payload['prio'] = 10;
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<int, array{name: string, type: string, data: string}>  $requested
+     * @param  array<int, array{name: string, type: string, data: string}>  $saved
+     */
+    protected function assertRecordsPersisted(string $domain, array $requested, array $saved): void
+    {
+        $requestedKeys = [];
+        foreach ($requested as $record) {
+            $requestedKeys[] = $this->recordKey($record, normalizeNameForDomain: $domain);
+        }
+
+        $savedSet = [];
+        foreach ($saved as $record) {
+            $savedSet[$this->recordKey($record, normalizeNameForDomain: $domain)] = true;
+        }
+
+        foreach ($requestedKeys as $key) {
+            if (! isset($savedSet[$key])) {
+                throw new \RuntimeException(
+                    'Realtime Register hat nicht alle DNS-Eintraege uebernommen. Pruefen Sie Record-Typ/Format oder ob Sandbox (OT&E) aktiv ist.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param  array{name?: string, type?: string, data?: string}  $record
+     */
+    protected function recordKey(array $record, ?string $normalizeNameForDomain = null): string
+    {
+        $name = trim((string) ($record['name'] ?? ''));
+        if ($normalizeNameForDomain !== null) {
+            $name = $this->normalizeZoneRecordName($normalizeNameForDomain, $name);
+        }
+        $name = strtolower(trim($name));
+        $type = strtoupper(trim((string) ($record['type'] ?? '')));
+        $data = strtolower(trim(preg_replace('/\s+/', ' ', (string) ($record['data'] ?? ''))));
+        if (in_array($type, ['MX', 'SRV'], true)) {
+            $data = preg_replace('/^\d+\s+/', '', $data) ?? $data;
+        }
+
+        return $type.'|'.$name.'|'.$data;
+    }
+
+    protected function normalizeZoneRecordName(string $domain, string $name): string
+    {
+        $zone = strtolower(rtrim(trim($domain), '.'));
+        $input = strtolower(rtrim(trim($name), '.'));
+
+        if ($input === '' || $input === '@') {
+            return $zone;
+        }
+
+        if ($input === '*') {
+            return '*.'.$zone;
+        }
+
+        if ($input === $zone || str_ends_with($input, '.'.$zone)) {
+            return $input;
+        }
+
+        return $input.'.'.$zone;
     }
 }

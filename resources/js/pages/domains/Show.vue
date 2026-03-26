@@ -144,11 +144,104 @@
         <BCard v-show="activeTab === 'dns'" no-body>
           <BCardBody>
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <h6 class="mb-0">DNS-Einträge</h6>
-              <BButton size="sm" @click="loadDnsRecords" :disabled="dnsLoading">Einträge laden</BButton>
+              <h5 class="mb-0">{{ dns_manager?.ui?.tab_title ?? 'DNS Manager' }}</h5>
+              <div class="d-flex align-items-center gap-3">
+                <BButton
+                  v-if="dnsMode === 'simple'"
+                  size="sm"
+                  variant="success"
+                  :disabled="dnsLoading || dnsSaving"
+                  @click="openEasyDnsDialog"
+                >
+                  {{ dns_manager?.toolbar?.easy_dns_button_label ?? 'Easy DNS' }}
+                </BButton>
+
+                <BButton
+                  v-if="dnsMode === 'simple'"
+                  size="sm"
+                  variant="primary"
+                  :disabled="dnsLoading || dnsSaving"
+                  @click="openAddDnsRecordDialog"
+                >
+                  {{ dns_manager?.toolbar?.add_record_button_label ?? 'Eintrag hinzufügen' }}
+                </BButton>
+
+                <div id="expertModeToggleContainer">
+                  <div class="d-flex align-items-center">
+                    <span class="me-2">{{ dns_manager?.ui?.mode?.easy_label ?? 'Easy Mode' }}</span>
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="expertModeToggle"
+                        :checked="dnsMode === 'pro'"
+                        @change="dnsMode = $event.target.checked ? 'pro' : 'simple'"
+                      >
+                    </div>
+                    <span class="ms-2">{{ dns_manager?.ui?.mode?.expert_label ?? 'Expert Mode' }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <div v-if="dnsMode === 'simple'" class="d-flex justify-content-between align-items-center mb-3">
+              <BButton size="sm" @click="loadDnsRecords" :disabled="dnsLoading || dnsSaving">Einträge laden</BButton>
+              <BButton size="sm" variant="primary" :disabled="dnsLoading || dnsSaving || !dnsDirty" @click="saveDnsRecords">
+                DNS Zone speichern
+              </BButton>
+            </div>
+
             <p v-if="dnsError" class="text-danger small">{{ dnsError }}</p>
-            <BTable v-else :items="dnsRecords" :fields="[{ key: 'type', label: 'Typ' }, { key: 'name', label: 'Name' }, { key: 'data', label: 'Inhalt' }]" small responsive />
+            <p v-if="dnsFormError" class="text-danger small">{{ dnsFormError }}</p>
+            <p v-if="dnsInfo" class="text-success small">{{ dnsInfo }}</p>
+
+            <BTable
+              v-if="dnsMode === 'simple'"
+              :items="dnsDraftRecords"
+              :fields="[{ key: 'type', label: 'Typ' }, { key: 'name', label: 'Name' }, { key: 'data', label: 'Inhalt' }, { key: 'actions', label: '' }]"
+              small
+              responsive
+            >
+              <template #cell(actions)="{ item }">
+                <BButton size="sm" variant="outline-danger" @click="removeDnsRecord(item)">Entfernen</BButton>
+              </template>
+            </BTable>
+
+            <div v-else class="table-responsive mt-3">
+              <table class="table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col" class="border-bottom">Name</th>
+                    <th scope="col" class="border-bottom">Typ</th>
+                    <th scope="col" class="border-bottom">Inhalt</th>
+                    <th scope="col" class="border-bottom" style="width: 80px;">Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(record, idx) in dnsDraftRecords" :key="idx">
+                    <td>
+                      <BFormInput v-model="dnsDraftRecords[idx].name" class="form-control" placeholder="Subdomain" />
+                    </td>
+                    <td>
+                      <BFormSelect v-model="dnsDraftRecords[idx].type" :options="dnsTypeOptions" class="form-select" />
+                    </td>
+                    <td>
+                      <BFormInput v-model="dnsDraftRecords[idx].data" class="form-control" placeholder="Ziel" />
+                    </td>
+                    <td class="text-center">
+                      <BButton size="sm" variant="outline-danger" @click="removeDnsRecord(record)">Entfernen</BButton>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="d-flex gap-2 mt-3">
+                <BButton variant="primary" :disabled="dnsSaving" @click="saveDnsRecords">DNS Zone speichern</BButton>
+                <BButton variant="info" :disabled="dnsSaving" type="button" @click="addExpertRow">Zeile hinzufügen</BButton>
+              </div>
+            </div>
+
           </BCardBody>
         </BCard>
 
@@ -182,7 +275,7 @@
         </BCard>
 
         <ProductSharingCard
-          v-show="activeTab === 'sharing' && canManageCollaborators"
+          v-if="activeTab === 'sharing' && canManageCollaborators"
           :product-shares="productShares ?? []"
           :product-invitations="productInvitations ?? []"
           :allowed-share-permissions="allowedSharePermissions ?? []"
@@ -206,6 +299,7 @@
         <BButton v-if="nameserverForm.nameservers.length < 6" type="button" variant="outline-secondary" size="sm" class="mb-2" @click="addNameserverSlot">+ Nameserver</BButton>
         <div v-if="nameserverForm.errors.nameservers" class="invalid-feedback d-block">{{ nameserverForm.errors.nameservers }}</div>
         <div class="d-flex justify-content-end gap-2 mt-3">
+          <BButton type="button" variant="outline-warning" @click="resetNameserverToDefault">Auf Standard zurücksetzen</BButton>
           <BButton type="button" variant="secondary" @click="nameserverDialogOpen = false">Abbrechen</BButton>
           <BButton type="submit" :disabled="nameserverForm.processing">Speichern</BButton>
         </div>
@@ -221,12 +315,140 @@
         <BButton variant="primary" @click="renew">Verlängern</BButton>
       </div>
     </BModal>
+
+    <BModal v-model="easyDnsModalOpen" title="Easy DNS" size="xl" centered no-footer>
+      <div class="row g-3">
+        <div class="col-md-12">
+          <label class="form-label">Preset</label>
+          <BFormSelect
+            v-model="selectedPresetId"
+            :options="[
+              { value: '', text: 'Bitte wählen' },
+              ...easyDnsPresetOptions,
+            ]"
+          />
+        </div>
+
+        <template v-for="field in selectedPresetFields" :key="field.key">
+          <div class="col-md-4">
+            <label class="form-label">{{ field.label }}</label>
+            <BFormInput
+              v-model="presetFormValues[field.key]"
+              :type="field.type === 'number' ? 'number' : 'text'"
+              class="form-control"
+              :placeholder="field.placeholder ?? ''"
+            />
+          </div>
+        </template>
+      </div>
+
+      <p v-if="dnsFormError" class="text-danger small mt-2">{{ dnsFormError }}</p>
+
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <BButton variant="secondary" @click="easyDnsModalOpen = false">Abbrechen</BButton>
+        <BButton variant="primary" :disabled="!selectedPreset" @click="applyPresetAndCloseEasyDns">
+          {{ selectedPreset?.button_label ?? 'Preset anwenden' }}
+        </BButton>
+      </div>
+    </BModal>
+
+    <BModal
+      v-model="addDnsRecordDialogOpen"
+      :title="addRecordModalConfig.title ?? 'DNS Eintrag hinzufügen'"
+      size="xl"
+      centered
+      no-footer
+      :header-class="addRecordModalConfig.header_class ?? 'border-bottom'"
+      :content-class="addRecordModalConfig.content_class ?? ''"
+      :body-class="addRecordModalConfig.body_class ?? ''"
+    >
+      <div :class="addRecordModalConfig.type_select_container_class ?? 'row mb-3'">
+        <div :class="addRecordModalConfig.type_select_col_class ?? 'col-md-6'">
+          <label class="form-label">{{ addRecordModalConfig.type_label ?? 'Typ' }}</label>
+          <BFormSelect v-model="simpleForm.type" :options="dnsAddRecordTypeOptions" />
+        </div>
+
+        <div :class="addRecordModalConfig.type_select_col_class ?? 'col-md-6'">
+          <label class="form-label">{{ addRecordModalConfig.name_label ?? 'Name' }}</label>
+          <BFormInput v-model="simpleForm.name" placeholder="z.B. www, mail oder @ für neroserv.eu" />
+        </div>
+      </div>
+
+      <div v-if="activeAddRecordTypeConfig" class="mt-2">
+        <template v-for="(block, blockIdx) in activeAddRecordTypeConfig.blocks" :key="blockIdx">
+          <div :class="block.class">
+            <template v-for="field in block.fields ?? []" :key="field.key">
+              <div v-if="block.type === 'row'" :class="field.colClass">
+                <label class="form-label">{{ field.label }}</label>
+                <BFormInput
+                  v-if="field.component === 'input'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  :type="field.inputType ?? 'text'"
+                  class="form-control"
+                  :placeholder="field.placeholder ?? ''"
+                />
+                <BFormSelect
+                  v-else-if="field.component === 'select'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  :options="field.options ?? []"
+                  class="form-select"
+                />
+                <textarea
+                  v-else-if="field.component === 'textarea'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  class="form-control"
+                  :rows="field.rows ?? 3"
+                  :placeholder="field.placeholder ?? ''"
+                />
+              </div>
+
+              <template v-else>
+                <label class="form-label">{{ field.label }}</label>
+                <BFormInput
+                  v-if="field.component === 'input'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  :type="field.inputType ?? 'text'"
+                  class="form-control"
+                  :placeholder="field.placeholder ?? ''"
+                />
+                <BFormSelect
+                  v-else-if="field.component === 'select'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  :options="field.options ?? []"
+                  class="form-select"
+                />
+                <textarea
+                  v-else-if="field.component === 'textarea'"
+                  v-model="dnsAddRecordFieldValues[field.key]"
+                  class="form-control"
+                  :rows="field.rows ?? 3"
+                  :placeholder="field.placeholder ?? ''"
+                />
+              </template>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <p v-if="dnsFormError" class="text-danger small mt-2">{{ dnsFormError }}</p>
+
+      <div :class="addRecordModalConfig.footer_class ?? 'modal-footer'" class="mt-3">
+        <BButton
+          type="button"
+          :class="addRecordModalConfig.submit_button_class ?? 'btn btn-primary w-100'"
+          variant="primary"
+          @click="addSimpleRecordAndClose"
+        >
+          {{ addRecordModalConfig.submit_button_label ?? 'DNS Eintrag hinzufügen' }}
+        </BButton>
+      </div>
+    </BModal>
   </DefaultLayout>
 </template>
 
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   BButton,
   BCard,
@@ -270,6 +492,21 @@ const props = withDefaults(
     productInvitations?: Array<{ id: number; email: string; permissions: string[]; expires_at: string | null; destroy_url: string }>
     allowedSharePermissions?: string[]
     storeInvitationUrl?: string | null
+    easy_dns_presets?: Array<{
+      id: string
+      label?: string
+      button_label?: string | null
+      fields?: Array<{ key: string; label: string; type?: string; placeholder?: string; default?: string | number }>
+      records?: Array<{
+        name?: string
+        name_key?: string
+        name_template?: string
+        type: string
+        data_key?: string
+        data_template?: string
+      }>
+    }>
+    dns_manager?: any
   }>(),
   {
     canManageCollaborators: false,
@@ -277,6 +514,8 @@ const props = withDefaults(
     productInvitations: () => [],
     allowedSharePermissions: () => [],
     storeInvitationUrl: null,
+    easy_dns_presets: () => [],
+    dns_manager: () => ({}),
   },
 )
 
@@ -297,7 +536,6 @@ const nameserverDialogOpen = ref(false)
 const nameserverForm = useForm({
   nameservers: props.domain.nameservers?.length ? [...props.domain.nameservers] : ['', ''],
 })
-const DEFAULT_NS = ['nameserver01.eu', 'nameserver02.eu', 'nameserver03.eu', 'nameserver04.eu', 'nameserver05.eu', 'nameserver06.eu']
 function openNameserverDialog() {
   nameserverForm.nameservers = props.domain.nameservers?.length ? [...props.domain.nameservers] : ['', '']
   if (nameserverForm.nameservers.length < 2) {
@@ -319,6 +557,15 @@ function submitNameserver() {
   }
   nameserverForm.nameservers = ns
   nameserverForm.put(`${baseUrl()}/nameserver`, { preserveScroll: true, onSuccess: () => { nameserverDialogOpen.value = false } })
+}
+
+function resetNameserverToDefault() {
+  router.post(`${baseUrl()}/nameserver/reset`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      nameserverDialogOpen.value = false
+    },
+  })
 }
 
 const authcodeDialogOpen = ref(false)
@@ -364,20 +611,345 @@ function setAutoRenew(enabled: boolean) {
   )
 }
 
-const dnsRecords = ref<{ name: string; type: string; data: string }[]>([])
+type DnsRecord = { name: string; type: string; data: string }
+
+const dnsRecords = ref<DnsRecord[]>([])
+const dnsDraftRecords = ref<DnsRecord[]>([])
 const dnsLoading = ref(false)
+const dnsSaving = ref(false)
 const dnsError = ref('')
+const dnsFormError = ref('')
+const dnsInfo = ref('')
+const dnsMode = ref<'simple' | 'pro'>('simple')
+const simpleForm = ref<{ type: string; name: string; data: string }>({
+  type: 'A',
+  name: '@',
+  data: '',
+})
+const proForm = ref<DnsRecord>({
+  type: 'A',
+  name: '@',
+  data: '',
+})
+const dnsTypeOptions = [
+  { value: 'A', text: 'A' },
+  { value: 'AAAA', text: 'AAAA' },
+  { value: 'CNAME', text: 'CNAME' },
+  { value: 'ALIAS', text: 'ALIAS' },
+  { value: 'MX', text: 'MX' },
+  { value: 'NS', text: 'NS' },
+  { value: 'SRV', text: 'SRV' },
+  { value: 'TXT', text: 'TXT' },
+  { value: 'CAA', text: 'CAA' },
+  { value: 'PTR', text: 'PTR' },
+  { value: 'TLSA', text: 'TLSA' },
+  { value: 'DS', text: 'DS' },
+  { value: 'DNSKEY', text: 'DNSKEY' },
+  { value: 'NAPTR', text: 'NAPTR' },
+  { value: 'SOA', text: 'SOA' },
+]
+
+const dnsManagerConfig = computed(() => props.dns_manager ?? {})
+const addRecordModalConfig = computed(() => dnsManagerConfig.value.add_record_modal ?? {})
+const addRecordTypesConfig = computed(() => addRecordModalConfig.value.types ?? {})
+
+const dnsAddRecordTypeOptions = computed(() =>
+  (addRecordModalConfig.value.record_types ?? []).map((t: { value: string; label: string }) => ({
+    value: t.value,
+    text: t.label,
+  })),
+)
+
+const activeAddRecordTypeConfig = computed(() => {
+  const type = simpleForm.value.type
+  if (!type) return null
+  return addRecordTypesConfig.value[type] ?? null
+})
+
+const dnsAddRecordFieldValues = ref<Record<string, string>>({})
+
+function initDnsAddRecordFieldValues(type: string): void {
+  const typeConfig = addRecordTypesConfig.value[type]
+  if (!typeConfig) {
+    dnsAddRecordFieldValues.value = {}
+    return
+  }
+
+  const values: Record<string, string> = {}
+  for (const block of typeConfig.blocks ?? []) {
+    for (const field of block.fields ?? []) {
+      if (field.default !== undefined) {
+        values[field.key] = String(field.default)
+      } else if (field.component === 'select' && Array.isArray(field.options) && field.options.length > 0) {
+        values[field.key] = String(field.options[0].value)
+      } else {
+        values[field.key] = ''
+      }
+    }
+  }
+  dnsAddRecordFieldValues.value = values
+}
+
+function buildDnsAddRecordDataFromConfig(): string {
+  const typeConfig = addRecordTypesConfig.value[simpleForm.value.type]
+  const template = typeConfig?.data_template
+  if (!template || typeof template !== 'string') return ''
+
+  // Allow templates to reference fields by key.
+  const values: Record<string, string> = {
+    ...dnsAddRecordFieldValues.value,
+    domain: props.domain.domain,
+  }
+
+  const placeholders = [...template.matchAll(/\{\{([^}]+)\}\}/g)].map((m) => m[1].trim())
+  for (const key of placeholders) {
+    if (!Object.prototype.hasOwnProperty.call(values, key) || values[key].trim() === '') {
+      return ''
+    }
+  }
+
+  return templateValue(template, values).trim()
+}
+
+watch(
+  () => simpleForm.value.type,
+  (newType) => {
+    initDnsAddRecordFieldValues(newType)
+  },
+  { immediate: true },
+)
+const selectedPresetId = ref('')
+const easyDnsModalOpen = ref(false)
+const addDnsRecordDialogOpen = ref(false)
+const presetFormValues = ref<Record<string, string>>({})
+const easyDnsPresetOptions = computed(() =>
+  (props.easy_dns_presets ?? []).map((preset) => ({ value: preset.id, text: preset.label ?? preset.id })),
+)
+const selectedPreset = computed(() =>
+  (props.easy_dns_presets ?? []).find((preset) => preset.id === selectedPresetId.value) ?? null,
+)
+const selectedPresetFields = computed(() => selectedPreset.value?.fields ?? [])
+const dnsDirty = computed(() => JSON.stringify(dnsRecords.value) !== JSON.stringify(dnsDraftRecords.value))
+
+function normalizeDnsName(name: string): string {
+  const normalized = name.trim().toLowerCase()
+  return normalized === '' ? '@' : normalized
+}
+
+function normalizeRecord(record: DnsRecord): DnsRecord {
+  return {
+    name: normalizeDnsName(record.name),
+    type: record.type.trim().toUpperCase(),
+    data: record.data.trim(),
+  }
+}
+
+function recordKey(record: DnsRecord): string {
+  return `${record.type}\u0000${record.name}`
+}
+
+function mergeRecordIntoDraft(input: DnsRecord): void {
+  const record = normalizeRecord(input)
+  const map = new Map<string, DnsRecord>()
+  for (const existing of dnsDraftRecords.value) {
+    map.set(recordKey(normalizeRecord(existing)), normalizeRecord(existing))
+  }
+  map.set(recordKey(record), record)
+  dnsDraftRecords.value = Array.from(map.values())
+}
+
+function removeDnsRecord(record: DnsRecord): void {
+  const key = recordKey(normalizeRecord(record))
+  dnsDraftRecords.value = dnsDraftRecords.value.filter((item) => recordKey(normalizeRecord(item)) !== key)
+}
+
+function addExpertRow(): void {
+  dnsFormError.value = ''
+  dnsError.value = ''
+  dnsInfo.value = ''
+  dnsDraftRecords.value.push({ name: '@', type: 'A', data: '' })
+}
+
+function validateRecord(record: DnsRecord): string | null {
+  if (record.name.trim() === '') {
+    return 'Name darf nicht leer sein.'
+  }
+  if (record.type.trim() === '') {
+    return 'Typ darf nicht leer sein.'
+  }
+  if (record.data.trim() === '') {
+    return 'Inhalt darf nicht leer sein.'
+  }
+  return null
+}
+
+function addSimpleRecord(): void {
+  dnsFormError.value = ''
+  const data = buildDnsAddRecordDataFromConfig()
+  const candidate: DnsRecord = {
+    type: simpleForm.value.type,
+    name: simpleForm.value.name,
+    data,
+  }
+  const error = validateRecord(candidate)
+  if (error !== null) {
+    dnsFormError.value = error
+    return
+  }
+  mergeRecordIntoDraft(candidate)
+  dnsInfo.value = 'Eintrag zum Entwurf hinzugefügt.'
+}
+
+function addSimpleRecordAndClose(): void {
+  addSimpleRecord()
+  if (dnsFormError.value === '') {
+    addDnsRecordDialogOpen.value = false
+  }
+}
+
+function addProRecord(): void {
+  dnsFormError.value = ''
+  const error = validateRecord(proForm.value)
+  if (error !== null) {
+    dnsFormError.value = error
+    return
+  }
+  mergeRecordIntoDraft(proForm.value)
+  dnsInfo.value = 'Eintrag zum Entwurf hinzugefügt.'
+}
+
+function addProRecordAndClose(): void {
+  addProRecord()
+  if (dnsFormError.value === '') {
+    addDnsRecordDialogOpen.value = false
+  }
+}
+
+function templateValue(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (_match, key: string) => values[key.trim()] ?? '')
+}
+
+function applyPreset(): void {
+  dnsFormError.value = ''
+  const preset = selectedPreset.value
+  if (preset === null) {
+    dnsFormError.value = 'Bitte zuerst ein Preset wählen.'
+    return
+  }
+
+  const values: Record<string, string> = { ...presetFormValues.value, domain: props.domain.domain }
+  for (const field of preset.fields ?? []) {
+    if (!(field.key in values) || values[field.key] === '') {
+      if (field.default !== undefined) {
+        values[field.key] = String(field.default)
+      }
+    }
+  }
+
+  for (const record of preset.records ?? []) {
+    const name = record.name
+      ?? (record.name_key ? values[record.name_key] : undefined)
+      ?? (record.name_template ? templateValue(record.name_template, values) : undefined)
+    const data = (record.data_key ? values[record.data_key] : '')
+      || (record.data_template ? templateValue(record.data_template, values) : '')
+    const candidate: DnsRecord = {
+      name: name ?? '@',
+      type: record.type ?? 'A',
+      data: data ?? '',
+    }
+    const error = validateRecord(candidate)
+    if (error !== null) {
+      dnsFormError.value = `Preset unvollständig: ${error}`
+      return
+    }
+    mergeRecordIntoDraft(candidate)
+  }
+
+  dnsInfo.value = 'Preset in den Entwurf übernommen.'
+}
+
+function applyPresetAndClose(): void {
+  applyPreset()
+  if (dnsFormError.value === '') {
+    addDnsRecordDialogOpen.value = false
+  }
+}
+
+function applyPresetAndCloseEasyDns(): void {
+  applyPreset()
+  if (dnsFormError.value === '') {
+    easyDnsModalOpen.value = false
+  }
+}
+
+function openEasyDnsDialog(): void {
+  dnsFormError.value = ''
+  dnsInfo.value = ''
+  presetFormValues.value = {}
+  selectedPresetId.value = ''
+  easyDnsModalOpen.value = true
+}
+
+function openAddDnsRecordDialog(): void {
+  dnsFormError.value = ''
+  dnsInfo.value = ''
+  initDnsAddRecordFieldValues(simpleForm.value.type)
+  addDnsRecordDialogOpen.value = true
+}
+
 function loadDnsRecords() {
   dnsLoading.value = true
   dnsError.value = ''
+  dnsFormError.value = ''
+  dnsInfo.value = ''
   fetch(`${baseUrl()}/dns`)
     .then((r) => r.json())
     .then((data) => {
       if (data.error) dnsError.value = data.error
-      else dnsRecords.value = (data.records ?? []).map((r: { name: string; type: string; data: string }) => ({ name: r.name, type: r.type, data: r.data }))
+      else {
+        dnsRecords.value = (data.records ?? []).map((r: { name: string; type: string; data: string }) => ({ name: r.name, type: r.type, data: r.data }))
+        dnsDraftRecords.value = [...dnsRecords.value]
+      }
     })
     .catch(() => { dnsError.value = 'Fehler beim Laden' })
     .finally(() => { dnsLoading.value = false })
+}
+
+function saveDnsRecords() {
+  dnsSaving.value = true
+  dnsError.value = ''
+  dnsFormError.value = ''
+  dnsInfo.value = ''
+
+  for (const record of dnsDraftRecords.value) {
+    const error = validateRecord(record)
+    if (error !== null) {
+      dnsError.value = error
+      dnsSaving.value = false
+      return
+    }
+  }
+
+  router.put(
+    `${baseUrl()}/dns`,
+    { records: dnsDraftRecords.value.map((record) => normalizeRecord(record)) },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        loadDnsRecords()
+        dnsInfo.value = 'DNS-Zone gespeichert.'
+      },
+      onError: (errors) => {
+        const firstError = Object.values(errors ?? {}).find((value) => typeof value === 'string')
+        dnsError.value = typeof firstError === 'string' && firstError.trim() !== ''
+          ? firstError
+          : 'DNS-Zone konnte nicht gespeichert werden.'
+      },
+      onFinish: () => {
+        dnsSaving.value = false
+      },
+    },
+  )
 }
 
 const contactForm = useForm({

@@ -12,6 +12,7 @@ use App\Models\TeamSpeakSnapshot;
 use App\Services\BalancePaymentService;
 use App\Services\ControlPanels\TeamSpeakClient;
 use App\Services\MollieCustomerService;
+use App\Services\ResellerDomainRegistrarAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -286,9 +287,9 @@ class TeamSpeakAccountController extends Controller
         $srvName = strtolower($srvService.'.'.$srvProtocol.'.'.$subdomain);
         $srvData = $priority.' '.$weight.' '.$port.' '.$target.'.';
 
-        $skrime = app(SkrimeApiService::class)->forBrand($resellerDomain->brand);
         try {
-            $existingRecords = $skrime->getDns($resellerDomain->domain);
+            $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
+            $existingRecords = $registrar->getDns();
             $records = array_map(fn ($r) => [
                 'name' => $r['name'],
                 'type' => $r['type'],

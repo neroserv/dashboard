@@ -412,8 +412,8 @@ class GamingAccountController extends Controller
         $port = $nodeAndPort['port'];
         $srvData = '0 5 '.$port.' '.$target.'.';
 
-        $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
         try {
+            $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
             $existingRecords = $registrar->getDns();
             $records = array_map(fn ($r) => [
                 'name' => $r['name'],

@@ -27,6 +27,8 @@ class UpdateSkrimeBrandExtensionRequest extends FormRequest
             'timeout' => ['nullable', 'integer', 'min:1', 'max:300'],
             'margin_type' => ['nullable', 'string', 'in:fixed,percent'],
             'margin_value' => ['nullable', 'numeric', 'min:0'],
+            'default_nameservers' => ['nullable', 'array'],
+            'default_nameservers.*' => ['string', 'max:255'],
         ];
     }
 }

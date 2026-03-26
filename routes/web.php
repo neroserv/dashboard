@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified', 'brand.domain'])->group(function () {
     Route::get('domains/{reseller_domain}/whois', [\App\Http\Controllers\DomainManageController::class, 'getWhoisLookup'])->name('domains.manage.whois');
     Route::put('domains/{reseller_domain}/whois', [\App\Http\Controllers\DomainManageController::class, 'updateWhoisPrivacy'])->name('domains.manage.whois.update');
     Route::put('domains/{reseller_domain}/nameserver', [\App\Http\Controllers\DomainManageController::class, 'updateNameserver'])->name('domains.manage.nameserver.update');
+    Route::post('domains/{reseller_domain}/nameserver/reset', [\App\Http\Controllers\DomainManageController::class, 'resetNameserver'])->name('domains.manage.nameserver.reset');
     Route::get('domains/{reseller_domain}/dns', [\App\Http\Controllers\DomainManageController::class, 'dns'])->name('domains.manage.dns');
     Route::put('domains/{reseller_domain}/dns', [\App\Http\Controllers\DomainManageController::class, 'updateDns'])->name('domains.manage.dns.update');
     Route::get('domains/{reseller_domain}/dnssec', [\App\Http\Controllers\DomainManageController::class, 'getDnssec'])->name('domains.manage.dnssec');

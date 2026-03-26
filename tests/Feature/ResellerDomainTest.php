@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\BrandExtension;
 use App\Models\ResellerDomain;
 use App\Models\User;
 use App\Services\SkrimeApiService;
@@ -95,6 +96,12 @@ test('customer can view own domain manage page', function () {
         'domain' => 'example.de',
         'tld' => 'de',
     ]);
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_SKRIME,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
 
     $this->mock(SkrimeApiService::class, function ($mock) {
         $mock->shouldReceive('forBrand')->andReturnSelf();
@@ -110,7 +117,12 @@ test('customer can view own domain manage page', function () {
     $response = $this->get(route('domains.manage.show', $domain));
 
     $response->assertStatus(200);
-    $response->assertInertia(fn ($page) => $page->component('domains/Show')->has('domain')->where('domain.domain', 'example.de'));
+    $response->assertInertia(fn ($page) => $page
+        ->component('domains/Show')
+        ->has('domain')
+        ->where('domain.domain', 'example.de')
+        ->has('dns_manager')
+        ->where('dns_manager.add_record_modal.title', 'DNS Eintrag hinzufügen'));
 });
 
 test('customer cannot view another users domain manage page', function () {

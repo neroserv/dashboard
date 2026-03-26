@@ -23,6 +23,11 @@ class ResellerDomainRegistrarAdapter
             throw new \RuntimeException('ResellerDomain has no brand.');
         }
 
+        app(BrandExtensionService::class)->ensureRegistrarProviderInstalledForBrand(
+            $brand,
+            (string) $domain->registrar
+        );
+
         return new self(
             $domain,
             app(SkrimeApiService::class)->forBrand($brand),
@@ -57,6 +62,18 @@ class ResellerDomainRegistrarAdapter
         }
 
         return $this->skrime->setNameserver($this->domain->domain, $nameservers);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function defaultNameservers(): array
+    {
+        if ($this->usesRealtimeRegister()) {
+            return $this->realtimeRegister->defaultNameservers();
+        }
+
+        return $this->skrime->defaultNameservers();
     }
 
     /**

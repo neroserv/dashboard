@@ -4,9 +4,40 @@ namespace App\Services;
 
 use App\Models\Brand;
 use App\Models\BrandExtension;
+use App\Support\DomainRegistrar;
 
 class BrandExtensionService
 {
+    public function registrarProviderIsInstalledForBrand(?Brand $brand, string $registrar): bool
+    {
+        if ($brand === null) {
+            return true;
+        }
+
+        return match ($registrar) {
+            DomainRegistrar::SKRIME => $this->isInstalled($brand, BrandExtension::EXTENSION_SKRIME),
+            DomainRegistrar::REALTIME_REGISTER => $this->isInstalled($brand, BrandExtension::EXTENSION_REALTIMEREGISTER),
+            default => false,
+        };
+    }
+
+    public function ensureRegistrarProviderInstalledForBrand(?Brand $brand, string $registrar): void
+    {
+        if ($this->registrarProviderIsInstalledForBrand($brand, $registrar)) {
+            return;
+        }
+
+        $providerLabel = match ($registrar) {
+            DomainRegistrar::SKRIME => 'Skrime',
+            DomainRegistrar::REALTIME_REGISTER => 'Realtime Register',
+            default => $registrar,
+        };
+
+        throw new \RuntimeException(
+            'Der Registrar '.$providerLabel.' ist für diese Marke nicht aktiviert.'
+        );
+    }
+
     /**
      * @return list<string>
      */
@@ -136,6 +167,9 @@ class BrandExtensionService
         }
         if (isset($s['tlds']) && is_array($s['tlds'])) {
             $base['tlds'] = $s['tlds'];
+        }
+        if (isset($s['default_nameservers']) && is_array($s['default_nameservers'])) {
+            $base['default_nameservers'] = array_values(array_filter(array_map('strval', $s['default_nameservers'])));
         }
 
         return $base;

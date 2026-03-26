@@ -234,13 +234,13 @@ class WebspaceAccountController extends Controller
     {
         $this->authorize('view', $webspaceAccount);
 
-        $request->validate([
+        $validated = $request->validate([
             'reseller_domain_uuid' => ['required', 'string', 'exists:reseller_domains,uuid'],
         ]);
 
         $currentBrand = $request->attributes->get('current_brand') ?? Brand::getDefault();
         $resellerDomain = ResellerDomain::query()
-            ->where('uuid', $request->validated('reseller_domain_uuid'))
+            ->where('uuid', $validated['reseller_domain_uuid'])
             ->where('user_id', $request->user()->id)
             ->when($currentBrand !== null, fn ($q) => $q->where('brand_id', $currentBrand->id))
             ->firstOrFail();
@@ -268,8 +268,8 @@ class WebspaceAccountController extends Controller
                 ->with('error', 'In der Vorlage wurden keine DNS-Einträge erkannt.');
         }
 
-        $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
         try {
+            $registrar = ResellerDomainRegistrarAdapter::forDomain($resellerDomain);
             $existing = $registrar->getDns();
             $existingByKey = [];
             foreach ($existing as $r) {

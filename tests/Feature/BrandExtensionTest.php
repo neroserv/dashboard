@@ -182,6 +182,42 @@ test('admin can update realtimeregister extension settings', function () {
     expect($settings['default_nameservers'] ?? [])->toBe(['ns1.example.test', 'ns2.example.test']);
 });
 
+test('admin can update skrime extension settings including default nameservers', function () {
+    $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+    $admin = User::factory()->create(['is_admin' => true]);
+    $brand = Brand::getDefault();
+    expect($brand)->not->toBeNull();
+
+    BrandExtension::query()->create([
+        'brand_id' => $brand->id,
+        'extension' => BrandExtension::EXTENSION_SKRIME,
+        'installed_at' => now(),
+        'settings' => [],
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->put(route('admin.brand-extensions.skrime.update'), [
+        'api_url' => 'https://api.skrime.example.test/',
+        'api_token' => 'skrime-secret',
+        'timeout' => 35,
+        'margin_type' => 'fixed',
+        'margin_value' => 2.5,
+        'default_nameservers' => ['nameserver01.eu', 'nameserver02.eu'],
+    ])->assertRedirect(route('admin.brand-extensions.index'));
+
+    $row = BrandExtension::query()
+        ->where('brand_id', $brand->id)
+        ->where('extension', BrandExtension::EXTENSION_SKRIME)
+        ->first();
+    expect($row)->not->toBeNull();
+    $settings = $row->settings;
+    expect(is_array($settings))->toBeTrue();
+    expect($settings['api_url'] ?? null)->toBe('https://api.skrime.example.test/');
+    expect($settings['api_token'] ?? null)->toBe('skrime-secret');
+    expect($settings['default_nameservers'] ?? [])->toBe(['nameserver01.eu', 'nameserver02.eu']);
+});
+
 test('skrime extension cannot be uninstalled while skrime domains exist', function () {
     $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
     $admin = User::factory()->create(['is_admin' => true]);

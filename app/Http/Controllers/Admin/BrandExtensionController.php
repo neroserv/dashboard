@@ -82,6 +82,7 @@ class BrandExtensionController extends Controller
                     'timeout' => (int) ($skrimeConfig['timeout'] ?? 30),
                     'margin_type' => (string) ($skrimeConfig['margin_type'] ?? 'fixed'),
                     'margin_value' => (float) ($skrimeConfig['margin_value'] ?? 0),
+                    'default_nameservers' => array_values($skrimeConfig['default_nameservers'] ?? []),
                     'has_api_token' => ! empty($settings['api_token']) || ! empty(config('skrime.api_key')),
                 ];
             }
@@ -288,6 +289,10 @@ class BrandExtensionController extends Controller
 
         if (isset($data['margin_value'])) {
             $settings['margin_value'] = (float) $data['margin_value'];
+        }
+
+        if (isset($data['default_nameservers']) && is_array($data['default_nameservers'])) {
+            $settings['default_nameservers'] = array_values(array_filter(array_map('trim', $data['default_nameservers'])));
         }
 
         $row->settings = $settings;

@@ -38,6 +38,11 @@ class SkrimeApiService
 
     protected function client(): PendingRequest
     {
+        $this->brandExtensionService->ensureRegistrarProviderInstalledForBrand(
+            $this->brand,
+            \App\Support\DomainRegistrar::SKRIME
+        );
+
         $c = $this->brandExtensionService->skrimeConfigForBrand($this->brand);
         $token = (string) ($c['api_key'] ?? '');
 
@@ -248,6 +253,19 @@ class SkrimeApiService
         }
 
         return $response->json('data', []);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function defaultNameservers(): array
+    {
+        $config = $this->brandExtensionService->skrimeConfigForBrand($this->brand);
+
+        return array_values(array_filter(
+            array_map(static fn ($ns) => trim((string) $ns), $config['default_nameservers'] ?? []),
+            static fn (string $ns) => $ns !== ''
+        ));
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Services\ResellerDomainRegistrarAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -93,6 +94,7 @@ class DomainManageController extends Controller
             'domain' => $domain,
             'domains_index_url' => route('domains.index'),
             'easy_dns_presets' => $easyDnsPresets,
+            'dns_manager' => config('domain-dns-manager', []),
             'canManageCollaborators' => $canManageCollaborators,
             'productShares' => $productShares,
             'productInvitations' => $productInvitations,
@@ -129,6 +131,27 @@ class DomainManageController extends Controller
             ->with('success', 'Nameserver aktualisiert.');
     }
 
+    public function resetNameserver(ResellerDomain $reseller_domain): RedirectResponse
+    {
+        $this->authorize('update', $reseller_domain);
+
+        try {
+            $defaults = $this->registrarAdapter($reseller_domain)->defaultNameservers();
+            if (count($defaults) < 2 || count($defaults) > 6) {
+                return redirect()->route('domains.manage.show', $reseller_domain)
+                    ->with('error', 'Standard-Nameserver sind nicht korrekt konfiguriert (2 bis 6 erforderlich).');
+            }
+
+            $this->registrarAdapter($reseller_domain)->setNameserver($defaults);
+        } catch (\Throwable $e) {
+            return redirect()->route('domains.manage.show', $reseller_domain)
+                ->with('error', 'Nameserver konnten nicht zurückgesetzt werden: '.$e->getMessage());
+        }
+
+        return redirect()->route('domains.manage.show', $reseller_domain)
+            ->with('success', 'Nameserver auf Standard zurückgesetzt.');
+    }
+
     public function dns(ResellerDomain $reseller_domain): JsonResponse|RedirectResponse
     {
         $this->authorize('view', $reseller_domain);
@@ -149,21 +172,22 @@ class DomainManageController extends Controller
         $request->validate([
             'records' => ['required', 'array'],
             'records.*.name' => ['required', 'string', 'max:255'],
-            'records.*.type' => ['required', 'string', 'in:A,AAAA,CNAME,ALIAS,MX,SRV,TXT,CAA,PTR,TLSA,DS,DNSKEY'],
+            'records.*.type' => ['required', 'string', 'regex:/^[A-Za-z][A-Za-z0-9-]{0,14}$/'],
             'records.*.data' => ['required', 'string', 'max:65535'],
         ]);
 
         $records = array_map(fn ($r) => [
             'name' => $r['name'],
-            'type' => $r['type'],
+            'type' => strtoupper((string) $r['type']),
             'data' => $r['data'],
         ], $request->input('records', []));
 
         try {
             $this->registrarAdapter($reseller_domain)->setDns($records);
         } catch (\Throwable $e) {
-            return redirect()->route('domains.manage.show', $reseller_domain)
-                ->with('error', 'DNS-Zone konnte nicht gespeichert werden: '.$e->getMessage());
+            throw ValidationException::withMessages([
+                'dns' => 'DNS-Zone konnte nicht gespeichert werden: '.$e->getMessage(),
+            ]);
         }
 
         return redirect()->route('domains.manage.show', $reseller_domain)
