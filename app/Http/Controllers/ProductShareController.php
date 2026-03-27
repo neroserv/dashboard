@@ -20,6 +20,19 @@ use Illuminate\Validation\ValidationException;
 class ProductShareController extends Controller
 {
     /**
+     * Whether the share row refers to the billing/owner user of the shareable (must not be edited or removed via this API).
+     */
+    protected function shareTargetsProductOwner(object $shareable, ProductShare $share): bool
+    {
+        $ownerUserId = $shareable->user_id ?? null;
+        if ($ownerUserId === null) {
+            return false;
+        }
+
+        return (int) $share->user_id === (int) $ownerUserId;
+    }
+
+    /**
      * Allowed permission keys for the given shareable type.
      *
      * @return list<string>
@@ -160,6 +173,10 @@ class ProductShareController extends Controller
             abort(404);
         }
 
+        if ($this->shareTargetsProductOwner($shareable, $share)) {
+            abort(403);
+        }
+
         $allowed = $this->allowedPermissions($shareable);
         $permissions = array_values(array_intersect(
             (array) $request->validated('permissions'),
@@ -218,6 +235,10 @@ class ProductShareController extends Controller
 
         if ($share->shareable_type !== get_class($shareable) || (string) $share->shareable_id !== (string) $shareable->getKey()) {
             abort(404);
+        }
+
+        if ($this->shareTargetsProductOwner($shareable, $share)) {
+            abort(403);
         }
 
         $share->delete();

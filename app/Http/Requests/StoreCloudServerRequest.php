@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\GameserverCloudSubscription;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCloudServerRequest extends FormRequest
@@ -9,8 +10,11 @@ class StoreCloudServerRequest extends FormRequest
     public function authorize(): bool
     {
         $subscription = $this->route('subscription');
+        $user = $this->user();
 
-        return $subscription && $subscription->user_id === $this->user()?->id;
+        return $subscription instanceof GameserverCloudSubscription
+            && $user !== null
+            && $subscription->userCan($user, 'create_server');
     }
 
     /**

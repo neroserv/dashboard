@@ -62,7 +62,11 @@ class GamingAccountController extends Controller
             ->latest()
             ->get();
         $accounts = $accounts->map(function (GameServerAccount $account) use ($user) {
-            $account->setAttribute('is_shared_with_me', ! $account->isOwnedBy($user));
+            $isSharedWithMe = ! $account->isOwnedBy($user);
+            if ($account->isCloudAccount() && $account->gameserverCloudSubscription) {
+                $isSharedWithMe = ! $account->gameserverCloudSubscription->isOwnedBy($user);
+            }
+            $account->setAttribute('is_shared_with_me', $isSharedWithMe);
             $account->makeHidden('id');
 
             return $account;
@@ -453,7 +457,7 @@ class GamingAccountController extends Controller
             return response()->json(['error' => 'unauthorized'], 403);
         }
 
-        if ($gameServerAccount->user_id !== $request->user()->id) {
+        if ($request->user() === null || ! $request->user()->can('view', $gameServerAccount)) {
             return response()->json(['error' => 'not found'], 404);
         }
 
@@ -613,7 +617,7 @@ class GamingAccountController extends Controller
     }
 
     /**
-     * Return current server overview (for live polling). Only owner.
+     * Return current server overview (for live polling). Owner or user with view access.
      */
     public function overview(Request $request, GameServerAccount $gameServerAccount): JsonResponse
     {
@@ -622,7 +626,7 @@ class GamingAccountController extends Controller
             return response()->json(['error' => 'unauthorized'], 403);
         }
 
-        if ($gameServerAccount->user_id !== $request->user()->id) {
+        if ($request->user() === null || ! $request->user()->can('view', $gameServerAccount)) {
             return response()->json(['error' => 'not found'], 404);
         }
 

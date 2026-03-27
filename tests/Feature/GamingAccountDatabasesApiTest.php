@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\BrandExtension;
 use App\Models\GameServerAccount;
 use App\Models\HostingPlan;
 use App\Models\HostingServer;
@@ -18,6 +19,12 @@ beforeEach(function () {
         'domains' => ['gaming-db.praxishosting.test'],
         'is_default' => true,
         'features' => ['gaming' => true],
+    ]);
+
+    BrandExtension::query()->create([
+        'brand_id' => $this->brand->id,
+        'extension' => BrandExtension::EXTENSION_PTERODACTYL,
+        'installed_at' => now(),
     ]);
 
     $this->user = User::factory()->create([

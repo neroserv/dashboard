@@ -45,8 +45,17 @@ class GameServerAccountPolicy
 
     public function manageCollaborators(User $user, GameServerAccount $gameServerAccount): bool
     {
-        return $user->isAdmin()
-            || $gameServerAccount->isOwnedBy($user);
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($gameServerAccount->isCloudAccount()) {
+            $subscription = $gameServerAccount->gameserverCloudSubscription;
+
+            return $subscription !== null && $subscription->isOwnedBy($user);
+        }
+
+        return $gameServerAccount->isOwnedBy($user);
     }
 
     public function renew(User $user, GameServerAccount $gameServerAccount): bool

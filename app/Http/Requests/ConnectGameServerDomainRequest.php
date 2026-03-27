@@ -12,15 +12,17 @@ class ConnectGameServerDomainRequest extends FormRequest
     {
         $gameServerAccount = $this->route('game_server_account');
 
-        if (! $gameServerAccount instanceof GameServerAccount) {
-            return false;
-        }
+        $user = $this->user();
 
-        if ($gameServerAccount->user_id !== $this->user()?->id) {
+        if (! $gameServerAccount instanceof GameServerAccount || $user === null) {
             return false;
         }
 
         if (! $gameServerAccount->isCloudAccount()) {
+            return false;
+        }
+
+        if (! $gameServerAccount->userCan($user, 'manage_servers')) {
             return false;
         }
 

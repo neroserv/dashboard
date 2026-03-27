@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasProductShares;
 use App\Services\HostingPlanOptionSurchargeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -138,6 +139,69 @@ class GameServerAccount extends Model
     public function isOwnedBy(User $user): bool
     {
         return $this->user_id === $user->id;
+    }
+
+    /**
+     * @param  Builder<static>  $query
+     */
+    public function scopeViewableBy(Builder $query, User $user): void
+    {
+        $query->where(function ($q) use ($user) {
+            $q->where($this->getOwnerKeyName(), $user->id)
+                ->orWhereHas('productShares', function ($q2) use ($user) {
+                    $q2->where('user_id', $user->id)
+                        ->whereJsonContains('permissions', 'view');
+                })
+                ->orWhereHas('gameserverCloudSubscription', function ($subQ) use ($user) {
+                    $subQ->viewableBy($user);
+                });
+        });
+    }
+
+    /**
+     * Whether the given user can perform the given permission (owner has all, else from share).
+     * For Gameserver Cloud, permissions are derived from the parent subscription when set.
+     */
+    public function userCan(User $user, string $permission): bool
+    {
+        if (! $this->isCloudAccount()) {
+            if ($this->isOwnedBy($user)) {
+                return true;
+            }
+
+            return $this->hasSharedAccess($user, $permission);
+        }
+
+        $subscription = $this->gameserverCloudSubscription;
+        if ($subscription === null) {
+            if ($this->isOwnedBy($user)) {
+                return true;
+            }
+
+            return $this->hasSharedAccess($user, $permission);
+        }
+
+        if ($subscription->isOwnedBy($user)) {
+            return true;
+        }
+
+        if ($permission === 'view') {
+            return $subscription->hasSharedAccess($user, 'view');
+        }
+
+        if (in_array($permission, ['panel_login', 'backups', 'schedules', 'databases', 'renew'], true)) {
+            return $subscription->hasSharedAccess($user, 'manage_servers');
+        }
+
+        if ($permission === 'cancel_subscription') {
+            return $subscription->hasSharedAccess($user, 'cancel_subscription');
+        }
+
+        if ($permission === 'manage_auto_renew') {
+            return $subscription->hasSharedAccess($user, 'manage_auto_renew');
+        }
+
+        return $this->hasSharedAccess($user, $permission);
     }
 
     public function getRouteKeyName(): string

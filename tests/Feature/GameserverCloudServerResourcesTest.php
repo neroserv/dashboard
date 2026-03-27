@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Brand;
+use App\Models\BrandExtension;
 use App\Models\GameServerAccount;
 use App\Models\GameserverCloudPlan;
 use App\Models\GameserverCloudSubscription;
@@ -14,7 +15,13 @@ beforeEach(function () {
         'name' => 'Cloud Resources Test',
         'domains' => null,
         'is_default' => true,
-        'features' => ['gameserver_cloud' => true],
+        'features' => ['gaming' => true, 'gameserver_cloud' => true],
+    ]);
+
+    BrandExtension::query()->create([
+        'brand_id' => $this->brand->id,
+        'extension' => BrandExtension::EXTENSION_PTERODACTYL,
+        'installed_at' => now(),
     ]);
 
     $this->server = HostingServer::create([

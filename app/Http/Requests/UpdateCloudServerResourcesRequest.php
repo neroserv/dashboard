@@ -14,12 +14,14 @@ class UpdateCloudServerResourcesRequest extends FormRequest
         $subscription = $this->route('subscription');
         $gameServerAccount = $this->route('game_server_account');
 
-        if (! $subscription instanceof GameserverCloudSubscription || ! $gameServerAccount instanceof GameServerAccount) {
+        $user = $this->user();
+
+        if (! $subscription instanceof GameserverCloudSubscription || ! $gameServerAccount instanceof GameServerAccount || $user === null) {
             return false;
         }
 
-        return $subscription->user_id === $this->user()?->id
-            && $gameServerAccount->gameserver_cloud_subscription_id === $subscription->id;
+        return $gameServerAccount->gameserver_cloud_subscription_id === $subscription->id
+            && $subscription->userCan($user, 'manage_servers');
     }
 
     /**

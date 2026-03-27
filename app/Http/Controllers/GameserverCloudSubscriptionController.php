@@ -582,7 +582,7 @@ class GameserverCloudSubscriptionController extends Controller
 
     public function destroyServer(Request $request, GameserverCloudSubscription $subscription, GameServerAccount $gameServerAccount): RedirectResponse
     {
-        $this->authorize('view', $subscription);
+        $this->authorize('manageServers', $subscription);
         if ($gameServerAccount->gameserver_cloud_subscription_id !== $subscription->id) {
             abort(404);
         }
@@ -616,7 +616,7 @@ class GameserverCloudSubscriptionController extends Controller
         }
         $gameServerAccount->delete();
 
-        return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
+        return redirect()->route('gaming.cloud.subscriptions.show', $subscription)
             ->with('success', 'Der Server wurde gelöscht.');
     }
 
@@ -629,6 +629,8 @@ class GameserverCloudSubscriptionController extends Controller
         if ($redirect !== null) {
             return $redirect;
         }
+
+        $this->authorize('manageServers', $subscription);
 
         if ($subscription->status !== 'active' && ! $subscription->current_period_ends_at?->isFuture()) {
             return redirect()->route('gaming.cloud.subscriptions.show', $subscription->id)
